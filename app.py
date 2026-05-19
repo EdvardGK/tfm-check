@@ -1096,18 +1096,19 @@ App v{APP_VERSION}
             {"start_prefix": "", "builder_rows": list(DEFAULT_BUILDER)}
         ]
 
-    # Presets — apply to first pattern only
-    pcol = st.columns(len(PRESETS))
-    for i, (pname, pseq) in enumerate(PRESETS.items()):
-        with pcol[i]:
-            if st.button(pname, key=f"preset_{pname}_{file_key}",
-                         use_container_width=True):
-                st.session_state[patterns_key][0] = {
-                    "start_prefix": "++" if "Statsbygg" in pname else "",
-                    "builder_rows": list(pseq),
-                }
-                st.session_state.pop(f"editor_builder_p0_{file_key}", None)
-                reset_results(); st.rerun()
+    # Optional Statsbygg starting point — discreet, doesn't compete with the builder
+    with st.expander("📋 Sett inn Statsbygg-mønster som utgangspunkt"):
+        st.caption("Erstatter mønster 1 med full Statsbygg-struktur "
+                   "(`++lokasjon.rom=bygningsdel.etasje.subnr-komponent.komp.nr`). "
+                   "Du kan deretter redigere, fjerne eller legge til ledd.")
+        if st.button("Bruk Statsbygg-mønster", key=f"use_statsbygg_{file_key}",
+                     use_container_width=True):
+            st.session_state[patterns_key][0] = {
+                "start_prefix": "++",
+                "builder_rows": list(PRESETS["Statsbygg (full)"]),
+            }
+            st.session_state.pop(f"editor_builder_p0_{file_key}", None)
+            reset_results(); st.rerun()
 
     patterns = st.session_state[patterns_key]
     templates = []
