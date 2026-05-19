@@ -5,19 +5,23 @@ Designet for self-service hos klienter: konfigurer regler → last opp IFC → f
 
 ## Funksjonalitet
 
-- **Prosjekt + disiplin** med presets for RIE, RIV, RIB, ARK, RIBR
-- **Konfigurerbar struktur** (placeholdere `{bygningsdel}.{etasje}-{komponent}{lopenummer}`)
-- **Allowlists** per kodedel (komma-separerte lister)
-- **Etasjer fra referansemodell** — last opp en «ren» IFC for å hente ut tillatte etasjekoder
+- **Filnavn → disiplin-deteksjon** — gjenkjenner `_RIE`, `_RIV`, `_RIB`, `_ARK`, `_RIBR` i filnavnet og pre-velger disiplinknappen for bekreftelse
+- **Klassifikasjonssystem** for bygningsdelvalidering (NS3451 medsendt; «Ingen» hopper over sjekken)
+- **Pset/Property-velger** — velg presist felt der TFM-koden ligger (eller skann alle felt)
+- **Etasjekoder** — auto-detektert fra modellens `IfcBuildingStorey`, redigerbar liste (legg til / endre / slett rader). Knapp for å hente fra en referansemodell.
+- **Komponentkoder** — redigerbar liste (valgfri)
+- **Konfigurerbar struktur** — placeholdere `{bygningsdel}.{etasje}-{komponent}{lopenummer}` (skjult under Avansert)
 - **Schema-støtte**: IFC2X3, IFC4, IFC4X1, IFC4X2, IFC4X3
 - **Sjekker**:
-  - Element har TFM-kode (i Name / Tag / hvilket som helst Pset)
-  - Kode følger struktur (loose regex)
-  - Kode fullt gyldig (alle deler i lister)
+  - Element har TFM-kode i valgt felt
+  - Bygningsdelskoden er gyldig i klassifikasjonssystemet
+  - Bygningsdelskoden er i forventet område for disiplinen (kryssfagsflagg)
+  - Etasjekoden er i tillatt liste
+  - Komponentkoden er i tillatt liste
   - IfcSystem-navn har TFM-prefiks
   - Element tildelt IfcSystem
   - Element tildelt TFM-navnet system
-- **Dashboard** med fargekodede metric-cards + bar chart
+- **Dashboard** — fargekodede metric-cards (grønn/gul/rød) + bar chart, kryssfag-flagg
 - **Drill-down** dialoger for elementer uten kode, ugyldige koder, systemer, m.m.
 - **Eksport**: Excel + PDF i én ZIP
 

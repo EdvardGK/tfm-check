@@ -1,0 +1,1193 @@
+{
+  "211": {
+    "name": "Klargjøring av tomt"
+  },
+  "212": {
+    "name": "Byggegrop"
+  },
+  "213": {
+    "name": "Grunnforsterkning"
+  },
+  "214": {
+    "name": "Støttekonstruksjoner"
+  },
+  "215": {
+    "name": "Pelefundamentering"
+  },
+  "216": {
+    "name": "Direkte fundamentering"
+  },
+  "217": {
+    "name": "Drenering"
+  },
+  "218": {
+    "name": "Utstyr og komplettering for grunn og fundamenter"
+  },
+  "219": {
+    "name": "Andre deler av grunn og fundamenter"
+  },
+  "221": {
+    "name": "Rammer"
+  },
+  "222": {
+    "name": "Søyler"
+  },
+  "223": {
+    "name": "Bjelker"
+  },
+  "224": {
+    "name": "Avstivende konstruksjoner"
+  },
+  "225": {
+    "name": "Brannbeskyttelse av bærende konstruksjoner"
+  },
+  "226": {
+    "name": "Kledning og overflåte"
+  },
+  "227": {
+    "name": "(Reservert)"
+  },
+  "228": {
+    "name": "Utstyr og komplettering for bærende konstruksjoner"
+  },
+  "229": {
+    "name": "Andre deler av bærende konstruksjoner"
+  },
+  "231": {
+    "name": "Bærende yttervegger"
+  },
+  "232": {
+    "name": "Ikke-bærende yttervegger"
+  },
+  "233": {
+    "name": "Glassfasader"
+  },
+  "234": {
+    "name": "Vinduer, dører, porter"
+  },
+  "235": {
+    "name": "Utvendig kledning og overflåte"
+  },
+  "236": {
+    "name": "Innvendig overflåte"
+  },
+  "237": {
+    "name": "Solavskjerming"
+  },
+  "238": {
+    "name": "Utstyr og komplettering for yttervegger"
+  },
+  "239": {
+    "name": "Andre deler av yttervegg"
+  },
+  "241": {
+    "name": "Bærende innervegger"
+  },
+  "242": {
+    "name": "Ikke-bærende innervegger"
+  },
+  "243": {
+    "name": "Systemvegger og glassfelt"
+  },
+  "244": {
+    "name": "Vinduer, dører, foldevegger"
+  },
+  "245": {
+    "name": "Skjørt"
+  },
+  "246": {
+    "name": "Kledning og overflåte"
+  },
+  "247": {
+    "name": "(Reservert)"
+  },
+  "248": {
+    "name": "Utstyr og komplettering for innervegger"
+  },
+  "249": {
+    "name": "Andre deler av innervegg"
+  },
+  "251": {
+    "name": "Frittbærende dekker"
+  },
+  "252": {
+    "name": "Gulv på grunn, bunnplate"
+  },
+  "253": {
+    "name": "Oppforet gulv og påstøp"
+  },
+  "254": {
+    "name": "Systemgulv"
+  },
+  "255": {
+    "name": "Gulvoverflåte"
+  },
+  "256": {
+    "name": "Faste himlinger og overflåtebehåndling"
+  },
+  "257": {
+    "name": "Systemhimlinger"
+  },
+  "258": {
+    "name": "Utstyr og komplettering for dekker"
+  },
+  "259": {
+    "name": "Andre deler av dekker"
+  },
+  "261": {
+    "name": "Primærkonstruksjon for yttertak"
+  },
+  "262": {
+    "name": "Taktekking"
+  },
+  "263": {
+    "name": "Glasstak, overlys, takluker, røykluker"
+  },
+  "264": {
+    "name": "Takoppbygg"
+  },
+  "265": {
+    "name": "Gesimser, takrenner og nedløp"
+  },
+  "266": {
+    "name": "Himling og innvendig overflåte"
+  },
+  "267": {
+    "name": "Prefabrikkerte takelementer"
+  },
+  "268": {
+    "name": "Utstyr og kompletteringer for yttertak"
+  },
+  "269": {
+    "name": "Andre deler av yttertak"
+  },
+  "271": {
+    "name": "Murte piper og ildsteder"
+  },
+  "272": {
+    "name": "Monteringsferdige ildsteder"
+  },
+  "273": {
+    "name": "Kjøkkeninnredning"
+  },
+  "274": {
+    "name": "Innredning og garnityr for våtrom"
+  },
+  "275": {
+    "name": "Skap og reoler"
+  },
+  "276": {
+    "name": "Sittebenker, stolrader, bord"
+  },
+  "277": {
+    "name": "Skilt og tavler"
+  },
+  "278": {
+    "name": "Utstyr og kompletteringer for fast inventar"
+  },
+  "279": {
+    "name": "Annet fast inventar"
+  },
+  "281": {
+    "name": "Innvendige trapper"
+  },
+  "282": {
+    "name": "Utvendige trapper"
+  },
+  "283": {
+    "name": "Ramper"
+  },
+  "284": {
+    "name": "Balkonger og verandaer"
+  },
+  "285": {
+    "name": "Tribuner og åmfier"
+  },
+  "286": {
+    "name": "Baldakiner og skjermtak"
+  },
+  "287": {
+    "name": "Andre rekkverk, håndlister og fendere"
+  },
+  "288": {
+    "name": "Utstyr og kompletteringer for trapper, balkonger m.m."
+  },
+  "289": {
+    "name": "Andre trapper, balkonger m.m."
+  },
+  "291": {
+    "name": "Hull, tettinger"
+  },
+  "311": {
+    "name": "Bunnledninger for sanitærinstallasjoner"
+  },
+  "312": {
+    "name": "Ledningsnett for sanitærinstallasjoner"
+  },
+  "313": {
+    "name": "(Reservert)"
+  },
+  "314": {
+    "name": "Armaturer for sanitærinstallasjoner"
+  },
+  "315": {
+    "name": "Utstyr for sanitærinstallasjoner"
+  },
+  "316": {
+    "name": "Isolasjon av sanitærinstallasjoner"
+  },
+  "317": {
+    "name": "(Reservert)"
+  },
+  "318": {
+    "name": "(Reservert)"
+  },
+  "319": {
+    "name": "Andre deler av sanitærinstallasjoner"
+  },
+  "321": {
+    "name": "Bunnledninger for varmeinstallasjoner"
+  },
+  "322": {
+    "name": "Ledningsnett for varmeinstallasjoner"
+  },
+  "323": {
+    "name": "(Reservert)"
+  },
+  "324": {
+    "name": "Armaturer for varmeinstallasjon"
+  },
+  "325": {
+    "name": "Utstyr for varmeinstallasjoner"
+  },
+  "326": {
+    "name": "Isolasjon av varmeinstallasjoner"
+  },
+  "327": {
+    "name": "(Reservert)"
+  },
+  "328": {
+    "name": "(Reservert)"
+  },
+  "329": {
+    "name": "Andre deler av varmeinstallasjoner"
+  },
+  "331": {
+    "name": "Installasjon for manuell brannslokking med vann"
+  },
+  "332": {
+    "name": "Installasjon for brannslokking med sprinkler"
+  },
+  "333": {
+    "name": "Installasjon for brannslokking med vanntåke"
+  },
+  "334": {
+    "name": "Installasjon for brannslokking med pulver"
+  },
+  "335": {
+    "name": "Installasjon for brannslokking med gass"
+  },
+  "336": {
+    "name": "Installasjon for brannslokking med skum"
+  },
+  "337": {
+    "name": "Brannslokking med håndslukker"
+  },
+  "338": {
+    "name": "(Reservert)"
+  },
+  "339": {
+    "name": "Andre deler av installasjoner for brannslokking"
+  },
+  "341": {
+    "name": "Installasjon for gass til bygningsdrift"
+  },
+  "342": {
+    "name": "Installasjon for gass til virksomhet"
+  },
+  "343": {
+    "name": "Installasjon for medisinske gasser"
+  },
+  "344": {
+    "name": "(Reservert)"
+  },
+  "345": {
+    "name": "Installasjon for trykkluft til virksomhet"
+  },
+  "346": {
+    "name": "Installasjon for medisinsk trykkluft"
+  },
+  "347": {
+    "name": "Installasjon for vakuumanlegg"
+  },
+  "348": {
+    "name": "Spesialavtrekk for gasser"
+  },
+  "349": {
+    "name": "Andre deler av installasjoner for gass og trykkluft"
+  },
+  "351": {
+    "name": "Installasjoner for kjøling av kjølerom"
+  },
+  "352": {
+    "name": "Installasjoner for kjøling av fryserom"
+  },
+  "353": {
+    "name": "Installasjoner til kjøling for virksomhet"
+  },
+  "354": {
+    "name": "Installasjoner til kjøling og varme for industri og produksjon"
+  },
+  "355": {
+    "name": "Installasjoner til kjøling for innendørs idrettsbaner"
+  },
+  "356": {
+    "name": "Installasjoner for oppvarming og kjøling i bygg"
+  },
+  "357": {
+    "name": "(Reservert)"
+  },
+  "358": {
+    "name": "(Reservert)"
+  },
+  "359": {
+    "name": "Andre deler for varmepumpe- og kuldeinstallasjoner"
+  },
+  "361": {
+    "name": "Kanalnett i grunnen for luftbehandling"
+  },
+  "362": {
+    "name": "Kanalnett for luftbehandling"
+  },
+  "363": {
+    "name": "(Reservert)"
+  },
+  "364": {
+    "name": "Utstyr for luftfordeling"
+  },
+  "365": {
+    "name": "Utstyr for luftbehandling"
+  },
+  "366": {
+    "name": "Isolasjon av installasjon for luftbehandling"
+  },
+  "367": {
+    "name": "(Reservert)"
+  },
+  "368": {
+    "name": "(Reservert)"
+  },
+  "369": {
+    "name": "Annet utstyr for luftbehandling"
+  },
+  "371": {
+    "name": "Ledningsnett i grunnen for komfortkjøling"
+  },
+  "372": {
+    "name": "Ledningsnett for komfortkjøling"
+  },
+  "373": {
+    "name": "(Reservert)"
+  },
+  "375": {
+    "name": "Utstyr for komfortkjøling"
+  },
+  "376": {
+    "name": "Isolasjon av installasjon for komfortkjøling"
+  },
+  "377": {
+    "name": "(Reservert)"
+  },
+  "378": {
+    "name": "(Reservert)"
+  },
+  "379": {
+    "name": "Andre deler for komfortkjøling"
+  },
+  "381": {
+    "name": "Installasjon for rensing av vann"
+  },
+  "382": {
+    "name": "Installasjon for rensing av avløpsvann"
+  },
+  "383": {
+    "name": "Installasjon for vannrensing til svømmebasseng"
+  },
+  "384": {
+    "name": "(Reservert)"
+  },
+  "385": {
+    "name": "(Reservert)"
+  },
+  "386": {
+    "name": "Innendørs fontener og springvann"
+  },
+  "387": {
+    "name": "(Reservert)"
+  },
+  "388": {
+    "name": "(Reservert)"
+  },
+  "389": {
+    "name": "Andre deler for vannbehandling"
+  },
+  "411": {
+    "name": "Kabelføring for elkraftinstallasjoner"
+  },
+  "412": {
+    "name": "Jording for elkraftinstallasjoner"
+  },
+  "413": {
+    "name": "Lynvern"
+  },
+  "414": {
+    "name": "Installasjoner for elkraftuttak"
+  },
+  "415": {
+    "name": "(Reservert)"
+  },
+  "416": {
+    "name": "(Reservert)"
+  },
+  "417": {
+    "name": "(Reservert)"
+  },
+  "418": {
+    "name": "(Reservert)"
+  },
+  "419": {
+    "name": "Andre basisinstallasjoner for elkraft"
+  },
+  "421": {
+    "name": "Installasjoner for høyspent fordeling"
+  },
+  "422": {
+    "name": "Nettstasjoner"
+  },
+  "423": {
+    "name": "(Reservert)"
+  },
+  "424": {
+    "name": "(Reservert)"
+  },
+  "425": {
+    "name": "(Reservert)"
+  },
+  "426": {
+    "name": "(Reservert)"
+  },
+  "427": {
+    "name": "(Reservert)"
+  },
+  "428": {
+    "name": "(Reservert)"
+  },
+  "429": {
+    "name": "Andre deler for høyspent forsyning"
+  },
+  "431": {
+    "name": "Installasjoner for elkraftinntak"
+  },
+  "432": {
+    "name": "Installasjoner for hovedfordeling"
+  },
+  "433": {
+    "name": "Elkraftfordeling til alminnelig forbruk"
+  },
+  "434": {
+    "name": "Elkraftfordeling til driftstekniske installasjoner"
+  },
+  "435": {
+    "name": "Elkraftfordeling til virksomhet"
+  },
+  "436": {
+    "name": "Elkraftfordeling til lading"
+  },
+  "437": {
+    "name": "(Reservert)"
+  },
+  "438": {
+    "name": "(Reservert)"
+  },
+  "439": {
+    "name": "Andre deler for lavspent forsyning"
+  },
+  "441": {
+    "name": "(Reservert)"
+  },
+  "442": {
+    "name": "Belysning"
+  },
+  "443": {
+    "name": "Nødlys"
+  },
+  "444": {
+    "name": "(Reservert)"
+  },
+  "445": {
+    "name": "(Reservert)"
+  },
+  "446": {
+    "name": "(Reservert)"
+  },
+  "447": {
+    "name": "(Reservert)"
+  },
+  "448": {
+    "name": "(Reservert)"
+  },
+  "449": {
+    "name": "Andre deler for installasjoner for lys"
+  },
+  "451": {
+    "name": "(Reservert)"
+  },
+  "452": {
+    "name": "Varmeovner"
+  },
+  "453": {
+    "name": "Varmeelementer for innbygging"
+  },
+  "454": {
+    "name": "Vannvarmere og elektrokjeler"
+  },
+  "455": {
+    "name": "(Reservert)"
+  },
+  "456": {
+    "name": "(Reservert)"
+  },
+  "457": {
+    "name": "(Reservert)"
+  },
+  "458": {
+    "name": "(Reservert)"
+  },
+  "459": {
+    "name": "Annen elvarme"
+  },
+  "461": {
+    "name": "Elkraftaggregater"
+  },
+  "462": {
+    "name": "Avbruddsfri kraftforsyning"
+  },
+  "463": {
+    "name": "Akkumulatoranlegg"
+  },
+  "464": {
+    "name": "(Reservert)"
+  },
+  "465": {
+    "name": "(Reservert)"
+  },
+  "466": {
+    "name": "(Reservert)"
+  },
+  "467": {
+    "name": "(Reservert)"
+  },
+  "468": {
+    "name": "(Reservert)"
+  },
+  "469": {
+    "name": "Andre deler for reservekraftforsyning"
+  },
+  "471": {
+    "name": "Solceller"
+  },
+  "472": {
+    "name": "Vindmøller"
+  },
+  "473": {
+    "name": "(Reservert)"
+  },
+  "474": {
+    "name": "(Reservert)"
+  },
+  "475": {
+    "name": "(Reservert)"
+  },
+  "476": {
+    "name": "(Reservert)"
+  },
+  "477": {
+    "name": "(Reservert)"
+  },
+  "478": {
+    "name": "(Reservert)"
+  },
+  "479": {
+    "name": "Andre deler for lokal elkraftproduksjon"
+  },
+  "481": {
+    "name": "Elektrisk korrosjonsbeskyttelse"
+  },
+  "482": {
+    "name": "Elektrisk sikkerhet for forebygging mot uønskede hendelser"
+  },
+  "483": {
+    "name": "(Reservert)"
+  },
+  "484": {
+    "name": "(Reservert)"
+  },
+  "485": {
+    "name": "(Reservert)"
+  },
+  "486": {
+    "name": "(Reservert)"
+  },
+  "487": {
+    "name": "(Reservert)"
+  },
+  "488": {
+    "name": "(Reservert)"
+  },
+  "489": {
+    "name": "Andre deler for installasjon for elektrisk beskyttelse"
+  },
+  "511": {
+    "name": "Kabelføring"
+  },
+  "512": {
+    "name": "Jording"
+  },
+  "513": {
+    "name": "(Reservert)"
+  },
+  "514": {
+    "name": "Inntak for ekom og automatisering"
+  },
+  "515": {
+    "name": "Fordelinger for ekom og automatisering"
+  },
+  "516": {
+    "name": "(Reservert)"
+  },
+  "517": {
+    "name": "(Reservert)"
+  },
+  "518": {
+    "name": "(Reservert)"
+  },
+  "519": {
+    "name": "Andre basisinstallasjoner for ekom og automatisering"
+  },
+  "521": {
+    "name": "Kabling for ekom og automatisering"
+  },
+  "522": {
+    "name": "Nettutstyr"
+  },
+  "523": {
+    "name": "Sentralutstyr"
+  },
+  "524": {
+    "name": "Terminalutstyr"
+  },
+  "525": {
+    "name": "(Reservert)"
+  },
+  "526": {
+    "name": "(Reservert)"
+  },
+  "527": {
+    "name": "(Reservert)"
+  },
+  "528": {
+    "name": "(Reservert)"
+  },
+  "529": {
+    "name": "Andre deler for integrert kommunikasjon"
+  },
+  "531": {
+    "name": "(Reservert)"
+  },
+  "532": {
+    "name": "Telefoni"
+  },
+  "533": {
+    "name": "Nødkommunikasjon"
+  },
+  "534": {
+    "name": "Porttelefoner"
+  },
+  "535": {
+    "name": "Høyttalende hustelefoner"
+  },
+  "536": {
+    "name": "Personsøkning"
+  },
+  "537": {
+    "name": "(Reservert)"
+  },
+  "538": {
+    "name": "(Reservert)"
+  },
+  "539": {
+    "name": "Andre deler for telefoni og personsøkning"
+  },
+  "541": {
+    "name": "(Reservert)"
+  },
+  "542": {
+    "name": "Brannalarm"
+  },
+  "543": {
+    "name": "Adgangskontroll, innbrudds- og overfallsalarm"
+  },
+  "544": {
+    "name": "Pasientsignal"
+  },
+  "545": {
+    "name": "Uranlegg og tidsregistrering"
+  },
+  "546": {
+    "name": "Alarm knyttet til bygning eller installasjon"
+  },
+  "547": {
+    "name": "(Reservert)"
+  },
+  "548": {
+    "name": "(Reservert)"
+  },
+  "549": {
+    "name": "Andre deler for alarm og signal"
+  },
+  "551": {
+    "name": "(Reservert)"
+  },
+  "552": {
+    "name": "Fellesantenner"
+  },
+  "553": {
+    "name": "Internfjernsyn"
+  },
+  "554": {
+    "name": "Lyddistribusjonsanlegg"
+  },
+  "555": {
+    "name": "Lydanlegg"
+  },
+  "556": {
+    "name": "Bilde og AV"
+  },
+  "557": {
+    "name": "(Reservert)"
+  },
+  "558": {
+    "name": "(Reservert)"
+  },
+  "559": {
+    "name": "Andre deler for lyd og bilde"
+  },
+  "561": {
+    "name": "(Reservert)"
+  },
+  "562": {
+    "name": "Sentral driftskontroll og automatisering"
+  },
+  "563": {
+    "name": "Lokal automatisering"
+  },
+  "564": {
+    "name": "Installasjoner for buss-systemer"
+  },
+  "565": {
+    "name": "Installasjoner for FDVUS: Administrative systemer"
+  },
+  "566": {
+    "name": "(Reservert)"
+  },
+  "567": {
+    "name": "(Reservert)"
+  },
+  "568": {
+    "name": "(Reservert)"
+  },
+  "569": {
+    "name": "Andre deler for automatisering"
+  },
+  "571": {
+    "name": "Kabling for instrumentering"
+  },
+  "572": {
+    "name": "Instrumentering for måling av mengde"
+  },
+  "573": {
+    "name": "Instrumentering for måling av trykk"
+  },
+  "574": {
+    "name": "Instrumentering for måling av temperatur"
+  },
+  "575": {
+    "name": "Instrumentering for måling av lengde"
+  },
+  "576": {
+    "name": "Instrumentering for måling av vekt"
+  },
+  "577": {
+    "name": "Instrumentering for måling av elektriske størrelser"
+  },
+  "578": {
+    "name": "Instrumentering for analyse"
+  },
+  "579": {
+    "name": "Annen instrumentering"
+  },
+  "611": {
+    "name": "Prefabrikkerte kjølerom"
+  },
+  "612": {
+    "name": "Prefabrikkerte fryserom"
+  },
+  "613": {
+    "name": "Prefabrikkerte baderom"
+  },
+  "614": {
+    "name": "Prefabrikkerte skjermrom"
+  },
+  "615": {
+    "name": "Prefabrikkerte moduler for sjakter og himlinger"
+  },
+  "616": {
+    "name": "(Reservert)"
+  },
+  "617": {
+    "name": "(Reservert)"
+  },
+  "618": {
+    "name": "(Reservert)"
+  },
+  "619": {
+    "name": "Andre prefabrikkerte rom"
+  },
+  "621": {
+    "name": "Heiser"
+  },
+  "622": {
+    "name": "Rulletrapper"
+  },
+  "623": {
+    "name": "Rullebånd"
+  },
+  "624": {
+    "name": "Løftebord"
+  },
+  "625": {
+    "name": "Trappeheiser"
+  },
+  "626": {
+    "name": "Kraner"
+  },
+  "627": {
+    "name": "Fasade- og takvask"
+  },
+  "628": {
+    "name": "(Reservert)"
+  },
+  "629": {
+    "name": "Annen person- og varetransport"
+  },
+  "631": {
+    "name": "Dokument- og småvåretrånsportører"
+  },
+  "633": {
+    "name": "Transportanlegg for drivstoff, olje og kjemikalier"
+  },
+  "634": {
+    "name": "Selvgående transportører"
+  },
+  "635": {
+    "name": "(Reservert)"
+  },
+  "636": {
+    "name": "(Reservert)"
+  },
+  "637": {
+    "name": "(Reservert)"
+  },
+  "638": {
+    "name": "(Reservert)"
+  },
+  "639": {
+    "name": "Andre transportanlegg"
+  },
+  "641": {
+    "name": "Kogenerering – CHP"
+  },
+  "642": {
+    "name": "Solfanger"
+  },
+  "643": {
+    "name": "(Reservert)"
+  },
+  "644": {
+    "name": "(Reservert)"
+  },
+  "645": {
+    "name": "(Reservert)"
+  },
+  "646": {
+    "name": "(Reservert)"
+  },
+  "647": {
+    "name": "(Reservert)"
+  },
+  "648": {
+    "name": "(Reservert)"
+  },
+  "649": {
+    "name": "Annen lokal varmeproduksjon"
+  },
+  "651": {
+    "name": "Utstyr for oppsamling og behandling av avfall"
+  },
+  "652": {
+    "name": "Sentralstøvsuger"
+  },
+  "653": {
+    "name": "Pneumatisk søppeltransport"
+  },
+  "654": {
+    "name": "(Reservert)"
+  },
+  "655": {
+    "name": "(Reservert)"
+  },
+  "656": {
+    "name": "(Reservert)"
+  },
+  "657": {
+    "name": "(Reservert)"
+  },
+  "658": {
+    "name": "(Reservert)"
+  },
+  "659": {
+    "name": "Andre installasjoner for avfall og støvsuging"
+  },
+  "661": {
+    "name": "Utstyr for fastmontert spesialutrustning for virksomhet"
+  },
+  "671": {
+    "name": "Utstyr for løs spesialutrustning for virksomhet"
+  },
+  "681": {
+    "name": "Deler til inventar"
+  },
+  "711": {
+    "name": "Grovplanert terreng"
+  },
+  "712": {
+    "name": "Drenering"
+  },
+  "713": {
+    "name": "Forsterket grunn"
+  },
+  "714": {
+    "name": "Grøfter og groper for tekniske installasjoner"
+  },
+  "715": {
+    "name": "Bergrom"
+  },
+  "716": {
+    "name": "(Reservert)"
+  },
+  "717": {
+    "name": "(Reservert)"
+  },
+  "718": {
+    "name": "(Reservert)"
+  },
+  "719": {
+    "name": "Annen terrengbearbeiding"
+  },
+  "721": {
+    "name": "Utendørs støttemurer og andre murer"
+  },
+  "722": {
+    "name": "Utendørs trapper, ramper, terrasser, platting i terreng"
+  },
+  "723": {
+    "name": "Utendørs skjermtak, leskur m.m. som henger sammen med bygning"
+  },
+  "724": {
+    "name": "Utendørs svømmebassenger m.m."
+  },
+  "725": {
+    "name": "Utendørs gjerder, porter og bommer"
+  },
+  "726": {
+    "name": "Utendørs kanaler og kulverter for tekniske installasjoner"
+  },
+  "727": {
+    "name": "Utendørs kummer og tanker for tekniske installasjoner"
+  },
+  "728": {
+    "name": "(Reservert)"
+  },
+  "729": {
+    "name": "Andre utendørs konstruksjoner"
+  },
+  "731": {
+    "name": "Utendørs VA"
+  },
+  "732": {
+    "name": "Utendørs varme"
+  },
+  "733": {
+    "name": "Utendørs brannslokking"
+  },
+  "734": {
+    "name": "Utendørs gassinstallasjoner"
+  },
+  "735": {
+    "name": "Utendørs kjøling for idrettsbaner"
+  },
+  "736": {
+    "name": "Utendørs luftbehandlingsanlegg"
+  },
+  "737": {
+    "name": "Utendørs forsyningsanlegg for termisk energi"
+  },
+  "738": {
+    "name": "Utendørs fontener og springvann"
+  },
+  "739": {
+    "name": "Andre utendørs røranlegg"
+  },
+  "741": {
+    "name": "(Reservert)"
+  },
+  "742": {
+    "name": "Utendørs høyspent forsyning"
+  },
+  "743": {
+    "name": "Utendørs lavspent forsyning"
+  },
+  "744": {
+    "name": "Utendørs lys"
+  },
+  "745": {
+    "name": "Utendørs elvarme"
+  },
+  "746": {
+    "name": "Utendørs reservekraft"
+  },
+  "747": {
+    "name": "(Reservert)"
+  },
+  "748": {
+    "name": "(Reservert)"
+  },
+  "749": {
+    "name": "Andre installasjoner for utendørs elkraft"
+  },
+  "751": {
+    "name": "(Reservert)"
+  },
+  "752": {
+    "name": "Utendørs integrert kommunikasjon"
+  },
+  "753": {
+    "name": "Utendørs telefoni og personsøkning"
+  },
+  "754": {
+    "name": "Utendørs alarm og signal"
+  },
+  "755": {
+    "name": "Utendørs lyd og bilde"
+  },
+  "756": {
+    "name": "Utendørs automatisering"
+  },
+  "757": {
+    "name": "(Reservert)"
+  },
+  "758": {
+    "name": "(Reservert)"
+  },
+  "759": {
+    "name": "Andre installasjoner for utendørs ekom og automatisering"
+  },
+  "761": {
+    "name": "Veier"
+  },
+  "763": {
+    "name": "Utendørs skilter"
+  },
+  "764": {
+    "name": "Utendørs sikkerhetsrekkverk, avvisere, guard-rail m.m."
+  },
+  "765": {
+    "name": "(Reservert)"
+  },
+  "766": {
+    "name": "(Reservert)"
+  },
+  "767": {
+    "name": "(Reservert)"
+  },
+  "768": {
+    "name": "(Reservert)"
+  },
+  "769": {
+    "name": "Andre deler for veier og plasser"
+  },
+  "771": {
+    "name": "Utendørs gressarealer"
+  },
+  "772": {
+    "name": "Utendørs beplantning"
+  },
+  "773": {
+    "name": "Utendørs utstyr"
+  },
+  "774": {
+    "name": "Utendørs plasser for idrett og kultur"
+  },
+  "775": {
+    "name": "Utendørs tribuner og åmfier"
+  },
+  "776": {
+    "name": "(Reservert)"
+  },
+  "777": {
+    "name": "(Reservert)"
+  },
+  "778": {
+    "name": "(Reservert)"
+  },
+  "779": {
+    "name": "Andre deler for park og grøntanlegg"
+  },
+  "781": {
+    "name": "(Reservert)"
+  },
+  "782": {
+    "name": "(Reservert)"
+  },
+  "783": {
+    "name": "Utendørs tilknytning til eksterne nett for vannforsyning, avløp og fjernvårme"
+  },
+  "784": {
+    "name": "Utendørs tilknytning til eksternt elkraftnett"
+  },
+  "785": {
+    "name": "Utendørs tilknytning til eksternt telenett"
+  },
+  "786": {
+    "name": "(Reservert)"
+  },
+  "787": {
+    "name": "(Reservert)"
+  },
+  "788": {
+    "name": "(Reservert)"
+  },
+  "789": {
+    "name": "Andre deler for utendørs infrastruktur"
+  }
+}
