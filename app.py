@@ -40,7 +40,7 @@ import usage
 # CONSTANTS
 # =============================================================================
 
-APP_VERSION = "0.5.0"
+APP_VERSION = "0.6.0"
 HERE = Path(__file__).parent
 
 ACCEPTED_SCHEMA_PREFIXES = ("IFC2X3", "IFC4")
@@ -259,21 +259,31 @@ class TFMRules:
     discipline_key: str = "Annet"
     bygningsdel_system: str = "NS3451"
     komponent_system: str = "IEC81346"
-    start_prefix: str = ""
-    structure: str = "{bygningsdel}.{etasje}-{komponent}"
-    builder_rows: list[dict] = field(default_factory=lambda: list(DEFAULT_BUILDER))
+    # Multiple TFM patterns — an element passes "has TFM-kode" if ANY pattern matches.
+    # Each pattern: {"start_prefix": str, "builder_rows": list[dict]}.
+    patterns: list[dict] = field(default_factory=lambda: [
+        {"start_prefix": "", "builder_rows": list(DEFAULT_BUILDER)}
+    ])
     floor_codes: list[str] = field(default_factory=list)
     tfm_location: tuple = ("all", None, None)
 
-    def regex(self) -> re.Pattern:
-        parts, i = [], 0
-        for m in PLACEHOLDER_RE.finditer(self.structure):
-            parts.append(re.escape(self.structure[i:m.start()]))
-            name = m.group(1)
-            parts.append(f"(?P<{name}>{PLACEHOLDER_FALLBACK.get(name, r'\\S+')})")
-            i = m.end()
-        parts.append(re.escape(self.structure[i:]))
-        return re.compile("^" + "".join(parts))
+    def structures(self) -> list[str]:
+        return [builder_rows_to_structure(p.get("builder_rows", []),
+                                          p.get("start_prefix", ""))
+                for p in self.patterns]
+
+    def regexes(self) -> list[re.Pattern]:
+        out = []
+        for s in self.structures():
+            parts, i = [], 0
+            for m in PLACEHOLDER_RE.finditer(s):
+                parts.append(re.escape(s[i:m.start()]))
+                name = m.group(1)
+                parts.append(f"(?P<{name}>{PLACEHOLDER_FALLBACK.get(name, r'\\S+')})")
+                i = m.end()
+            parts.append(re.escape(s[i:]))
+            out.append(re.compile("^" + "".join(parts)))
+        return out
 
     @property
     def discipline_label(self) -> str:
@@ -324,14 +334,28 @@ def candidate_strings_for(elem, location: tuple):
                 yield (f"{pn}.{k}", v)
 
 
+def _build_storey_map(ifc) -> dict[int, str]:
+    """Return {ifc_id → canonical-floor-code} via IfcRelContainedInSpatialStructure."""
+    out = {}
+    for st_ in ifc.by_type("IfcBuildingStorey"):
+        code = parse_storey_name_to_code(st_.Name or "")
+        for rel in getattr(st_, "ContainsElements", []) or []:
+            for elem in rel.RelatedElements:
+                out[elem.id()] = code
+    return out
+
+
 def run_checks(ifc, products, rules: TFMRules,
                bygningsdel_codes: dict, komponent_codes: dict) -> dict:
-    rx = rules.regex()
+    regexes = rules.regexes()
+    structures = rules.structures()
     floor_set = set(rules.floor_codes)
     has_floor = bool(floor_set)
     has_bd = bool(bygningsdel_codes)
     has_komp = bool(komponent_codes)
     expected_ns = set(rules.expected_ns_range)
+
+    storey_map = _build_storey_map(ifc)
 
     n_total = len(products)
     n_has_code = n_struct_ok = 0
@@ -339,20 +363,40 @@ def run_checks(ifc, products, rules: TFMRules,
     n_bd_valid = n_bd_total = 0
     n_in_disc = n_disc_total = 0
     n_komp_valid = n_komp_total = 0
+    n_floor_match = n_floor_match_total = 0
     cross_disc = Counter(); invalid_bd = Counter(); invalid_komp = Counter()
     field_hits = Counter()
+    pattern_hits = Counter()
+    seen_systems = Counter(); seen_components = Counter()
+    seen_bygningsdel = Counter(); seen_floors = Counter()
+    floor_mismatch = Counter()
     missing, invalid, code_samples = [], [], []
 
+    # Per-type tracking (ST28-style coverage)
+    type_stats: dict[str, dict] = {}
+    def _bump(typ, **kw):
+        d = type_stats.setdefault(typ, {"total": 0, "with_code": 0,
+                                         "valid": 0, "errors": 0})
+        for k, v in kw.items():
+            d[k] = d.get(k, 0) + v
+
     for e in products:
+        typ = e.is_a()
+        _bump(typ, total=1)
+
         chosen = None
+        chosen_pat_idx = None
         for fld, val in candidate_strings_for(e, rules.tfm_location):
-            m = rx.search(val)
-            if m:
-                chosen = (fld, val, m); break
+            for idx, rx in enumerate(regexes):
+                m = rx.search(val)
+                if m:
+                    chosen = (fld, val, m); chosen_pat_idx = idx; break
+            if chosen: break
+
         if chosen is None:
             if len(missing) < 500:
                 missing.append({
-                    "GUID": e.GlobalId, "Type": e.is_a(),
+                    "GUID": e.GlobalId, "Type": typ,
                     "Navn": (e.Name or "")[:80],
                     "Tag": str(getattr(e, "Tag", "") or "")[:40],
                 })
@@ -360,50 +404,78 @@ def run_checks(ifc, products, rules: TFMRules,
 
         fld, val, m = chosen
         n_has_code += 1; n_struct_ok += 1
+        _bump(typ, with_code=1)
         field_hits[fld] += 1
+        pattern_hits[f"Mønster {chosen_pat_idx + 1}"] += 1
         g = m.groupdict()
         any_invalid = False
 
         bd = g.get("bygningsdel")
-        if bd is not None and has_bd:
-            part_total["bygningsdel"] += 1; n_bd_total += 1
-            if bd in bygningsdel_codes:
-                part_ok["bygningsdel"] += 1; n_bd_valid += 1
-                if expected_ns:
-                    n_disc_total += 1
-                    if bd[:1] in expected_ns: n_in_disc += 1
-                    else: cross_disc[bd] += 1
-            else:
-                invalid_bd[bd] += 1; any_invalid = True
+        if bd is not None:
+            seen_bygningsdel[bd] += 1
+            if has_bd:
+                part_total["bygningsdel"] += 1; n_bd_total += 1
+                if bd in bygningsdel_codes:
+                    part_ok["bygningsdel"] += 1; n_bd_valid += 1
+                    if expected_ns:
+                        n_disc_total += 1
+                        if bd[:1] in expected_ns: n_in_disc += 1
+                        else: cross_disc[bd] += 1
+                else:
+                    invalid_bd[bd] += 1; any_invalid = True
 
         et = g.get("etasje")
-        if et is not None and has_floor:
-            part_total["etasje"] += 1
-            if et in floor_set: part_ok["etasje"] += 1
-            else: any_invalid = True
+        if et is not None:
+            seen_floors[et] += 1
+            if has_floor:
+                part_total["etasje"] += 1
+                if et in floor_set: part_ok["etasje"] += 1
+                else: any_invalid = True
+            # Floor↔storey consistency check
+            actual = storey_map.get(e.id())
+            if actual:
+                n_floor_match_total += 1
+                if actual == et or actual == et.zfill(2) or et == actual.lstrip("0"):
+                    n_floor_match += 1
+                else:
+                    floor_mismatch[f"{et} ≠ {actual}"] += 1
 
         ko = g.get("komponent")
-        if ko is not None and has_komp:
-            part_total["komponent"] += 1; n_komp_total += 1
-            first = ko[:1].upper()
-            if first in komponent_codes:
-                part_ok["komponent"] += 1; n_komp_valid += 1
-            else:
-                invalid_komp[first or "(tom)"] += 1; any_invalid = True
+        if ko is not None:
+            seen_components[ko] += 1
+            if has_komp:
+                part_total["komponent"] += 1; n_komp_total += 1
+                first = ko[:1].upper()
+                if first in komponent_codes:
+                    part_ok["komponent"] += 1; n_komp_valid += 1
+                else:
+                    invalid_komp[first or "(tom)"] += 1; any_invalid = True
 
         for nm in ("lopenummer", "subnr", "kompnr", "lokasjon", "rom"):
             if nm in g:
                 part_total[nm] += 1; part_ok[nm] += 1
 
+        if bd:
+            full = bd
+            if et: full += f".{et}"
+            lop = g.get("lopenummer")
+            if lop: full += f".{lop}"
+            seen_systems[full] += 1
+
+        if any_invalid:
+            _bump(typ, errors=1)
+        else:
+            _bump(typ, valid=1)
+
         if len(code_samples) < 200:
             code_samples.append({
-                "GUID": e.GlobalId, "Type": e.is_a(),
+                "GUID": e.GlobalId, "Type": typ, "Mønster": chosen_pat_idx + 1,
                 "Felt": fld, "Kode": val[:80],
                 **{k: g.get(k, "") for k in g.keys()},
             })
         if any_invalid and len(invalid) < 500:
             invalid.append({
-                "GUID": e.GlobalId, "Type": e.is_a(),
+                "GUID": e.GlobalId, "Type": typ, "Mønster": chosen_pat_idx + 1,
                 "Navn": (e.Name or "")[:60], "Felt": fld, "Kode": val[:60],
                 **{k: g.get(k, "") for k in g.keys()},
             })
@@ -414,9 +486,10 @@ def run_checks(ifc, products, rules: TFMRules,
         systems = []
     sys_rows, n_sys_ok = [], 0
     for s in systems:
-        ok = bool(rx.search(s.Name or ""))
+        name = s.Name or ""
+        ok = any(rx.search(name) for rx in regexes)
         if ok: n_sys_ok += 1
-        sys_rows.append({"Navn": s.Name or "", "TFM-prefiks": "Ja" if ok else "Nei"})
+        sys_rows.append({"Navn": name, "TFM-prefiks": "Ja" if ok else "Nei"})
 
     n_assigned = n_tfm_assigned = 0
     unassigned_types = Counter()
@@ -429,12 +502,25 @@ def run_checks(ifc, products, rules: TFMRules,
                     sf.append(gobj)
         if sf:
             n_assigned += 1
-            if any(rx.search(s.Name or "") for s in sf):
+            if any(any(rx.search(s.Name or "") for rx in regexes) for s in sf):
                 n_tfm_assigned += 1
         else:
             unassigned_types[e.is_a()] += 1
 
     def pct(a, b): return (a / b * 100) if b else 0.0
+
+    # Per-type coverage rows (sorted by total desc)
+    type_rows = []
+    for t, d in sorted(type_stats.items(), key=lambda kv: -kv[1]["total"]):
+        total = d["total"]
+        type_rows.append({
+            "IfcType": t,
+            "Antall": total,
+            "Med kode": d["with_code"],
+            "Coverage %": round(d["with_code"] / total * 100, 1) if total else 0.0,
+            "Gyldig": d["valid"],
+            "Feil": d["errors"],
+        })
 
     bd_sys_label = BYGNINGSDEL_SYSTEMS.get(rules.bygningsdel_system, {}).get("label", "klassifikasjon")
     komp_sys_label = KOMPONENT_SYSTEMS.get(rules.komponent_system, {}).get("label", "klassifikasjon")
@@ -449,6 +535,9 @@ def run_checks(ifc, products, rules: TFMRules,
         "floor_valid":   dict(n=part_ok["etasje"], total=part_total["etasje"],
                               pct=pct(part_ok["etasje"], part_total["etasje"]),
                               label="Etasjekode tillatt"),
+        "floor_consistency": dict(n=n_floor_match, total=n_floor_match_total,
+                                  pct=pct(n_floor_match, n_floor_match_total),
+                                  label="Kode-etasje = elementets storey"),
         "komp_valid":    dict(n=n_komp_valid, total=n_komp_total,
                               pct=pct(n_komp_valid, n_komp_total),
                               label=f"Komponent i {rules.komponent_system}"),
@@ -469,13 +558,22 @@ def run_checks(ifc, products, rules: TFMRules,
         "has_komp_check":  has_komp,
         "has_bd_check":    has_bd,
         "has_disc_check":  bool(expected_ns) and has_bd,
+        "has_floor_consistency_check": n_floor_match_total > 0,
         "field_hits": dict(field_hits),
+        "pattern_hits": dict(pattern_hits),
+        "structures": structures,
         "cross_disc": dict(cross_disc.most_common(40)),
         "invalid_bd":   dict(invalid_bd.most_common(40)),
         "invalid_komp": dict(invalid_komp.most_common(20)),
+        "floor_mismatch": dict(floor_mismatch.most_common(40)),
+        "seen_bygningsdel": dict(seen_bygningsdel.most_common(50)),
+        "seen_systems":   dict(seen_systems.most_common(80)),
+        "seen_components": dict(seen_components.most_common(50)),
+        "seen_floors":    dict(seen_floors.most_common(50)),
         "missing_samples": missing,
         "invalid_samples": invalid,
         "code_samples":    code_samples,
+        "type_rows":       type_rows,
         "sys_rows": sys_rows,
         "unassigned_by_type": dict(unassigned_types.most_common(20)),
         "bd_sys_label": bd_sys_label,
@@ -495,7 +593,8 @@ def status_for_pct(pct: float):
 
 
 CHECK_ORDER = ["has_code", "bd_valid", "in_discipline", "floor_valid",
-               "komp_valid", "system_prefix", "system_assign", "tfm_system"]
+               "floor_consistency", "komp_valid",
+               "system_prefix", "system_assign", "tfm_system"]
 
 
 def applicable_checks(results: dict):
@@ -506,6 +605,7 @@ def applicable_checks(results: dict):
         if k == "komp_valid"    and not results["has_komp_check"]:  continue
         if k == "bd_valid"      and not results["has_bd_check"]:    continue
         if k == "in_discipline" and not results["has_disc_check"]:  continue
+        if k == "floor_consistency" and not results.get("has_floor_consistency_check"): continue
         if c["total"] == 0 and k not in ("has_code", "system_prefix",
                                           "system_assign", "tfm_system"):
             continue
@@ -530,7 +630,7 @@ def build_excel(rules, facts, results, file_name, file_size, duration) -> bytes:
             ["Produkter", facts["n_products"]],
             ["Etasjer (modell)", len(facts["storey_names"])],
             ["IfcSystems", facts["n_systems"]],
-            ["TFM-struktur", rules.structure],
+            ["TFM-mønstre", " | ".join(results.get("structures") or [])],
             ["Bygningsdel-system", results["bd_sys_label"]],
             ["Komponent-system", results["komp_sys_label"]],
             ["TFM-kode hentes fra", loc_str],
@@ -546,6 +646,37 @@ def build_excel(rules, facts, results, file_name, file_size, duration) -> bytes:
         pd.DataFrame(rows, columns=["Sjekk", "OK", "Totalt", "Andel"]).to_excel(
             xw, sheet_name="Sjekker", index=False)
 
+        # Per-type coverage (ST28-style)
+        if results.get("type_rows"):
+            pd.DataFrame(results["type_rows"]).to_excel(
+                xw, sheet_name="Type_dekning", index=False)
+
+        # Aggregated codes seen in data (whether valid or not)
+        if results.get("seen_systems"):
+            pd.DataFrame(list(results["seen_systems"].items()),
+                         columns=["Systemkode", "Antall"]
+                         ).to_excel(xw, sheet_name="Systemkoder_funnet", index=False)
+        if results.get("seen_bygningsdel"):
+            pd.DataFrame(list(results["seen_bygningsdel"].items()),
+                         columns=["Bygningsdel", "Antall"]
+                         ).to_excel(xw, sheet_name="Bygningsdeler_funnet", index=False)
+        if results.get("seen_components"):
+            pd.DataFrame(list(results["seen_components"].items()),
+                         columns=["Komponentkode", "Antall"]
+                         ).to_excel(xw, sheet_name="Komponentkoder_funnet", index=False)
+        if results.get("seen_floors"):
+            pd.DataFrame(list(results["seen_floors"].items()),
+                         columns=["Etasjekode", "Antall"]
+                         ).to_excel(xw, sheet_name="Etasjekoder_funnet", index=False)
+
+        if results.get("floor_mismatch"):
+            pd.DataFrame(list(results["floor_mismatch"].items()),
+                         columns=["Kode-etasje ≠ Storey", "Antall"]
+                         ).to_excel(xw, sheet_name="Etasje_avvik", index=False)
+        if results.get("pattern_hits"):
+            pd.DataFrame(list(results["pattern_hits"].items()),
+                         columns=["Mønster", "Antall treff"]
+                         ).to_excel(xw, sheet_name="Mønstertreff", index=False)
         if results["cross_disc"]:
             pd.DataFrame(list(results["cross_disc"].items()),
                          columns=["Bygningsdel utenfor disiplin", "Antall"]
@@ -606,7 +737,7 @@ def build_pdf(rules, facts, results, file_name, file_size, duration) -> bytes:
         ["Antall produkter", f"{facts['n_products']:,}".replace(",", " ")],
         ["Antall etasjer i modell", str(len(facts["storey_names"]))],
         ["Antall IfcSystems", str(facts["n_systems"])],
-        ["TFM-struktur", rules.structure],
+        ["TFM-mønstre", " | ".join(results.get("structures") or [])],
         ["Bygningsdel-system", results["bd_sys_label"]],
         ["Komponent-system", results["komp_sys_label"]],
         ["TFM-kode hentes fra", loc_str],
@@ -782,9 +913,7 @@ def floor_list_editor(key: str, seed: list[str] | None = None) -> list[str]:
 
 
 def structure_builder(key: str, seed: list[dict] | None = None) -> tuple[str, list[dict]]:
-    if key not in st.session_state:
-        st.session_state[key] = list(seed or DEFAULT_BUILDER)
-    df = pd.DataFrame(st.session_state[key])
+    df = pd.DataFrame(seed if seed else DEFAULT_BUILDER)
     edited = st.data_editor(
         df,
         num_rows="dynamic", hide_index=False, use_container_width=True,
@@ -804,7 +933,6 @@ def structure_builder(key: str, seed: list[dict] | None = None) -> tuple[str, li
         },
     )
     rows = [r for r in edited.to_dict("records") if r.get("Datatype") in PART_TYPES]
-    st.session_state[key] = rows
     return "", rows  # template built later including start_prefix
 
 
@@ -978,45 +1106,83 @@ App v{APP_VERSION}
     </div>
     """, unsafe_allow_html=True)
 
-    # ----- Step 2: TFM-struktur (regex-bygger) -----
+    # ----- Step 2: TFM-struktur (regex-bygger med flere mønstre) -----
     st.markdown('<div class="step-label">Steg 2 — TFM-struktur (bygg merkereglen)</div>',
                 unsafe_allow_html=True)
     st.caption("Bygg TFM-koden ledd for ledd. Følger Statsbygg TFM-veiledning: "
                "valgfritt **++lokasjon** (avsluttes med `=`), **system** (NS3451 + etasje + nr.), "
                "valgfritt **-komponent** (IEC 81346-bokstav + nr.). "
-               "Hopp over deler du ikke trenger.")
+               "Du kan legge til flere mønstre — et element godkjennes om _minst ett_ matcher.")
 
-    # Presets
+    patterns_key = f"patterns_{file_key}"
+    if patterns_key not in st.session_state:
+        st.session_state[patterns_key] = [
+            {"start_prefix": "", "builder_rows": list(DEFAULT_BUILDER)}
+        ]
+
+    # Presets — apply to first pattern only
     pcol = st.columns(len(PRESETS))
     for i, (pname, pseq) in enumerate(PRESETS.items()):
         with pcol[i]:
             if st.button(pname, key=f"preset_{pname}_{file_key}",
                          use_container_width=True):
-                st.session_state[f"builder_{file_key}"] = list(pseq)
-                st.session_state.pop(f"editor_builder_{file_key}", None)
-                st.session_state[f"start_prefix_{file_key}"] = "++" if "Statsbygg" in pname else ""
+                st.session_state[patterns_key][0] = {
+                    "start_prefix": "++" if "Statsbygg" in pname else "",
+                    "builder_rows": list(pseq),
+                }
+                st.session_state.pop(f"editor_builder_p0_{file_key}", None)
                 reset_results(); st.rerun()
 
-    start_prefix = st.text_input(
-        "Start-prefiks (valgfritt, f.eks. `++` for Statsbygg-lokasjon)",
-        st.session_state.get(f"start_prefix_{file_key}", ""),
-        key=f"start_prefix_{file_key}",
-        max_chars=4,
-    )
+    patterns = st.session_state[patterns_key]
+    templates = []
+    for idx in range(len(patterns)):
+        p = patterns[idx]
+        with st.container(border=True):
+            hc1, hc2, hc3 = st.columns([3, 5, 1])
+            with hc1:
+                st.markdown(f"**Mønster {idx + 1}**")
+            with hc2:
+                prefix = st.text_input(
+                    "Start-prefiks", value=p.get("start_prefix", ""),
+                    key=f"prefix_p{idx}_{file_key}", max_chars=4,
+                    help="F.eks. `++` for Statsbygg-lokasjon",
+                    label_visibility="collapsed", placeholder="Start-prefiks (valgfritt)",
+                )
+            with hc3:
+                if len(patterns) > 1:
+                    if st.button("✕", key=f"rm_p{idx}_{file_key}",
+                                 help="Fjern dette mønsteret"):
+                        patterns.pop(idx)
+                        # Clear editor states from removed index onward so each
+                        # remaining pattern re-seeds from its stored builder_rows
+                        for i in range(idx, len(patterns) + 2):
+                            st.session_state.pop(f"editor_builder_p{i}_{file_key}", None)
+                        st.session_state[patterns_key] = patterns
+                        reset_results(); st.rerun()
+            _, rows = structure_builder(f"builder_p{idx}_{file_key}",
+                                        seed=p.get("builder_rows", DEFAULT_BUILDER))
+            patterns[idx] = {"start_prefix": prefix, "builder_rows": rows}
+            template_i = builder_rows_to_structure(rows, prefix)
+            templates.append(template_i)
+            st.markdown(f'<div class="preview-chip">Eksempel: {template_i or "(tomt)"}</div>',
+                        unsafe_allow_html=True)
 
-    _, builder_rows = structure_builder(f"builder_{file_key}")
-    template = builder_rows_to_structure(builder_rows, start_prefix)
+    st.session_state[patterns_key] = patterns
 
-    st.markdown(f'<div class="preview-chip">Eksempel: {template or "(tomt)"}</div>',
-                unsafe_allow_html=True)
+    if st.button("➕ Legg til mønster", use_container_width=True,
+                 key=f"add_pat_{file_key}"):
+        patterns.append({"start_prefix": "", "builder_rows": list(DEFAULT_BUILDER)})
+        st.session_state[patterns_key] = patterns
+        reset_results(); st.rerun()
 
-    if not builder_rows:
-        st.warning("Strukturen er tom. Legg til minst ett ledd, eller velg en preset over.")
+    if not any(t for t in templates):
+        st.warning("Minst ett mønster må ha innhold.")
         return
-    try:
-        re.compile(template)
-    except re.error as e:
-        st.error(f"Strukturen er ugyldig regex: {e}"); return
+    for i, t in enumerate(templates):
+        try:
+            re.compile(t)
+        except re.error as e:
+            st.error(f"Mønster {i+1} er ugyldig regex: {e}"); return
 
     # ----- Step 3: Klassifikasjonssystemer -----
     st.markdown('<div class="step-label">Steg 3 — Klassifikasjonssystemer</div>',
@@ -1135,9 +1301,7 @@ App v{APP_VERSION}
         discipline_key=discipline_key,
         bygningsdel_system=bd_sys,
         komponent_system=komp_sys,
-        start_prefix=start_prefix,
-        structure=template,
-        builder_rows=builder_rows,
+        patterns=list(patterns),
         floor_codes=floor_codes,
         tfm_location=tfm_location,
     )
@@ -1165,10 +1329,17 @@ App v{APP_VERSION}
                     st.session_state[disc_key] = data.get("discipline_key", "Annet")
                     st.session_state[f"bd_sys_{file_key}"] = data.get("bygningsdel_system", "NS3451")
                     st.session_state[f"komp_sys_{file_key}"] = data.get("komponent_system", "IEC81346")
-                    st.session_state[f"start_prefix_{file_key}"] = data.get("start_prefix", "")
-                    st.session_state[f"builder_{file_key}"] = data.get(
-                        "builder_rows", list(DEFAULT_BUILDER))
-                    st.session_state.pop(f"editor_builder_{file_key}", None)
+                    # Load patterns — accept both new (patterns list) and legacy (single) format
+                    if "patterns" in data and isinstance(data["patterns"], list) and data["patterns"]:
+                        new_patterns = data["patterns"]
+                    else:
+                        new_patterns = [{
+                            "start_prefix": data.get("start_prefix", ""),
+                            "builder_rows": data.get("builder_rows", list(DEFAULT_BUILDER)),
+                        }]
+                    st.session_state[f"patterns_{file_key}"] = new_patterns
+                    for i in range(20):
+                        st.session_state.pop(f"editor_builder_p{i}_{file_key}", None)
                     st.session_state[f"floor_codes_{file_key}"] = data.get("floor_codes", [])
                     st.session_state.pop(f"editor_floor_codes_{file_key}", None)
                     reset_results()
@@ -1249,13 +1420,20 @@ App v{APP_VERSION}
         metric_card(c["system_prefix"]["label"], c["system_prefix"]["pct"],
                     f"{c['system_prefix']['n']} / {c['system_prefix']['total']}")
 
-    r3c1, r3c2 = st.columns(2)
+    r3c1, r3c2, r3c3 = st.columns(3)
     with r3c1:
         metric_card(c["system_assign"]["label"], c["system_assign"]["pct"],
                     f"{c['system_assign']['n']:,} / {c['system_assign']['total']:,}")
     with r3c2:
         metric_card(c["tfm_system"]["label"], c["tfm_system"]["pct"],
                     f"{c['tfm_system']['n']:,} / {c['tfm_system']['total']:,}")
+    with r3c3:
+        if results.get("has_floor_consistency_check") and c["floor_consistency"]["total"]:
+            metric_card(c["floor_consistency"]["label"], c["floor_consistency"]["pct"],
+                        f"{c['floor_consistency']['n']:,} / {c['floor_consistency']['total']:,}")
+        else:
+            info_card("Etasje-konsistens", "—",
+                      "Krever {etasje} + IfcRelContainedInSpatialStructure")
 
     chart_rows = [{"Sjekk": ch["label"], "Andel (%)": ch["pct"]}
                   for _, ch in applicable_checks(results)]
@@ -1292,6 +1470,43 @@ App v{APP_VERSION}
             st.dataframe(pd.DataFrame(list(results["invalid_komp"].items()),
                                        columns=["Bokstav", "Antall"]),
                          hide_index=True, use_container_width=True, height=200)
+    if results.get("floor_mismatch"):
+        with st.expander(f"🏢 Etasjeavvik (kode vs. faktisk storey) — "
+                          f"{sum(results['floor_mismatch'].values()):,} treff"):
+            st.caption("TFM-kodens etasjeledd matcher ikke elementets `IfcRelContainedInSpatialStructure`-storey.")
+            st.dataframe(pd.DataFrame(list(results["floor_mismatch"].items()),
+                                       columns=["Kode ≠ Storey", "Antall"]),
+                         hide_index=True, use_container_width=True, height=200)
+
+    # Per-type coverage (ST28-style)
+    if results.get("type_rows"):
+        with st.expander(f"📊 Coverage per IfcType ({len(results['type_rows'])} typer)"):
+            st.dataframe(pd.DataFrame(results["type_rows"]),
+                         hide_index=True, use_container_width=True, height=300)
+
+    # Aggregated counters seen in data
+    agg_pairs = [
+        ("Systemkoder funnet",  results.get("seen_systems",   {})),
+        ("Bygningsdeler funnet", results.get("seen_bygningsdel", {})),
+        ("Komponentkoder funnet", results.get("seen_components", {})),
+        ("Etasjekoder funnet",  results.get("seen_floors",    {})),
+    ]
+    if any(v for _, v in agg_pairs):
+        with st.expander("📈 Aggregerte koder funnet i modellen"):
+            ac1, ac2 = st.columns(2)
+            for i, (lbl, d) in enumerate(agg_pairs):
+                if not d:
+                    continue
+                with (ac1 if i % 2 == 0 else ac2):
+                    st.caption(f"**{lbl}** ({len(d)} unike, totalt {sum(d.values()):,})")
+                    st.dataframe(pd.DataFrame(list(d.items()), columns=["Kode", "Antall"]),
+                                 hide_index=True, use_container_width=True, height=200)
+
+    if results.get("pattern_hits") and len(results.get("pattern_hits", {})) > 1:
+        with st.expander(f"🎯 Mønstertreff — fordeling per mønster"):
+            st.dataframe(pd.DataFrame(list(results["pattern_hits"].items()),
+                                       columns=["Mønster", "Antall treff"]),
+                         hide_index=True, use_container_width=True)
 
     st.markdown("##### Detaljer")
     b1, b2 = st.columns(2)
