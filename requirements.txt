@@ -1,0 +1,6 @@
+streamlit
+pandas
+ifcopenshell
+openpyxl
+altair
+reportlab
