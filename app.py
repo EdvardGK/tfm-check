@@ -157,6 +157,29 @@ def sequence_to_template(seq: list[str], start_prefix: str = "") -> str:
     return "".join(parts)
 
 
+# Concrete example values for the live preview. Picked to look like real TFM codes.
+PART_EXAMPLE = {
+    "Lokasjon":    "U1",
+    "Rom":         "012",
+    "Bygningsdel": "433",
+    "Etasje":      "01",
+    "Subnr":       "01",
+    "Løpenummer":  "001",
+    "Komponent":   "OS",
+    "Komp.nr":     "01",
+}
+
+
+def sequence_to_example(seq: list[str], start_prefix: str = "") -> str:
+    parts = [start_prefix] if start_prefix else []
+    for item in seq:
+        if item in PART_EXAMPLE:
+            parts.append(PART_EXAMPLE[item])
+        elif item in SEP_TO_CHAR:
+            parts.append(SEP_TO_CHAR[item])
+    return "".join(parts)
+
+
 def legacy_rows_to_sequence(rows: list[dict]) -> list[str]:
     """Convert pre-0.7 builder_rows (with Datatype + Skilletegn etter) to new flat sequence."""
     out = []
@@ -1006,6 +1029,30 @@ def main():
             box-shadow: 0 2px 4px rgba(0,0,0,0.08);
         }
 
+        .pattern-preview {
+            background: #1e293b; border-radius: 10px;
+            padding: 0.9rem 1.1rem; margin: 0.7rem 0 0.4rem 0;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+            border-left: 4px solid #a7f3d0;
+        }
+        .pattern-preview .preview-label {
+            font-size: 0.65rem; color: #94a3b8; text-transform: uppercase;
+            letter-spacing: 0.1em; font-weight: 700; margin-bottom: 4px;
+        }
+        .pattern-preview .preview-example {
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 1.6rem; font-weight: 700; color: #a7f3d0;
+            letter-spacing: 0.05em; line-height: 1.1;
+        }
+        .pattern-preview .preview-template {
+            font-size: 0.78rem; color: #94a3b8; margin-top: 6px;
+        }
+        .pattern-preview .preview-template code {
+            background: rgba(255,255,255,0.06); color: #cbd5e1;
+            padding: 1px 6px; border-radius: 4px;
+            font-family: 'Consolas', 'Courier New', monospace;
+        }
+
         .block-editor {
             background: white; border-radius: 10px;
             padding: 0.8rem 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.05);
@@ -1147,9 +1194,15 @@ hva hver blokk inneholder, og klikke ✕ for å fjerne.
             new_seq = block_builder(seq_key, st.session_state[seq_key])
             patterns[idx] = {"start_prefix": prefix, "sequence": new_seq}
             template_i = sequence_to_template(new_seq, prefix)
+            example_i = sequence_to_example(new_seq, prefix)
             templates.append(template_i)
-            st.markdown(f'<div class="preview-chip">Eksempel: {template_i or "(tomt)"}</div>',
-                        unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class="pattern-preview">
+                <div class="preview-label">Eksempel-streng</div>
+                <div class="preview-example">{example_i or "(tomt)"}</div>
+                <div class="preview-template">Mal: <code>{template_i or "(tomt)"}</code></div>
+            </div>
+            """, unsafe_allow_html=True)
 
     st.session_state[patterns_key] = patterns
 
