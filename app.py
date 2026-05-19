@@ -159,7 +159,7 @@ def sequence_to_template(seq: list[str], start_prefix: str = "") -> str:
 
 # Concrete example values for the live preview. Picked to look like real TFM codes.
 PART_EXAMPLE = {
-    "Lokasjon":    "U1",
+    "Lokasjon":    "BygningsID",
     "Rom":         "012",
     "Bygningsdel": "433",
     "Etasje":      "01",
