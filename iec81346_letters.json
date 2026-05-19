@@ -1,0 +1,20 @@
+{
+  "A": {"name": "To eller flere formål eller oppgaver"},
+  "B": {"name": "Omforming av inngangsvariabel til signal"},
+  "C": {"name": "Lagring av energi, informasjon eller materiale"},
+  "E": {"name": "Levering av strålende eller termisk energi"},
+  "F": {"name": "Beskyttelse mot farlige eller uønskede tilstander"},
+  "G": {"name": "Igangsetting av energi-/materialstrøm eller signalgenerering"},
+  "H": {"name": "Frembringe et nytt slags materiale eller produkt"},
+  "K": {"name": "Prosessering av signaler eller informasjon"},
+  "M": {"name": "Mekanisk drift (rotasjon, lineær bevegelse)"},
+  "P": {"name": "Presentere informasjon"},
+  "Q": {"name": "Kontrollert kobling/regulering av strøm av energi, signaler eller materiale"},
+  "R": {"name": "Begrense eller stabilisere bevegelse eller strøm"},
+  "S": {"name": "Manuell operasjon omformet til signal"},
+  "T": {"name": "Translasjon av energi (samme energiform) eller signal"},
+  "U": {"name": "Holde objekter i fastlagt posisjon"},
+  "V": {"name": "Prosessering (behandling) av materiale eller produkter"},
+  "W": {"name": "Føring/transport av energi, signaler, materiale fra et sted til et annet"},
+  "X": {"name": "Tilkobling av objekter"}
+}

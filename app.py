@@ -1,7 +1,9 @@
 """
 TFM-sjekk — IFC-mottakskontroll for TFM-merking.
 
-Centric, progressive-disclosure UI inspired by mmi-color-marker.
+Centric, progressive-disclosure UI. Visual structure builder følger Statsbygg
+TFM-veiledning (lokasjon/system/komponent-aspekter). Klassifikasjonsvelger
+(NS3451 + IEC 81346-2). Nedlastbar regelmal.
 
 Run: streamlit run app.py
 """
@@ -14,7 +16,7 @@ import re
 import tempfile
 import time
 import zipfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from pathlib import Path
 from collections import Counter
@@ -35,60 +37,118 @@ from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
 import usage
 
 # =============================================================================
-# CONFIG
+# CONSTANTS
 # =============================================================================
 
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.5.0"
 HERE = Path(__file__).parent
 
 ACCEPTED_SCHEMA_PREFIXES = ("IFC2X3", "IFC4")
 SPATIAL_TYPES = {"IfcSite", "IfcBuilding", "IfcBuildingStorey", "IfcSpace"}
 
-# Disciplines are LABELS for the report — they do not prime any allowlists.
-# Each one has a default structure template + an expected NS3451-category range
-# (used for cross-discipline flagging, not for validation).
 DISCIPLINES = {
-    "RIE":  dict(label="RIE — Elektro",
-                 structure="{bygningsdel}.{etasje}-{komponent}{lopenummer}",
-                 ns_range=["4", "5"]),
-    "RIV":  dict(label="RIV — VVS",
-                 structure="{bygningsdel}.{etasje}.{lopenummer}",
-                 ns_range=["3"]),
-    "RIB":  dict(label="RIB — Bygg",
-                 structure="{bygningsdel}.{etasje}-{komponent}{lopenummer}",
-                 ns_range=["2"]),
-    "ARK":  dict(label="ARK — Arkitekt",
-                 structure="{bygningsdel}.{etasje}-{komponent}{lopenummer}",
-                 ns_range=["2", "7"]),
-    "RIBR": dict(label="RIBR — Brann",
-                 structure="{bygningsdel}.{etasje}-{komponent}{lopenummer}",
-                 ns_range=["5"]),
-    "Annet": dict(label="Annet / ukjent",
-                  structure="{bygningsdel}.{etasje}-{komponent}{lopenummer}",
-                  ns_range=[]),
+    "RIE":   dict(label="RIE — Elektro",       ns_range=["4", "5"]),
+    "RIV":   dict(label="RIV — VVS",            ns_range=["3"]),
+    "RIB":   dict(label="RIB — Bygg",           ns_range=["2"]),
+    "ARK":   dict(label="ARK — Arkitekt",       ns_range=["2", "7"]),
+    "RIBR":  dict(label="RIBR — Brann",         ns_range=["5"]),
+    "Annet": dict(label="Annet / ukjent",       ns_range=[]),
 }
 
 FILENAME_DISCIPLINE_PATTERNS = [
-    ("RIBR", re.compile(r"(?<![A-Za-z])RIBR(?![A-Za-z])|RIBfy|RIBR_", re.I)),
+    ("RIBR", re.compile(r"(?<![A-Za-z])RIBR(?![A-Za-z])|RIBfy", re.I)),
     ("RIE",  re.compile(r"(?<![A-Za-z])RIE(?![A-Za-z])",  re.I)),
     ("RIV",  re.compile(r"(?<![A-Za-z])RIV(?![A-Za-z])",  re.I)),
     ("RIB",  re.compile(r"(?<![A-Za-z])RIB(?![A-Za-z])",  re.I)),
     ("ARK",  re.compile(r"(?<![A-Za-z])I?ARK(?![A-Za-z])", re.I)),
 ]
 
-# Classification systems for bygningsdel validation. Add new entries here as
-# additional reference data is bundled with the app (e.g. ebkph, NS3451:2022).
-CLASSIFICATION_SYSTEMS = {
-    "NS3451": dict(label="NS3451 (norsk standard for bygningsdeler)",
+# --- Classification systems --------------------------------------------------
+
+BYGNINGSDEL_SYSTEMS = {
+    "NS3451": dict(label="NS3451 — Bygningsdelstabell (norsk)",
                    file="ns3451_codes.json"),
     "Ingen":  dict(label="Ingen sjekk", file=None),
 }
 
+KOMPONENT_SYSTEMS = {
+    "IEC81346": dict(label="IEC 81346-2 — Funksjonsbokstaver",
+                     file="iec81346_letters.json"),
+    "Ingen":    dict(label="Ingen sjekk", file=None),
+}
+
+# --- Visual structure builder ------------------------------------------------
+# Følger Statsbygg TFM-veiledning: aspekter ++ (lokasjon), = (system), - (komponent).
+
+PART_TYPES = [
+    "Lokasjon", "Rom",            # ++lokasjon-aspekt
+    "Bygningsdel", "Etasje",       # =system-aspekt (etasje her er TFM-internt nr, ikke storey-navn)
+    "Subnr", "Løpenummer",
+    "Komponent",                   # -komponent-aspekt: IEC 81346 funksjonsbokstav
+    "Komp.nr",
+]
+PART_TO_TEMPLATE = {
+    "Lokasjon":    "{lokasjon}",
+    "Rom":         "{rom}",
+    "Bygningsdel": "{bygningsdel}",
+    "Etasje":      "{etasje}",
+    "Subnr":       "{subnr}",
+    "Løpenummer":  "{lopenummer}",
+    "Komponent":   "{komponent}",
+    "Komp.nr":     "{kompnr}",
+}
+SEP_OPTIONS = ["(ingen)", ".", "-", "_", "/", "(mellomrom)", "=", "++"]
+SEP_TO_CHAR = {
+    "(ingen)":      "",
+    ".":            ".",
+    "-":            "-",
+    "_":            "_",
+    "/":            "/",
+    "(mellomrom)":  " ",
+    "=":            "=",
+    "++":           "++",
+}
+
+# Default builder rows — minimal system aspect (matches what most projects use).
+DEFAULT_BUILDER = [
+    {"Datatype": "Bygningsdel", "Skilletegn etter": "."},
+    {"Datatype": "Etasje",       "Skilletegn etter": "-"},
+    {"Datatype": "Komponent",    "Skilletegn etter": "(ingen)"},
+    {"Datatype": "Løpenummer",   "Skilletegn etter": "(ingen)"},
+]
+
+PRESETS = {
+    "Enkel (system)":          [
+        {"Datatype": "Bygningsdel", "Skilletegn etter": "."},
+        {"Datatype": "Etasje",       "Skilletegn etter": "-"},
+        {"Datatype": "Komponent",    "Skilletegn etter": "(ingen)"},
+        {"Datatype": "Løpenummer",   "Skilletegn etter": "(ingen)"},
+    ],
+    "VVS (tre-leddet)":        [
+        {"Datatype": "Bygningsdel", "Skilletegn etter": "."},
+        {"Datatype": "Etasje",       "Skilletegn etter": "."},
+        {"Datatype": "Løpenummer",   "Skilletegn etter": "(ingen)"},
+    ],
+    "Statsbygg (full)":        [
+        {"Datatype": "Lokasjon",    "Skilletegn etter": "."},
+        {"Datatype": "Rom",          "Skilletegn etter": "="},
+        {"Datatype": "Bygningsdel",  "Skilletegn etter": "."},
+        {"Datatype": "Etasje",       "Skilletegn etter": "."},
+        {"Datatype": "Subnr",        "Skilletegn etter": "-"},
+        {"Datatype": "Komponent",    "Skilletegn etter": "."},
+        {"Datatype": "Komp.nr",      "Skilletegn etter": "(ingen)"},
+    ],
+}
+
 PLACEHOLDER_FALLBACK = {
+    "lokasjon":    r"[A-Za-z0-9æøåÆØÅ_\-]{1,12}",
+    "rom":         r"\d{1,5}",
     "bygningsdel": r"\d{3}",
     "etasje":      r"[A-Za-z0-9æøåÆØÅ_\- ]{1,12}",
-    "komponent":   r"[A-Za-zÆØÅæøå]{1,4}",
+    "subnr":       r"\d{1,4}",
     "lopenummer":  r"\d{1,4}(?:\.\d{1,4})?",
+    "komponent":   r"[A-Za-zÆØÅæøå]{1,4}",
+    "kompnr":      r"\d{1,4}",
 }
 PLACEHOLDER_RE = re.compile(r"\{(\w+)\}")
 
@@ -96,11 +156,10 @@ THRESHOLDS = {"ok": 95, "warn": 50}
 
 
 @st.cache_resource
-def load_classification_codes(system_key: str) -> dict:
-    cfg = CLASSIFICATION_SYSTEMS.get(system_key)
-    if not cfg or not cfg.get("file"):
+def load_codes(file_name: str | None) -> dict:
+    if not file_name:
         return {}
-    p = HERE / cfg["file"]
+    p = HERE / file_name
     if not p.exists():
         return {}
     with p.open(encoding="utf-8") as f:
@@ -108,7 +167,7 @@ def load_classification_codes(system_key: str) -> dict:
 
 
 # =============================================================================
-# DETECTION HELPERS
+# HELPERS
 # =============================================================================
 
 
@@ -120,11 +179,9 @@ def detect_discipline_from_filename(name: str) -> str | None:
 
 
 def parse_storey_name_to_code(name: str) -> str:
-    """Heuristic: extract a short floor code from a storey name."""
     s = (name or "").strip()
     if not s:
         return ""
-    # "Plan 01 - VVS" -> "01"; "Plan 1" -> "01"; "Kjeller" -> "Kjeller"
     m = re.search(r"\b(\d{1,3})\b", s)
     if m:
         return m.group(1).zfill(2)
@@ -138,11 +195,6 @@ def extract_storey_codes_from_ifc(ifc) -> list[str]:
         if code and code not in seen:
             seen.add(code); out.append(code)
     return out
-
-
-# =============================================================================
-# IFC LOADING
-# =============================================================================
 
 
 def load_ifc(uploaded_file) -> tuple[ifcopenshell.file, str]:
@@ -171,7 +223,6 @@ def model_facts(ifc, products) -> dict:
 
 
 def build_pset_index(ifc) -> dict[str, list[str]]:
-    """Return {pset_name: sorted_prop_names} found on actual IfcProducts."""
     out: dict[str, set[str]] = {}
     for rel in ifc.by_type("IfcRelDefinesByProperties"):
         if not any(o.is_a("IfcProduct") for o in rel.RelatedObjects):
@@ -185,6 +236,18 @@ def build_pset_index(ifc) -> dict[str, list[str]]:
     return {k: sorted(v) for k, v in sorted(out.items())}
 
 
+def builder_rows_to_structure(rows: list[dict], start_prefix: str = "") -> str:
+    parts = [start_prefix] if start_prefix else []
+    for r in rows:
+        dt = r.get("Datatype")
+        sep = r.get("Skilletegn etter", "(ingen)")
+        if dt not in PART_TYPES:
+            continue
+        parts.append(PART_TO_TEMPLATE.get(dt, ""))
+        parts.append(SEP_TO_CHAR.get(sep, ""))
+    return "".join(parts)
+
+
 # =============================================================================
 # RULES + REGEX
 # =============================================================================
@@ -194,14 +257,12 @@ def build_pset_index(ifc) -> dict[str, list[str]]:
 class TFMRules:
     project_name: str = ""
     discipline_key: str = "Annet"
-    structure: str = "{bygningsdel}.{etasje}-{komponent}{lopenummer}"
+    bygningsdel_system: str = "NS3451"
+    komponent_system: str = "IEC81346"
+    start_prefix: str = ""
+    structure: str = "{bygningsdel}.{etasje}-{komponent}"
+    builder_rows: list[dict] = field(default_factory=lambda: list(DEFAULT_BUILDER))
     floor_codes: list[str] = field(default_factory=list)
-    komponent_codes: list[str] = field(default_factory=list)
-    # Where to search for the TFM code. Examples:
-    #   ("all", None, None)         — scan Name, Tag, and all psets
-    #   ("attr", None, "Name")      — only IfcProduct.Name
-    #   ("attr", None, "Tag")       — only IfcProduct.Tag
-    #   ("pset", "PsetX", "PropY")  — only that pset/property
     tfm_location: tuple = ("all", None, None)
 
     def regex(self) -> re.Pattern:
@@ -222,6 +283,12 @@ class TFMRules:
     def expected_ns_range(self) -> list[str]:
         return DISCIPLINES.get(self.discipline_key, {}).get("ns_range", []) or []
 
+    def to_template_dict(self) -> dict:
+        d = asdict(self)
+        d["tfm_location"] = list(self.tfm_location)
+        d["app_version"] = APP_VERSION
+        return d
+
 
 # =============================================================================
 # ANALYSIS
@@ -229,7 +296,6 @@ class TFMRules:
 
 
 def candidate_strings_for(elem, location: tuple):
-    """Yield (field_label, value_str) pairs to test against TFM regex."""
     kind, ps, prop = location
     if kind == "attr":
         if prop == "Name" and elem.Name:
@@ -245,7 +311,6 @@ def candidate_strings_for(elem, location: tuple):
         if isinstance(v, str) and v.strip():
             yield (f"{ps}.{prop}", v)
         return
-    # "all" — scan everywhere
     if elem.Name:
         yield ("Name", elem.Name)
     tag = getattr(elem, "Tag", None)
@@ -259,27 +324,22 @@ def candidate_strings_for(elem, location: tuple):
                 yield (f"{pn}.{k}", v)
 
 
-def run_checks(ifc, products, rules: TFMRules, ns3451_codes: dict) -> dict:
+def run_checks(ifc, products, rules: TFMRules,
+               bygningsdel_codes: dict, komponent_codes: dict) -> dict:
     rx = rules.regex()
     floor_set = set(rules.floor_codes)
-    komp_set = set(rules.komponent_codes)
-    has_komp_check = bool(komp_set)
-    has_floor_check = bool(floor_set)
+    has_floor = bool(floor_set)
+    has_bd = bool(bygningsdel_codes)
+    has_komp = bool(komponent_codes)
     expected_ns = set(rules.expected_ns_range)
 
     n_total = len(products)
-    n_has_code = 0
-    n_struct_ok = 0
-
-    part_total = Counter()
-    part_ok = Counter()
-    n_ns3451_valid = 0
-    n_ns3451_total = 0
-    n_in_discipline = 0
-    n_discipline_total = 0
-    cross_disc_codes = Counter()       # bygningsdel codes outside expected range
-    invalid_ns_codes = Counter()
-
+    n_has_code = n_struct_ok = 0
+    part_total = Counter(); part_ok = Counter()
+    n_bd_valid = n_bd_total = 0
+    n_in_disc = n_disc_total = 0
+    n_komp_valid = n_komp_total = 0
+    cross_disc = Counter(); invalid_bd = Counter(); invalid_komp = Counter()
     field_hits = Counter()
     missing, invalid, code_samples = [], [], []
 
@@ -299,68 +359,55 @@ def run_checks(ifc, products, rules: TFMRules, ns3451_codes: dict) -> dict:
             continue
 
         fld, val, m = chosen
-        n_has_code += 1
-        n_struct_ok += 1
+        n_has_code += 1; n_struct_ok += 1
         field_hits[fld] += 1
         g = m.groupdict()
         any_invalid = False
 
-        # bygningsdel — validate against chosen classification system (if any)
         bd = g.get("bygningsdel")
-        if bd is not None and ns3451_codes:
-            part_total["bygningsdel"] += 1
-            n_ns3451_total += 1
-            if bd in ns3451_codes:
-                part_ok["bygningsdel"] += 1
-                n_ns3451_valid += 1
+        if bd is not None and has_bd:
+            part_total["bygningsdel"] += 1; n_bd_total += 1
+            if bd in bygningsdel_codes:
+                part_ok["bygningsdel"] += 1; n_bd_valid += 1
                 if expected_ns:
-                    n_discipline_total += 1
-                    if bd[:1] in expected_ns:
-                        n_in_discipline += 1
-                    else:
-                        cross_disc_codes[bd] += 1
+                    n_disc_total += 1
+                    if bd[:1] in expected_ns: n_in_disc += 1
+                    else: cross_disc[bd] += 1
             else:
-                invalid_ns_codes[bd] += 1
-                any_invalid = True
+                invalid_bd[bd] += 1; any_invalid = True
 
-        # etasje — validate against floor_codes (if any)
         et = g.get("etasje")
-        if et is not None and has_floor_check:
+        if et is not None and has_floor:
             part_total["etasje"] += 1
-            if et in floor_set:
-                part_ok["etasje"] += 1
-            else:
-                any_invalid = True
+            if et in floor_set: part_ok["etasje"] += 1
+            else: any_invalid = True
 
-        # komponent — validate against komponent_codes (if any)
         ko = g.get("komponent")
-        if ko is not None and has_komp_check:
-            part_total["komponent"] += 1
-            if ko in komp_set:
-                part_ok["komponent"] += 1
+        if ko is not None and has_komp:
+            part_total["komponent"] += 1; n_komp_total += 1
+            first = ko[:1].upper()
+            if first in komponent_codes:
+                part_ok["komponent"] += 1; n_komp_valid += 1
             else:
-                any_invalid = True
+                invalid_komp[first or "(tom)"] += 1; any_invalid = True
 
-        # løpenummer — already format-checked by the regex itself; count as valid
-        if "lopenummer" in g:
-            part_total["lopenummer"] += 1
-            part_ok["lopenummer"] += 1
+        for nm in ("lopenummer", "subnr", "kompnr", "lokasjon", "rom"):
+            if nm in g:
+                part_total[nm] += 1; part_ok[nm] += 1
 
         if len(code_samples) < 200:
             code_samples.append({
                 "GUID": e.GlobalId, "Type": e.is_a(),
                 "Felt": fld, "Kode": val[:80],
-                **{k: g.get(k, "") for k in ("bygningsdel", "etasje", "komponent", "lopenummer")},
+                **{k: g.get(k, "") for k in g.keys()},
             })
-
         if any_invalid and len(invalid) < 500:
             invalid.append({
                 "GUID": e.GlobalId, "Type": e.is_a(),
                 "Navn": (e.Name or "")[:60], "Felt": fld, "Kode": val[:60],
-                **{k: g.get(k, "") for k in ("bygningsdel", "etasje", "komponent", "lopenummer")},
+                **{k: g.get(k, "") for k in g.keys()},
             })
 
-    # IfcSystem
     try:
         systems = ifc.by_type("IfcSystem")
     except RuntimeError:
@@ -377,9 +424,9 @@ def run_checks(ifc, products, rules: TFMRules, ns3451_codes: dict) -> dict:
         sf = []
         for rel in getattr(e, "HasAssignments", []) or []:
             if rel.is_a("IfcRelAssignsToGroup"):
-                g = rel.RelatingGroup
-                if g.is_a("IfcSystem"):
-                    sf.append(g)
+                gobj = rel.RelatingGroup
+                if gobj.is_a("IfcSystem"):
+                    sf.append(gobj)
         if sf:
             n_assigned += 1
             if any(rx.search(s.Name or "") for s in sf):
@@ -389,27 +436,26 @@ def run_checks(ifc, products, rules: TFMRules, ns3451_codes: dict) -> dict:
 
     def pct(a, b): return (a / b * 100) if b else 0.0
 
+    bd_sys_label = BYGNINGSDEL_SYSTEMS.get(rules.bygningsdel_system, {}).get("label", "klassifikasjon")
+    komp_sys_label = KOMPONENT_SYSTEMS.get(rules.komponent_system, {}).get("label", "klassifikasjon")
+
     checks = {
-        "has_code":      dict(n=n_has_code,      total=n_total,
-                              pct=pct(n_has_code, n_total),
+        "has_code":      dict(n=n_has_code, total=n_total, pct=pct(n_has_code, n_total),
                               label="Element har TFM-kode"),
-        "ns3451_valid":  dict(n=n_ns3451_valid,  total=n_ns3451_total,
-                              pct=pct(n_ns3451_valid, n_ns3451_total),
-                              label="Bygningsdel i NS3451"),
-        "in_discipline": dict(n=n_in_discipline, total=n_discipline_total,
-                              pct=pct(n_in_discipline, n_discipline_total),
+        "bd_valid":      dict(n=n_bd_valid, total=n_bd_total, pct=pct(n_bd_valid, n_bd_total),
+                              label=f"Bygningsdel i {rules.bygningsdel_system}"),
+        "in_discipline": dict(n=n_in_disc, total=n_disc_total, pct=pct(n_in_disc, n_disc_total),
                               label=f"I forventet område for {rules.discipline_key}"),
         "floor_valid":   dict(n=part_ok["etasje"], total=part_total["etasje"],
                               pct=pct(part_ok["etasje"], part_total["etasje"]),
                               label="Etasjekode tillatt"),
-        "komp_valid":    dict(n=part_ok["komponent"], total=part_total["komponent"],
-                              pct=pct(part_ok["komponent"], part_total["komponent"]),
-                              label="Komponentkode tillatt"),
+        "komp_valid":    dict(n=n_komp_valid, total=n_komp_total,
+                              pct=pct(n_komp_valid, n_komp_total),
+                              label=f"Komponent i {rules.komponent_system}"),
         "system_prefix": dict(n=n_sys_ok, total=len(systems),
                               pct=pct(n_sys_ok, len(systems)),
                               label="IfcSystem-prefiks"),
-        "system_assign": dict(n=n_assigned, total=n_total,
-                              pct=pct(n_assigned, n_total),
+        "system_assign": dict(n=n_assigned, total=n_total, pct=pct(n_assigned, n_total),
                               label="Element tildelt IfcSystem"),
         "tfm_system":    dict(n=n_tfm_assigned, total=n_total,
                               pct=pct(n_tfm_assigned, n_total),
@@ -419,17 +465,21 @@ def run_checks(ifc, products, rules: TFMRules, ns3451_codes: dict) -> dict:
     return {
         "n_total": n_total,
         "checks": checks,
-        "has_floor_check": has_floor_check,
-        "has_komp_check": has_komp_check,
-        "has_disc_check": bool(expected_ns),
+        "has_floor_check": has_floor,
+        "has_komp_check":  has_komp,
+        "has_bd_check":    has_bd,
+        "has_disc_check":  bool(expected_ns) and has_bd,
         "field_hits": dict(field_hits),
-        "cross_disc_codes": dict(cross_disc_codes.most_common(40)),
-        "invalid_ns_codes": dict(invalid_ns_codes.most_common(40)),
+        "cross_disc": dict(cross_disc.most_common(40)),
+        "invalid_bd":   dict(invalid_bd.most_common(40)),
+        "invalid_komp": dict(invalid_komp.most_common(20)),
         "missing_samples": missing,
         "invalid_samples": invalid,
-        "code_samples": code_samples,
+        "code_samples":    code_samples,
         "sys_rows": sys_rows,
         "unassigned_by_type": dict(unassigned_types.most_common(20)),
+        "bd_sys_label": bd_sys_label,
+        "komp_sys_label": komp_sys_label,
     }
 
 
@@ -442,6 +492,25 @@ def status_for_pct(pct: float):
     if pct >= THRESHOLDS["ok"]:   return ("OK", "#059669")
     if pct >= THRESHOLDS["warn"]: return ("Advarsel", "#d97706")
     return ("Avvik", "#dc2626")
+
+
+CHECK_ORDER = ["has_code", "bd_valid", "in_discipline", "floor_valid",
+               "komp_valid", "system_prefix", "system_assign", "tfm_system"]
+
+
+def applicable_checks(results: dict):
+    out = []
+    for k in CHECK_ORDER:
+        c = results["checks"][k]
+        if k == "floor_valid"   and not results["has_floor_check"]: continue
+        if k == "komp_valid"    and not results["has_komp_check"]:  continue
+        if k == "bd_valid"      and not results["has_bd_check"]:    continue
+        if k == "in_discipline" and not results["has_disc_check"]:  continue
+        if c["total"] == 0 and k not in ("has_code", "system_prefix",
+                                          "system_assign", "tfm_system"):
+            continue
+        out.append((k, c))
+    return out
 
 
 def build_excel(rules, facts, results, file_name, file_size, duration) -> bytes:
@@ -462,43 +531,36 @@ def build_excel(rules, facts, results, file_name, file_size, duration) -> bytes:
             ["Etasjer (modell)", len(facts["storey_names"])],
             ["IfcSystems", facts["n_systems"]],
             ["TFM-struktur", rules.structure],
+            ["Bygningsdel-system", results["bd_sys_label"]],
+            ["Komponent-system", results["komp_sys_label"]],
             ["TFM-kode hentes fra", loc_str],
             ["Tillatte etasjekoder", ", ".join(rules.floor_codes) or "(ingen — sjekk hoppes over)"],
-            ["Tillatte komponentkoder", ", ".join(rules.komponent_codes) or "(ingen — sjekk hoppes over)"],
             ["Kjøretid", f"{duration:.1f} s"],
             ["Generert", datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
             ["App", f"TFM-sjekk v{APP_VERSION}"],
         ]
         pd.DataFrame(summary, columns=["Felt", "Verdi"]).to_excel(xw, sheet_name="Sammendrag", index=False)
 
-        rows = []
-        for k, c in results["checks"].items():
-            applicable = True
-            if k == "floor_valid":  applicable = results["has_floor_check"]
-            if k == "komp_valid":   applicable = results["has_komp_check"]
-            if k == "in_discipline": applicable = results["has_disc_check"]
-            if not applicable:
-                continue
-            rows.append([c["label"], c["n"], c["total"], f"{c['pct']:.1f}%"])
+        rows = [[c["label"], c["n"], c["total"], f"{c['pct']:.1f}%"]
+                for _, c in applicable_checks(results)]
         pd.DataFrame(rows, columns=["Sjekk", "OK", "Totalt", "Andel"]).to_excel(
             xw, sheet_name="Sjekker", index=False)
 
-        if results["cross_disc_codes"]:
-            pd.DataFrame(
-                list(results["cross_disc_codes"].items()),
-                columns=["Bygningsdel utenfor disiplin", "Antall"],
-            ).to_excel(xw, sheet_name="Kryssfag", index=False)
-
-        if results["invalid_ns_codes"]:
-            pd.DataFrame(
-                list(results["invalid_ns_codes"].items()),
-                columns=["Ikke-NS3451-kode", "Antall"],
-            ).to_excel(xw, sheet_name="Ugyldig_NS3451", index=False)
-
+        if results["cross_disc"]:
+            pd.DataFrame(list(results["cross_disc"].items()),
+                         columns=["Bygningsdel utenfor disiplin", "Antall"]
+                         ).to_excel(xw, sheet_name="Kryssfag", index=False)
+        if results["invalid_bd"]:
+            pd.DataFrame(list(results["invalid_bd"].items()),
+                         columns=[f"Ikke-{rules.bygningsdel_system} kode", "Antall"]
+                         ).to_excel(xw, sheet_name="Ugyldig_bygningsdel", index=False)
+        if results["invalid_komp"]:
+            pd.DataFrame(list(results["invalid_komp"].items()),
+                         columns=[f"Ikke-{rules.komponent_system} bokstav", "Antall"]
+                         ).to_excel(xw, sheet_name="Ugyldig_komponent", index=False)
         if results["field_hits"]:
             pd.DataFrame(sorted(results["field_hits"].items(), key=lambda kv: -kv[1]),
                          columns=["Felt", "Antall"]).to_excel(xw, sheet_name="Hvor_koden_ligger", index=False)
-
         pd.DataFrame(results["sys_rows"]).to_excel(xw, sheet_name="IfcSystems", index=False)
         if results["code_samples"]:
             pd.DataFrame(results["code_samples"]).to_excel(xw, sheet_name="Funne_koder", index=False)
@@ -508,7 +570,8 @@ def build_excel(rules, facts, results, file_name, file_size, duration) -> bytes:
             pd.DataFrame(results["invalid_samples"]).to_excel(xw, sheet_name="Ugyldig_kode", index=False)
         if results["unassigned_by_type"]:
             pd.DataFrame(list(results["unassigned_by_type"].items()),
-                         columns=["IfcType", "Antall"]).to_excel(xw, sheet_name="Uten_systemtilhørighet", index=False)
+                         columns=["IfcType", "Antall"]
+                         ).to_excel(xw, sheet_name="Uten_systemtilhørighet", index=False)
     return out.getvalue()
 
 
@@ -531,7 +594,7 @@ def build_pdf(rules, facts, results, file_name, file_size, duration) -> bytes:
     story.append(Spacer(1, 4*mm))
 
     loc = rules.tfm_location
-    loc_str = ("Alle felt (Name, Tag, alle Psets)" if loc[0] == "all"
+    loc_str = ("Alle felt" if loc[0] == "all"
                else f"IfcProduct.{loc[2]}" if loc[0] == "attr"
                else f"{loc[1]} → {loc[2]}")
 
@@ -544,6 +607,8 @@ def build_pdf(rules, facts, results, file_name, file_size, duration) -> bytes:
         ["Antall etasjer i modell", str(len(facts["storey_names"]))],
         ["Antall IfcSystems", str(facts["n_systems"])],
         ["TFM-struktur", rules.structure],
+        ["Bygningsdel-system", results["bd_sys_label"]],
+        ["Komponent-system", results["komp_sys_label"]],
         ["TFM-kode hentes fra", loc_str],
         ["Generert", datetime.now().strftime("%Y-%m-%d %H:%M")],
         ["Kjøretid", f"{duration:.1f} s"],
@@ -573,30 +638,22 @@ def build_pdf(rules, facts, results, file_name, file_size, duration) -> bytes:
         ("TOPPADDING", (0, 0), (-1, -1), 5),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
     ]
-    i = 1
-    for k, c in results["checks"].items():
-        applicable = True
-        if k == "floor_valid":   applicable = results["has_floor_check"]
-        if k == "komp_valid":    applicable = results["has_komp_check"]
-        if k == "in_discipline": applicable = results["has_disc_check"]
-        if not applicable:
-            continue
+    for i, (_, c) in enumerate(applicable_checks(results), start=1):
         status, color = status_for_pct(c["pct"])
         data.append([c["label"], f"{c['pct']:.1f}%",
                      f"{c['n']:,}/{c['total']:,}".replace(",", " "), status])
         cmds.append(("BACKGROUND", (3, i), (3, i), colors.HexColor(color)))
         cmds.append(("TEXTCOLOR",  (3, i), (3, i), colors.white))
         cmds.append(("FONTNAME",   (3, i), (3, i), "Helvetica-Bold"))
-        i += 1
     t = Table(data, colWidths=[80*mm, 25*mm, 35*mm, 25*mm])
     t.setStyle(TableStyle(cmds))
     story.append(t)
     story.append(Spacer(1, 6*mm))
 
-    if results["cross_disc_codes"]:
-        story.append(Paragraph("Kryssfagsmarkører (bygningsdelskoder utenfor disiplinens forventede område)", h2))
+    if results["cross_disc"]:
+        story.append(Paragraph("Kryssfagsmarkører (utenfor disiplinens forventede område)", h2))
         d = [["Bygningsdel", "Antall"]]
-        for k, v in list(results["cross_disc_codes"].items())[:20]:
+        for k, v in list(results["cross_disc"].items())[:20]:
             d.append([k, str(v)])
         t = Table(d, colWidths=[40*mm, 25*mm])
         t.setStyle(TableStyle([
@@ -609,8 +666,7 @@ def build_pdf(rules, facts, results, file_name, file_size, duration) -> bytes:
         ]))
         story.append(t)
         story.append(Paragraph(
-            "<i>Kryssfagsmarkører er ikke nødvendigvis feil — men de fortjener verifisering: "
-            "skal koder fra andre faggrupper egentlig være i denne modellen?</i>", small))
+            "<i>Kryssfagsmarkører er ikke nødvendigvis feil — verifiser om de hører hjemme her.</i>", small))
         story.append(Spacer(1, 6*mm))
 
     if results["sys_rows"]:
@@ -657,8 +713,7 @@ def build_bundle(xlsx: bytes, pdf: bytes, file_stem: str) -> bytes:
 def show_table_dialog(title: str, rows):
     st.markdown(f"##### {title}")
     if not rows:
-        st.info("Ingen rader.")
-        return
+        st.info("Ingen rader."); return
     st.dataframe(pd.DataFrame(rows), hide_index=True, height=520)
 
 
@@ -699,34 +754,58 @@ def metric_card(label: str, pct: float, sub: str):
 
 def info_card(label: str, value: str, sub: str = ""):
     st.markdown(f"""
-    <div class="summary-card" style="border-left-color: #64748b;">
+    <div class="summary-card" style="border-left-color: #94a3b8;">
         <h4>{label}</h4>
-        <div class="value" style="color: #334155; font-size: 1.3rem;">{value}</div>
+        <div class="value" style="color: #64748b; font-size: 1.3rem;">{value}</div>
         <div class="sub">{sub}</div>
     </div>
     """, unsafe_allow_html=True)
 
 
-def list_editor(label: str, key: str, seed: list[str] | None = None,
-                placeholder: str = "Skriv inn kode") -> list[str]:
-    """Editable list — single column. Add/edit/delete via st.data_editor."""
+def floor_list_editor(key: str, seed: list[str] | None = None) -> list[str]:
     if key not in st.session_state:
         st.session_state[key] = list(seed or [])
-    df = pd.DataFrame({label: st.session_state[key] or [""]})
+    df = pd.DataFrame({"Etasjekode": st.session_state[key] or [""]})
     edited = st.data_editor(
         df, num_rows="dynamic", use_container_width=True, hide_index=True,
         key=f"editor_{key}",
-        column_config={label: st.column_config.TextColumn(label, width="medium",
-                                                          help=placeholder)},
+        column_config={"Etasjekode": st.column_config.TextColumn("Etasjekode", width="medium")},
     )
-    vals = [str(v).strip() for v in edited[label].tolist() if str(v).strip() and str(v).strip().lower() != "nan"]
-    # de-dupe preserving order
+    vals = [str(v).strip() for v in edited["Etasjekode"].tolist()
+            if str(v).strip() and str(v).strip().lower() != "nan"]
     seen, out = set(), []
     for v in vals:
         if v not in seen:
             seen.add(v); out.append(v)
     st.session_state[key] = out
     return out
+
+
+def structure_builder(key: str, seed: list[dict] | None = None) -> tuple[str, list[dict]]:
+    if key not in st.session_state:
+        st.session_state[key] = list(seed or DEFAULT_BUILDER)
+    df = pd.DataFrame(st.session_state[key])
+    edited = st.data_editor(
+        df,
+        num_rows="dynamic", hide_index=False, use_container_width=True,
+        key=f"editor_{key}",
+        column_config={
+            "Datatype": st.column_config.SelectboxColumn(
+                "📦 Datatype", options=PART_TYPES, required=True, width="medium",
+                help="Hvilket kodeledd er dette? (Statsbygg-aspekter: Lokasjon/Rom for "
+                     "++-aspekt, Bygningsdel/Etasje/Subnr/Løpenummer for =-aspekt, "
+                     "Komponent/Komp.nr for --aspekt.)",
+            ),
+            "Skilletegn etter": st.column_config.SelectboxColumn(
+                "🔗 Skilletegn etter", options=SEP_OPTIONS, required=False, width="small",
+                help="Tegnet som følger leddet. Bruk `=` for å avslutte lokasjons-"
+                     "aspektet, eller `-` for å starte komponent-aspektet.",
+            ),
+        },
+    )
+    rows = [r for r in edited.to_dict("records") if r.get("Datatype") in PART_TYPES]
+    st.session_state[key] = rows
+    return "", rows  # template built later including start_prefix
 
 
 def reset_results():
@@ -808,6 +887,14 @@ def main():
             margin-bottom: 0.5rem;
         }
 
+        .preview-chip {
+            display:inline-block; background:#1e293b; color:#a7f3d0;
+            font-family: 'Consolas', 'Courier New', monospace;
+            padding: 0.5rem 0.9rem; border-radius: 8px; font-size: 1.05rem;
+            margin: 0.25rem 0 0.5rem 0; letter-spacing: 0.03em;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        }
+
         #MainMenu { visibility: hidden; }
         footer { visibility: hidden; }
         .stDeployButton { display: none; }
@@ -832,22 +919,24 @@ def main():
     st.markdown('<div class="step-label">Steg 1 — Last opp modell</div>', unsafe_allow_html=True)
     uploaded = st.file_uploader("Last opp IFC-fil", type=["ifc"], label_visibility="collapsed",
                                 key="target_uploader")
-
     if not uploaded:
         st.info("Last opp en IFC-fil for å starte. Støttede schemaer: IFC2X3, IFC4, IFC4X1/2/3.")
         with st.expander("ℹ️ Om verktøyet"):
             st.markdown(f"""
 **Hva sjekkes:**
 - Element har TFM-kode i valgt felt
-- Bygningsdelskoden er en gyldig NS3451-kode
+- Bygningsdelskoden er gyldig i valgt klassifikasjon (f.eks. NS3451)
 - Bygningsdelskoden er i forventet område for disiplinen (kryssfagsflagg)
 - Etasjekoden er i tillatt liste
-- Komponentkoden er i tillatt liste
+- Komponentbokstaven er gyldig i valgt system (f.eks. IEC 81346-2)
 - IfcSystem-navn har TFM-prefiks
 - Elementtilhørighet til IfcSystem
 
+**Struktur:** Bygges visuelt med utgangspunkt i Statsbygg TFM-veiledning
+(`++lokasjon=system-komponent`). Velg en preset eller bygg din egen.
+
 **Personvern:** Filnavn, elementnavn og verdier forlater ikke appen. Kun aggregerte
-tellinger logges anonymt (tidsstempel, filstørrelse, schema, produkter, kjøretid).
+tellinger logges anonymt.
 
 App v{APP_VERSION}
             """)
@@ -858,10 +947,9 @@ App v{APP_VERSION}
         with st.spinner("Laster IFC-fil..."):
             t0 = time.time()
             try:
-                ifc, tmp_path = load_ifc(uploaded)
+                ifc, _ = load_ifc(uploaded)
             except Exception as e:
-                st.error(f"Kunne ikke lese IFC-fil: {e}")
-                return
+                st.error(f"Kunne ikke lese IFC-fil: {e}"); return
             schema = ifc.schema
             if not any(schema.upper().startswith(p) for p in ACCEPTED_SCHEMA_PREFIXES):
                 st.error(f"IFC schema {schema!r} støttes ikke. Tillatt: IFC2X3 og IFC4 (inkl. IFC4X1/2/3).")
@@ -871,10 +959,8 @@ App v{APP_VERSION}
             st.session_state[file_key + "_facts"] = model_facts(ifc, list_products(ifc))
             st.session_state[file_key + "_psets"] = build_pset_index(ifc)
             st.session_state[file_key + "_auto_floors"] = extract_storey_codes_from_ifc(ifc)
-            # Seed floor list with auto-detected once per file
             st.session_state.setdefault(f"floor_codes_{file_key}",
                                         list(st.session_state[file_key + "_auto_floors"]))
-            # Set discipline default from filename
             detected = detect_discipline_from_filename(uploaded.name)
             st.session_state.setdefault(f"discipline_{file_key}", detected or "Annet")
             reset_results()
@@ -882,7 +968,6 @@ App v{APP_VERSION}
     facts = st.session_state[file_key + "_facts"]
     psets_idx = st.session_state[file_key + "_psets"]
 
-    # Fact row
     size_mb = uploaded.size / 1_048_576
     st.markdown(f"""
     <div class="fact-row">
@@ -893,58 +978,74 @@ App v{APP_VERSION}
     </div>
     """, unsafe_allow_html=True)
 
-    # ----- Step 2: Prosjekt + disiplin -----
-    st.markdown('<div class="step-label">Steg 2 — Prosjekt og disiplin</div>', unsafe_allow_html=True)
+    # ----- Step 2: TFM-struktur (regex-bygger) -----
+    st.markdown('<div class="step-label">Steg 2 — TFM-struktur (bygg merkereglen)</div>',
+                unsafe_allow_html=True)
+    st.caption("Bygg TFM-koden ledd for ledd. Følger Statsbygg TFM-veiledning: "
+               "valgfritt **++lokasjon** (avsluttes med `=`), **system** (NS3451 + etasje + nr.), "
+               "valgfritt **-komponent** (IEC 81346-bokstav + nr.). "
+               "Hopp over deler du ikke trenger.")
 
-    project_name = st.text_input("Prosjektnavn", st.session_state.get("project_name", ""),
-                                 placeholder="f.eks. Grønland 55", key="project_name")
+    # Presets
+    pcol = st.columns(len(PRESETS))
+    for i, (pname, pseq) in enumerate(PRESETS.items()):
+        with pcol[i]:
+            if st.button(pname, key=f"preset_{pname}_{file_key}",
+                         use_container_width=True):
+                st.session_state[f"builder_{file_key}"] = list(pseq)
+                st.session_state.pop(f"editor_builder_{file_key}", None)
+                st.session_state[f"start_prefix_{file_key}"] = "++" if "Statsbygg" in pname else ""
+                reset_results(); st.rerun()
 
-    detected = detect_discipline_from_filename(uploaded.name)
-    disc_key = f"discipline_{file_key}"
-    if detected:
-        cur = st.session_state.get(disc_key)
-        st.markdown(
-            f'<div class="detect-banner">🔍 Filnavnet antyder <b>{DISCIPLINES[detected]["label"]}</b>. '
-            f'{"Klikk en annen om dette ikke stemmer." if cur == detected else "Stemmer dette? Klikk for å bekrefte."}</div>',
-            unsafe_allow_html=True)
-
-    st.caption("Velg disiplin (bare for rapporten — påvirker ikke regler, men brukes til kryssfagsflagg):")
-    keys = list(DISCIPLINES.keys())
-    for row_start in range(0, len(keys), 3):
-        cols = st.columns(3)
-        for j, col in enumerate(cols):
-            idx = row_start + j
-            if idx >= len(keys):
-                break
-            k = keys[idx]
-            is_sel = st.session_state.get(disc_key) == k
-            with col:
-                if st.button(DISCIPLINES[k]["label"], key=f"disc_btn_{k}",
-                             use_container_width=True,
-                             type="primary" if is_sel else "secondary"):
-                    st.session_state[disc_key] = k
-                    reset_results()
-                    st.rerun()
-
-    discipline_key = st.session_state[disc_key]
-
-    # Classification system for bygningsdel validation (compact selector — no code list shown)
-    sys_keys = list(CLASSIFICATION_SYSTEMS.keys())
-    classification_key = st.selectbox(
-        "Klassifikasjonssystem for bygningsdelskode",
-        sys_keys, index=0,
-        format_func=lambda k: CLASSIFICATION_SYSTEMS[k]["label"],
-        key=f"classification_{file_key}",
-        help="Bygningsdelskoden valideres mot dette systemet. Velg «Ingen sjekk» for å hoppe over.",
+    start_prefix = st.text_input(
+        "Start-prefiks (valgfritt, f.eks. `++` for Statsbygg-lokasjon)",
+        st.session_state.get(f"start_prefix_{file_key}", ""),
+        key=f"start_prefix_{file_key}",
+        max_chars=4,
     )
 
-    # ----- Step 3: Hvor ligger TFM-koden? -----
-    st.markdown('<div class="step-label">Steg 3 — Hvor ligger TFM-koden?</div>', unsafe_allow_html=True)
+    _, builder_rows = structure_builder(f"builder_{file_key}")
+    template = builder_rows_to_structure(builder_rows, start_prefix)
+
+    st.markdown(f'<div class="preview-chip">Eksempel: {template or "(tomt)"}</div>',
+                unsafe_allow_html=True)
+
+    if not builder_rows:
+        st.warning("Strukturen er tom. Legg til minst ett ledd, eller velg en preset over.")
+        return
+    try:
+        re.compile(template)
+    except re.error as e:
+        st.error(f"Strukturen er ugyldig regex: {e}"); return
+
+    # ----- Step 3: Klassifikasjonssystemer -----
+    st.markdown('<div class="step-label">Steg 3 — Klassifikasjonssystemer</div>',
+                unsafe_allow_html=True)
+    sk1, sk2 = st.columns(2)
+    with sk1:
+        bd_sys = st.selectbox(
+            "Bygningsdelskode",
+            list(BYGNINGSDEL_SYSTEMS.keys()),
+            format_func=lambda k: BYGNINGSDEL_SYSTEMS[k]["label"],
+            key=f"bd_sys_{file_key}",
+            help="Validerer {bygningsdel}-leddet.",
+        )
+    with sk2:
+        komp_sys = st.selectbox(
+            "Komponentbokstaver",
+            list(KOMPONENT_SYSTEMS.keys()),
+            format_func=lambda k: KOMPONENT_SYSTEMS[k]["label"],
+            key=f"komp_sys_{file_key}",
+            help="Validerer {komponent}-leddet (første bokstav mot standardens funksjonsklasser).",
+        )
+
+    # ----- Step 4: TFM-kode-lokasjon -----
+    st.markdown('<div class="step-label">Steg 4 — Hvor ligger TFM-koden?</div>',
+                unsafe_allow_html=True)
     loc_options = ["(Skann alle felt)", "Element Name", "Element Tag"] + list(psets_idx.keys())
     loc_choice = st.selectbox(
-        "Velg felt", loc_options, key=f"loc_choice_{file_key}",
-        help="Pek på det feltet rådgiveren skal ha lagt TFM-koden i. Standard «Skann alle felt» går "
-             "gjennom Name, Tag og alle Psets — bra for å oppdage hvor merking faktisk ligger.",
+        "Felt der TFM-koden ligger", loc_options, key=f"loc_choice_{file_key}",
+        help="Pek på det feltet rådgiveren skal ha lagt TFM-koden i.",
     )
     tfm_location = ("all", None, None)
     if loc_choice == "Element Name":
@@ -956,22 +1057,22 @@ App v{APP_VERSION}
                             key=f"loc_prop_{file_key}_{loc_choice}")
         tfm_location = ("pset", loc_choice, prop)
 
-    # ----- Step 4: Etasjekoder -----
-    st.markdown('<div class="step-label">Steg 4 — Etasjekoder</div>', unsafe_allow_html=True)
-    st.caption("Hvilke etasjebetegnelser regnes som gyldige? Standard er auto-detektert fra denne "
-               "modellens IfcBuildingStorey-navn. Du kan redigere listen, eller hente etasjer fra en "
-               "annen referansemodell.")
+    # ----- Step 5: Etasjekoder -----
+    st.markdown('<div class="step-label">Steg 5 — Etasjekoder</div>', unsafe_allow_html=True)
+    st.caption("Tillatte verdier for {etasje}-leddet. Auto-detektert fra denne modellens "
+               "IfcBuildingStorey. Rediger fritt eller hent fra referansemodell.")
 
     fcb1, fcb2 = st.columns(2)
     with fcb1:
-        if st.button("🔄 Hent fra denne modellen", use_container_width=True):
-            st.session_state[f"floor_codes_{file_key}"] = list(st.session_state[file_key + "_auto_floors"])
-            reset_results()
-            st.rerun()
+        if st.button("🔄 Hent fra denne modellen", use_container_width=True,
+                     key=f"reseed_{file_key}"):
+            st.session_state[f"floor_codes_{file_key}"] = list(
+                st.session_state[file_key + "_auto_floors"])
+            st.session_state.pop(f"editor_floor_codes_{file_key}", None)
+            reset_results(); st.rerun()
     with fcb2:
         with st.popover("📁 Hent fra referansemodell", use_container_width=True):
-            ref = st.file_uploader("Last opp referanse-IFC", type=["ifc"],
-                                   key=f"ref_uploader_{file_key}")
+            ref = st.file_uploader("Referanse-IFC", type=["ifc"], key=f"ref_uploader_{file_key}")
             if ref is not None:
                 try:
                     ref_ifc, _ = load_ifc(ref)
@@ -986,55 +1087,98 @@ App v{APP_VERSION}
                         if st.button("Bruk disse kodene", use_container_width=True,
                                      key=f"use_ref_{file_key}"):
                             st.session_state[f"floor_codes_{file_key}"] = codes
-                            reset_results()
-                            st.rerun()
+                            st.session_state.pop(f"editor_floor_codes_{file_key}", None)
+                            reset_results(); st.rerun()
                 except Exception as e:
                     st.error(f"Kunne ikke lese referansemodell: {e}")
 
-    floor_codes = list_editor("Etasjekode", key=f"floor_codes_{file_key}",
-                              placeholder="f.eks. 01, 02, U1")
+    floor_codes = floor_list_editor(f"floor_codes_{file_key}")
     if not floor_codes:
         st.caption("📋 Ingen etasjekoder oppgitt — etasje-sjekken hoppes over.")
-
     with st.expander(f"Vis råe IfcBuildingStorey-navn ({len(facts['storey_names'])} stk.)"):
         st.write([n for n in facts["storey_names"] if n])
 
-    # ----- Step 5: Komponentkoder (optional) -----
-    st.markdown('<div class="step-label">Steg 5 — Komponentkoder (valgfritt)</div>', unsafe_allow_html=True)
-    st.caption("Liste over tillatte komponentkode-forkortelser (f.eks. KW, OS, UE, XS for RIE). "
-               "Tom liste = sjekken hoppes over.")
-    komp_codes = list_editor("Komponentkode", key=f"komp_codes_{file_key}",
-                             placeholder="f.eks. KW, OS, UE")
+    # ----- Step 6: Prosjekt + disiplin -----
+    st.markdown('<div class="step-label">Steg 6 — Prosjekt og disiplin (for rapporten)</div>',
+                unsafe_allow_html=True)
+    project_name = st.text_input("Prosjektnavn", st.session_state.get("project_name", ""),
+                                 placeholder="f.eks. Grønland 55", key="project_name")
+    detected = detect_discipline_from_filename(uploaded.name)
+    disc_key = f"discipline_{file_key}"
+    if detected:
+        cur = st.session_state.get(disc_key)
+        st.markdown(
+            f'<div class="detect-banner">🔍 Filnavnet antyder <b>{DISCIPLINES[detected]["label"]}</b>. '
+            f'{"Klikk en annen om dette ikke stemmer." if cur == detected else "Stemmer dette? Klikk for å bekrefte."}</div>',
+            unsafe_allow_html=True)
 
-    # ----- Step 6: Struktur (advanced) -----
-    with st.expander("⚙️ Avansert — TFM-strukturmønster"):
-        default_struct = DISCIPLINES[discipline_key]["structure"]
-        structure = st.text_input(
-            "Struktur (template)",
-            st.session_state.get(f"structure_{file_key}", default_struct),
-            key=f"structure_{file_key}",
-            help="Placeholdere: {bygningsdel}, {etasje}, {komponent}, {lopenummer}",
-        )
-        st.caption("Endring her invaliderer eksisterende resultater.")
-    structure = st.session_state.get(f"structure_{file_key}", DISCIPLINES[discipline_key]["structure"])
+    st.caption("Disiplin styrer kun rapportens etikett + kryssfagsflagging.")
+    keys = list(DISCIPLINES.keys())
+    for row_start in range(0, len(keys), 3):
+        cols = st.columns(3)
+        for j, col in enumerate(cols):
+            idx = row_start + j
+            if idx >= len(keys): break
+            k = keys[idx]
+            is_sel = st.session_state.get(disc_key) == k
+            with col:
+                if st.button(DISCIPLINES[k]["label"], key=f"disc_btn_{k}",
+                             use_container_width=True,
+                             type="primary" if is_sel else "secondary"):
+                    st.session_state[disc_key] = k
+                    reset_results(); st.rerun()
+    discipline_key = st.session_state[disc_key]
 
+    # Build the rules object
     rules = TFMRules(
         project_name=project_name,
         discipline_key=discipline_key,
-        structure=structure,
+        bygningsdel_system=bd_sys,
+        komponent_system=komp_sys,
+        start_prefix=start_prefix,
+        structure=template,
+        builder_rows=builder_rows,
         floor_codes=floor_codes,
-        komponent_codes=komp_codes,
         tfm_location=tfm_location,
     )
 
-    try:
-        rx = rules.regex()
-    except re.error as e:
-        st.error(f"Ugyldig regex: {e}")
-        return
+    # ----- Step 7: Regelmal -----
+    st.markdown('<div class="step-label">Steg 7 — Regelmal (valgfritt)</div>',
+                unsafe_allow_html=True)
+    st.caption("Lagre denne konfigurasjonen som JSON for senere gjenbruk eller deling. "
+               "Last opp en eksisterende mal for å gjenopprette innstillingene.")
+    rmc1, rmc2 = st.columns(2)
+    with rmc1:
+        tpl_json = json.dumps(rules.to_template_dict(), ensure_ascii=False, indent=2)
+        st.download_button(
+            "📥 Last ned regelmal (JSON)", data=tpl_json.encode("utf-8"),
+            file_name=f"tfm-regelmal_{discipline_key}.json", mime="application/json",
+            use_container_width=True,
+        )
+    with rmc2:
+        with st.popover("📁 Last opp regelmal", use_container_width=True):
+            tpl_up = st.file_uploader("Velg .json", type=["json"], key=f"tpl_up_{file_key}")
+            if tpl_up is not None:
+                try:
+                    data = json.loads(tpl_up.read().decode("utf-8"))
+                    st.session_state["project_name"] = data.get("project_name", "")
+                    st.session_state[disc_key] = data.get("discipline_key", "Annet")
+                    st.session_state[f"bd_sys_{file_key}"] = data.get("bygningsdel_system", "NS3451")
+                    st.session_state[f"komp_sys_{file_key}"] = data.get("komponent_system", "IEC81346")
+                    st.session_state[f"start_prefix_{file_key}"] = data.get("start_prefix", "")
+                    st.session_state[f"builder_{file_key}"] = data.get(
+                        "builder_rows", list(DEFAULT_BUILDER))
+                    st.session_state.pop(f"editor_builder_{file_key}", None)
+                    st.session_state[f"floor_codes_{file_key}"] = data.get("floor_codes", [])
+                    st.session_state.pop(f"editor_floor_codes_{file_key}", None)
+                    reset_results()
+                    st.success("Regelmal lastet. Klikk for å oppdatere visningen.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Kunne ikke lese regelmalen: {e}")
 
-    # ----- Step 7: Run -----
-    st.markdown('<div class="step-label">Steg 7 — Kjør kontroll</div>', unsafe_allow_html=True)
+    # ----- Step 8: Run -----
+    st.markdown('<div class="step-label">Steg 8 — Kjør kontroll</div>', unsafe_allow_html=True)
     rules_sig = repr(rules)
     results_key = f"results_{file_key}_{hash(rules_sig)}"
 
@@ -1043,8 +1187,9 @@ App v{APP_VERSION}
             with st.spinner("Analyserer modellen..."):
                 t0 = time.time()
                 products = list_products(ifc)
-                ns_codes = load_classification_codes(classification_key)
-                results = run_checks(ifc, products, rules, ns_codes)
+                bd_codes = load_codes(BYGNINGSDEL_SYSTEMS.get(bd_sys, {}).get("file"))
+                komp_codes = load_codes(KOMPONENT_SYSTEMS.get(komp_sys, {}).get("file"))
+                results = run_checks(ifc, products, rules, bd_codes, komp_codes)
                 duration = time.time() - t0 + st.session_state.get(file_key + "_load_t", 0)
                 st.session_state[results_key] = {"results": results, "duration": duration}
                 usage.log_upload(
@@ -1073,17 +1218,18 @@ App v{APP_VERSION}
         metric_card(c["has_code"]["label"], c["has_code"]["pct"],
                     f"{c['has_code']['n']:,} / {c['has_code']['total']:,}")
     with r1c2:
-        if c["ns3451_valid"]["total"]:
-            metric_card(c["ns3451_valid"]["label"], c["ns3451_valid"]["pct"],
-                        f"{c['ns3451_valid']['n']:,} / {c['ns3451_valid']['total']:,}")
+        if results["has_bd_check"] and c["bd_valid"]["total"]:
+            metric_card(c["bd_valid"]["label"], c["bd_valid"]["pct"],
+                        f"{c['bd_valid']['n']:,} / {c['bd_valid']['total']:,}")
         else:
-            info_card("NS3451", "—", "Ingen koder funnet")
+            info_card("Bygningsdel", "—",
+                      "Hoppes over" if not results["has_bd_check"] else "Ingen koder")
     with r1c3:
         if results["has_disc_check"] and c["in_discipline"]["total"]:
             metric_card(c["in_discipline"]["label"], c["in_discipline"]["pct"],
                         f"{c['in_discipline']['n']:,} / {c['in_discipline']['total']:,}")
         else:
-            info_card("Disiplinområde", "—", "Hoppes over for «Annet»")
+            info_card("Disiplinområde", "—", "Hoppes over")
 
     r2c1, r2c2, r2c3 = st.columns(3)
     with r2c1:
@@ -1091,13 +1237,14 @@ App v{APP_VERSION}
             metric_card(c["floor_valid"]["label"], c["floor_valid"]["pct"],
                         f"{c['floor_valid']['n']:,} / {c['floor_valid']['total']:,}")
         else:
-            info_card("Etasje", "—", "Ingen liste — hoppet over")
+            info_card("Etasje", "—", "Ingen liste" if not results["has_floor_check"] else "—")
     with r2c2:
         if results["has_komp_check"] and c["komp_valid"]["total"]:
             metric_card(c["komp_valid"]["label"], c["komp_valid"]["pct"],
                         f"{c['komp_valid']['n']:,} / {c['komp_valid']['total']:,}")
         else:
-            info_card("Komponent", "—", "Ingen liste — hoppet over")
+            info_card("Komponent", "—",
+                      "Hoppes over" if not results["has_komp_check"] else "—")
     with r2c3:
         metric_card(c["system_prefix"]["label"], c["system_prefix"]["pct"],
                     f"{c['system_prefix']['n']} / {c['system_prefix']['total']}")
@@ -1110,16 +1257,8 @@ App v{APP_VERSION}
         metric_card(c["tfm_system"]["label"], c["tfm_system"]["pct"],
                     f"{c['tfm_system']['n']:,} / {c['tfm_system']['total']:,}")
 
-    # Bar chart of all applicable checks
-    chart_rows = []
-    for k, ch in c.items():
-        applicable = True
-        if k == "floor_valid":   applicable = results["has_floor_check"] and ch["total"] > 0
-        if k == "komp_valid":    applicable = results["has_komp_check"]  and ch["total"] > 0
-        if k == "in_discipline": applicable = results["has_disc_check"]  and ch["total"] > 0
-        if not applicable or ch["total"] == 0:
-            continue
-        chart_rows.append({"Sjekk": ch["label"], "Andel (%)": ch["pct"]})
+    chart_rows = [{"Sjekk": ch["label"], "Andel (%)": ch["pct"]}
+                  for _, ch in applicable_checks(results)]
     if chart_rows:
         bar = alt.Chart(pd.DataFrame(chart_rows)).mark_bar(cornerRadius=4).encode(
             x=alt.X("Andel (%):Q", scale=alt.Scale(domain=[0, 100])),
@@ -1132,27 +1271,28 @@ App v{APP_VERSION}
         ).properties(height=max(180, 32 * len(chart_rows) + 40))
         st.altair_chart(bar, use_container_width=True)
 
-    # Cross-discipline + invalid NS callouts
-    if results["cross_disc_codes"]:
-        with st.expander(f"⚠️ Kryssfagsmarkører — {sum(results['cross_disc_codes'].values()):,} treff "
+    if results["cross_disc"]:
+        with st.expander(f"⚠️ Kryssfagsmarkører — {sum(results['cross_disc'].values()):,} treff "
                           f"på koder utenfor {discipline_key}-området"):
-            st.caption("Disse er gyldige NS3451-koder, men tilhører andre disipliner. "
-                       "Verifiser om de skal være i denne modellen.")
-            ns_codes_view = load_classification_codes(classification_key)
-            df = pd.DataFrame(
-                [{"Bygningsdel": k, "Antall": v,
-                  "Navn": ns_codes_view.get(k, {}).get("name", "")}
-                 for k, v in results["cross_disc_codes"].items()]
-            )
+            st.caption("Gyldige bygningsdelskoder fra andre disipliner. Verifiser om de hører hjemme.")
+            ns_view = load_codes(BYGNINGSDEL_SYSTEMS.get(bd_sys, {}).get("file"))
+            df = pd.DataFrame([{"Bygningsdel": k, "Antall": v,
+                                 "Navn": ns_view.get(k, {}).get("name", "")}
+                                for k, v in results["cross_disc"].items()])
             st.dataframe(df, hide_index=True, use_container_width=True, height=240)
-    if results["invalid_ns_codes"]:
-        with st.expander(f"❌ Ikke-NS3451 bygningsdelskoder — {sum(results['invalid_ns_codes'].values()):,} treff"):
-            st.caption("Disse 3-sifrede tallene matcher ikke en gyldig NS3451-kode.")
-            st.dataframe(pd.DataFrame(list(results["invalid_ns_codes"].items()),
+    if results["invalid_bd"]:
+        with st.expander(f"❌ Ugyldige bygningsdelskoder — {sum(results['invalid_bd'].values()):,} treff"):
+            st.caption(f"Matcher ikke {bd_sys}-tabellen.")
+            st.dataframe(pd.DataFrame(list(results["invalid_bd"].items()),
                                        columns=["Kode", "Antall"]),
                          hide_index=True, use_container_width=True, height=200)
+    if results["invalid_komp"]:
+        with st.expander(f"❌ Ugyldige komponentbokstaver — {sum(results['invalid_komp'].values()):,} treff"):
+            st.caption(f"Første bokstav matcher ikke {komp_sys}-listen.")
+            st.dataframe(pd.DataFrame(list(results["invalid_komp"].items()),
+                                       columns=["Bokstav", "Antall"]),
+                         hide_index=True, use_container_width=True, height=200)
 
-    # Drill-downs
     st.markdown("##### Detaljer")
     b1, b2 = st.columns(2)
     with b1:
