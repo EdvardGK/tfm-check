@@ -885,7 +885,7 @@ def block_builder(key: str, seed: list[str]) -> list[str]:
         st.session_state[key] = list(seed or DEFAULT_SEQUENCE)
     seq = st.session_state[key]
 
-    BLOCKS_PER_ROW = 6
+    BLOCKS_PER_ROW = 5
     total_slots = len(seq) + 1  # +1 trailing "+" slot
     for row_start in range(0, total_slots, BLOCKS_PER_ROW):
         cols = st.columns(BLOCKS_PER_ROW)
@@ -940,7 +940,7 @@ def main():
     st.markdown("""
     <style>
         .stApp { background: linear-gradient(135deg, #f5f5f0 0%, #e8e4dc 100%); }
-        .block-container { padding-top: 3rem; padding-bottom: 4rem; max-width: 920px; }
+        .block-container { padding-top: 3rem; padding-bottom: 4rem; max-width: 1100px; }
         header[data-testid="stHeader"] { background: transparent; }
         [data-testid="stSidebar"] { display: none; }
 
