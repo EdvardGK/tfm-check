@@ -848,24 +848,6 @@ def show_table_dialog(title: str, rows):
     st.dataframe(pd.DataFrame(rows), hide_index=True, height=520)
 
 
-@st.dialog("Statistikk", width="small")
-def show_stats_dialog():
-    s = usage.stats()
-    c1, c2 = st.columns(2)
-    with c1:
-        st.metric("Modeller behandlet", s["total_uploads"])
-        st.metric("Snitt-størrelse", f"{s['avg_size_mb']:.1f} MB")
-    with c2:
-        st.metric("Distinkte sesjoner", s["distinct_sessions"])
-        st.metric("Snitt-tid", f"{s['avg_duration_sec']:.1f} s")
-    if s["schemas"]:
-        st.caption("IFC-schema fordeling")
-        st.dataframe(pd.DataFrame(list(s["schemas"].items()), columns=["Schema", "Antall"]),
-                     hide_index=True, use_container_width=True)
-    st.caption(f"App v{APP_VERSION} · Anonym telemetri: tidsstempel, filstørrelse, schema, "
-               "produkter, kjøretid. Ingen filnavn eller modellinnhold.")
-
-
 # =============================================================================
 # UI HELPERS
 # =============================================================================
@@ -1030,18 +1012,12 @@ def main():
     """, unsafe_allow_html=True)
 
     # Header
-    hdr_l, hdr_r = st.columns([5, 1])
-    with hdr_l:
-        st.markdown("""
-        <div class="app-header">
-            <h1>🔍 TFM-sjekk</h1>
-            <p>Mottakskontroll på TFM-merking i IFC-fagmodeller</p>
-        </div>
-        """, unsafe_allow_html=True)
-    with hdr_r:
-        st.write("")
-        if st.button("📊 Stats", use_container_width=True):
-            show_stats_dialog()
+    st.markdown("""
+    <div class="app-header">
+        <h1>🔍 TFM-sjekk</h1>
+        <p>Mottakskontroll på TFM-merking i IFC-fagmodeller</p>
+    </div>
+    """, unsafe_allow_html=True)
 
     # ----- Step 1: Upload IFC -----
     st.markdown('<div class="step-label">Steg 1 — Last opp modell</div>', unsafe_allow_html=True)
