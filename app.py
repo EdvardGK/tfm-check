@@ -1215,11 +1215,6 @@ hva hver blokk inneholder, og klikke ✕ for å fjerne.
     if not any(t for t in templates):
         st.warning("Minst ett mønster må ha innhold.")
         return
-    for i, t in enumerate(templates):
-        try:
-            re.compile(t)
-        except re.error as e:
-            st.error(f"Mønster {i+1} er ugyldig regex: {e}"); return
 
     # Determine which block-editors to show based on what's in the sequences
     used_parts = {part for p in patterns for part in (p.get("sequence") or [])
