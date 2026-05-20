@@ -133,6 +133,14 @@ PLACEHOLDER_FALLBACK = {
 }
 PLACEHOLDER_RE = re.compile(r"\{(\w+)\}")
 
+# Digit-type parts where users may want to lock an exact number of digits
+# (so e.g. {etasje}{subnr} on "103" parses as etasje="1" + subnr="03").
+DIGIT_LOCKABLE_PARTS = ["etasje", "subnr", "kompnr", "lopenummer", "rom"]
+PART_KEY_TO_LABEL = {  # internal name → user-facing label
+    "etasje": "Etasje", "subnr": "Subnr", "kompnr": "Komp.nr",
+    "lopenummer": "Løpenummer", "rom": "Rom",
+}
+
 THRESHOLDS = {"ok": 95, "warn": 50}
 
 
@@ -297,6 +305,15 @@ class TFMRules:
     ])
     floor_codes: list[str] = field(default_factory=list)
     tfm_location: tuple = ("all", None, None)
+    # Optional exact digit-counts per digit-type part. {name: int} where int is
+    # the exact number of digits. Missing/0 → use PLACEHOLDER_FALLBACK.
+    part_digits: dict = field(default_factory=dict)
+
+    def _pattern_for_group(self, name: str) -> str:
+        n = self.part_digits.get(name) if self.part_digits else None
+        if n and name in DIGIT_LOCKABLE_PARTS and isinstance(n, int) and n > 0:
+            return r"\d{" + str(n) + "}"
+        return PLACEHOLDER_FALLBACK.get(name, r"\S+")
 
     def structures(self) -> list[str]:
         return [sequence_to_template(p.get("sequence", [])) for p in self.patterns]
@@ -308,7 +325,7 @@ class TFMRules:
             for m in PLACEHOLDER_RE.finditer(s):
                 parts.append(re.escape(s[i:m.start()]))
                 name = m.group(1)
-                parts.append(f"(?P<{name}>{PLACEHOLDER_FALLBACK.get(name, r'\\S+')})")
+                parts.append(f"(?P<{name}>{self._pattern_for_group(name)})")
                 i = m.end()
             parts.append(re.escape(s[i:]))
             out.append(re.compile("^" + "".join(parts)))
@@ -1306,8 +1323,36 @@ hva hver blokk inneholder, og klikke ✕ for å fjerne.
             floor_codes = floor_list_editor(f"floor_codes_{file_key}")
             if not floor_codes:
                 st.caption("📋 Ingen etasjekoder oppgitt — etasje-sjekken hoppes over.")
+            st.caption("📐 **Lås antall sifre** (nyttig for koder som `360.103` hvor `1` er etasje og "
+                       "`03` er subnr — modellér da som `[Etasje][Subnr]` uten skilletegn imellom).")
+            et_d = st.selectbox(
+                "Antall sifre i {etasje}-leddet",
+                ["Fri", "1", "2", "3", "4"],
+                index=["Fri","1","2","3","4"].index(
+                    st.session_state.get(f"etasje_digits_{file_key}", "Fri")),
+                key=f"etasje_digits_{file_key}",
+                label_visibility="collapsed",
+            )
     else:
         floor_codes = st.session_state.get(f"floor_codes_{file_key}", [])
+
+    # Compact digit-lock selectors for other digit-type parts (only shown if used)
+    other_digit_parts = [(p, lbl) for p, lbl in PART_KEY_TO_LABEL.items()
+                          if p != "etasje" and lbl in used_parts]
+    if other_digit_parts:
+        with st.container(border=True):
+            st.markdown("##### 📐 Antall sifre — øvrige digit-ledd")
+            st.caption("Lås antall sifre for digit-type ledd. «Fri» = ingen begrensning.")
+            cols = st.columns(len(other_digit_parts))
+            for (pname, plabel), col in zip(other_digit_parts, cols):
+                with col:
+                    st.selectbox(
+                        plabel,
+                        ["Fri", "1", "2", "3", "4"],
+                        index=["Fri","1","2","3","4"].index(
+                            st.session_state.get(f"{pname}_digits_{file_key}", "Fri")),
+                        key=f"{pname}_digits_{file_key}",
+                    )
 
     if "Komponent" in used_parts:
         with st.container(border=True):
@@ -1374,6 +1419,16 @@ hva hver blokk inneholder, og klikke ✕ for å fjerne.
                     reset_results(); st.rerun()
     discipline_key = st.session_state[disc_key]
 
+    # Gather digit-lock settings from session_state
+    part_digits = {}
+    for pname in DIGIT_LOCKABLE_PARTS:
+        v = st.session_state.get(f"{pname}_digits_{file_key}", "Fri")
+        if v and v != "Fri":
+            try:
+                part_digits[pname] = int(v)
+            except (TypeError, ValueError):
+                pass
+
     rules = TFMRules(
         project_name=project_name,
         discipline_key=discipline_key,
@@ -1382,6 +1437,7 @@ hva hver blokk inneholder, og klikke ✕ for å fjerne.
         patterns=list(patterns),
         floor_codes=floor_codes,
         tfm_location=tfm_location,
+        part_digits=part_digits,
     )
 
     # =========================================================================
