@@ -107,9 +107,9 @@ SEP_OPTIONS_DISPLAY = list(SEP_TO_CHAR.keys())
 # Default starting sequence — minimal system aspect
 DEFAULT_SEQUENCE = ["Bygningsdel", ".", "Etasje", "-", "Komponent", "Løpenummer"]
 
-# Statsbygg full TFM-veiledning structure
+# Statsbygg full TFM-veiledning structure — starts with "++" as a literal aspect marker.
 STATSBYGG_SEQUENCE = [
-    "Lokasjon", ".", "Rom", "=",
+    "++", "Lokasjon", ".", "Rom", "=",
     "Bygningsdel", ".", "Etasje", ".", "Subnr", "-",
     "Komponent", ".", "Komp.nr",
 ]
@@ -147,13 +147,26 @@ def load_codes(file_name: str | None) -> dict:
         return json.load(f)
 
 
-def sequence_to_template(seq: list[str], start_prefix: str = "") -> str:
-    parts = [start_prefix] if start_prefix else []
+FREETEXT_PREFIX = "T:"  # sentinel for free-text literal blocks
+
+
+def is_freetext(item: str) -> bool:
+    return isinstance(item, str) and item.startswith(FREETEXT_PREFIX)
+
+
+def freetext_value(item: str) -> str:
+    return item[len(FREETEXT_PREFIX):] if is_freetext(item) else item
+
+
+def sequence_to_template(seq: list[str]) -> str:
+    parts = []
     for item in seq:
         if item in PART_TO_TEMPLATE:
             parts.append(PART_TO_TEMPLATE[item])
         elif item in SEP_TO_CHAR:
             parts.append(SEP_TO_CHAR[item])
+        elif is_freetext(item):
+            parts.append(freetext_value(item))
     return "".join(parts)
 
 
@@ -170,13 +183,15 @@ PART_EXAMPLE = {
 }
 
 
-def sequence_to_example(seq: list[str], start_prefix: str = "") -> str:
-    parts = [start_prefix] if start_prefix else []
+def sequence_to_example(seq: list[str]) -> str:
+    parts = []
     for item in seq:
         if item in PART_EXAMPLE:
             parts.append(PART_EXAMPLE[item])
         elif item in SEP_TO_CHAR:
             parts.append(SEP_TO_CHAR[item])
+        elif is_freetext(item):
+            parts.append(freetext_value(item))
     return "".join(parts)
 
 
@@ -276,16 +291,15 @@ class TFMRules:
     discipline_key: str = "Annet"
     bygningsdel_system: str = "NS3451"
     komponent_system: str = "IEC81346"
-    # Each pattern: {"start_prefix": str, "sequence": list[str]}.
+    # Each pattern: {"sequence": list[str]} — sequence may include literal text.
     patterns: list[dict] = field(default_factory=lambda: [
-        {"start_prefix": "", "sequence": list(DEFAULT_SEQUENCE)}
+        {"sequence": list(DEFAULT_SEQUENCE)}
     ])
     floor_codes: list[str] = field(default_factory=list)
     tfm_location: tuple = ("all", None, None)
 
     def structures(self) -> list[str]:
-        return [sequence_to_template(p.get("sequence", []), p.get("start_prefix", ""))
-                for p in self.patterns]
+        return [sequence_to_template(p.get("sequence", [])) for p in self.patterns]
 
     def regexes(self) -> list[re.Pattern]:
         out = []
@@ -902,6 +916,10 @@ def reset_results():
             del st.session_state[k]
 
 
+FREETEXT_LABEL = "🆎 Fritekst"
+_BLOCK_OPTIONS_WITH_FREETEXT = ALL_BLOCK_OPTIONS + [FREETEXT_LABEL]
+
+
 def block_builder(key: str, seed: list[str]) -> list[str]:
     """Visual click-to-add block builder. Returns the (mutated) sequence."""
     if key not in st.session_state:
@@ -917,15 +935,29 @@ def block_builder(key: str, seed: list[str]) -> list[str]:
             with col:
                 if idx < len(seq):
                     cur = seq[idx]
-                    label = VALUE_TO_BLOCK_LABEL.get(cur, ALL_BLOCK_OPTIONS[0])
-                    sel_idx = (ALL_BLOCK_OPTIONS.index(label)
-                               if label in ALL_BLOCK_OPTIONS else 0)
+                    cur_is_freetext = is_freetext(cur)
+                    if cur_is_freetext:
+                        cur_label = FREETEXT_LABEL
+                    else:
+                        cur_label = VALUE_TO_BLOCK_LABEL.get(cur, _BLOCK_OPTIONS_WITH_FREETEXT[0])
+                    sel_idx = (_BLOCK_OPTIONS_WITH_FREETEXT.index(cur_label)
+                               if cur_label in _BLOCK_OPTIONS_WITH_FREETEXT else 0)
                     new_label = st.selectbox(
-                        f"Blokk {idx+1}", ALL_BLOCK_OPTIONS, index=sel_idx,
+                        f"Blokk {idx+1}", _BLOCK_OPTIONS_WITH_FREETEXT, index=sel_idx,
                         key=f"block_sel_{key}_{idx}",
                         label_visibility="collapsed",
                     )
-                    new_val = BLOCK_LABEL_TO_VALUE[new_label]
+                    if new_label == FREETEXT_LABEL:
+                        default_text = freetext_value(cur) if cur_is_freetext else ""
+                        new_text = st.text_input(
+                            "Fritekst", value=default_text,
+                            key=f"block_text_{key}_{idx}",
+                            label_visibility="collapsed",
+                            placeholder="Skriv fritekst…",
+                        )
+                        new_val = FREETEXT_PREFIX + new_text
+                    else:
+                        new_val = BLOCK_LABEL_TO_VALUE[new_label]
                     if new_val != seq[idx]:
                         seq[idx] = new_val
                         st.session_state[key] = seq
@@ -936,6 +968,7 @@ def block_builder(key: str, seed: list[str]) -> list[str]:
                         seq.pop(idx)
                         for i in range(idx, len(seq) + 2):
                             st.session_state.pop(f"block_sel_{key}_{i}", None)
+                            st.session_state.pop(f"block_text_{key}_{i}", None)
                         st.session_state[key] = seq
                         reset_results(); st.rerun()
                 elif idx == len(seq):
@@ -1148,17 +1181,17 @@ hva hver blokk inneholder, og klikke ✕ for å fjerne.
         if st.button("Bruk Statsbygg-mønster", key=f"use_statsbygg_{file_key}",
                      use_container_width=True):
             st.session_state[f"patterns_{file_key}"] = [
-                {"start_prefix": "++", "sequence": list(STATSBYGG_SEQUENCE)}
+                {"sequence": list(STATSBYGG_SEQUENCE)}
             ]
-            for i in range(20):
+            for i in range(40):
                 st.session_state.pop(f"block_sel_seq_p0_{file_key}_{i}", None)
+                st.session_state.pop(f"block_text_seq_p0_{file_key}_{i}", None)
+            st.session_state.pop(f"seq_p0_{file_key}", None)
             reset_results(); st.rerun()
 
     patterns_key = f"patterns_{file_key}"
     if patterns_key not in st.session_state:
-        st.session_state[patterns_key] = [
-            {"start_prefix": "", "sequence": list(DEFAULT_SEQUENCE)}
-        ]
+        st.session_state[patterns_key] = [{"sequence": list(DEFAULT_SEQUENCE)}]
 
     patterns = st.session_state[patterns_key]
     templates = []
@@ -1166,18 +1199,10 @@ hva hver blokk inneholder, og klikke ✕ for å fjerne.
     for idx in range(len(patterns)):
         p = patterns[idx]
         with st.container(border=True):
-            hc1, hc2, hc3 = st.columns([3, 5, 1])
+            hc1, hc2 = st.columns([10, 1])
             with hc1:
                 st.markdown(f"**Mønster {idx + 1}**")
             with hc2:
-                prefix = st.text_input(
-                    "Start-prefiks", value=p.get("start_prefix", ""),
-                    key=f"prefix_p{idx}_{file_key}", max_chars=4,
-                    help="F.eks. `++` for Statsbygg-lokasjon",
-                    label_visibility="collapsed",
-                    placeholder="Start-prefiks (valgfritt, f.eks. ++)",
-                )
-            with hc3:
                 if len(patterns) > 1:
                     if st.button("✕", key=f"rm_p{idx}_{file_key}",
                                  help="Fjern dette mønsteret"):
@@ -1185,6 +1210,8 @@ hva hver blokk inneholder, og klikke ✕ for å fjerne.
                         for i in range(idx, len(patterns) + 2):
                             for j in range(40):
                                 st.session_state.pop(f"block_sel_seq_p{i}_{file_key}_{j}", None)
+                                st.session_state.pop(f"block_text_seq_p{i}_{file_key}_{j}", None)
+                            st.session_state.pop(f"seq_p{i}_{file_key}", None)
                         st.session_state[patterns_key] = patterns
                         reset_results(); st.rerun()
 
@@ -1192,9 +1219,9 @@ hva hver blokk inneholder, og klikke ✕ for å fjerne.
             if seq_key not in st.session_state:
                 st.session_state[seq_key] = list(p.get("sequence") or DEFAULT_SEQUENCE)
             new_seq = block_builder(seq_key, st.session_state[seq_key])
-            patterns[idx] = {"start_prefix": prefix, "sequence": new_seq}
-            template_i = sequence_to_template(new_seq, prefix)
-            example_i = sequence_to_example(new_seq, prefix)
+            patterns[idx] = {"sequence": new_seq}
+            template_i = sequence_to_template(new_seq)
+            example_i = sequence_to_example(new_seq)
             templates.append(template_i)
             st.markdown(f"""
             <div class="pattern-preview">
@@ -1208,7 +1235,7 @@ hva hver blokk inneholder, og klikke ✕ for å fjerne.
 
     if st.button("➕ Legg til mønster", use_container_width=True,
                  key=f"add_pat_{file_key}"):
-        patterns.append({"start_prefix": "", "sequence": list(DEFAULT_SEQUENCE)})
+        patterns.append({"sequence": list(DEFAULT_SEQUENCE)})
         st.session_state[patterns_key] = patterns
         reset_results(); st.rerun()
 
@@ -1382,23 +1409,31 @@ hva hver blokk inneholder, og klikke ✕ for å fjerne.
                     st.session_state[disc_key] = data.get("discipline_key", "Annet")
                     st.session_state[f"bd_sys_{file_key}"] = data.get("bygningsdel_system", "NS3451")
                     st.session_state[f"komp_sys_{file_key}"] = data.get("komponent_system", "IEC81346")
-                    # Patterns: handle both new ("sequence") and legacy ("builder_rows") format
+                    # Patterns: handle both new ("sequence") and legacy ("builder_rows" + "start_prefix") formats
+                    def _merge_prefix(prefix, seq):
+                        if not prefix:
+                            return list(seq)
+                        # Known separator → use canonical name; otherwise free-text
+                        head = prefix if prefix in SEP_TO_CHAR else FREETEXT_PREFIX + prefix
+                        return [head] + list(seq)
                     loaded = []
                     for p in (data.get("patterns") or []):
                         if "sequence" in p:
-                            loaded.append({"start_prefix": p.get("start_prefix", ""),
-                                            "sequence": list(p["sequence"])})
+                            loaded.append({"sequence": _merge_prefix(
+                                p.get("start_prefix", ""), p["sequence"])})
                         elif "builder_rows" in p:
-                            loaded.append({"start_prefix": p.get("start_prefix", ""),
-                                            "sequence": legacy_rows_to_sequence(p["builder_rows"])})
+                            loaded.append({"sequence": _merge_prefix(
+                                p.get("start_prefix", ""),
+                                legacy_rows_to_sequence(p["builder_rows"]))})
                     if not loaded:
-                        loaded = [{"start_prefix": data.get("start_prefix", ""),
-                                    "sequence": legacy_rows_to_sequence(
-                                        data.get("builder_rows", []))}]
+                        loaded = [{"sequence": _merge_prefix(
+                            data.get("start_prefix", ""),
+                            legacy_rows_to_sequence(data.get("builder_rows", [])))}]
                     st.session_state[f"patterns_{file_key}"] = loaded
                     for i in range(20):
                         for j in range(40):
                             st.session_state.pop(f"block_sel_seq_p{i}_{file_key}_{j}", None)
+                            st.session_state.pop(f"block_text_seq_p{i}_{file_key}_{j}", None)
                         st.session_state.pop(f"seq_p{i}_{file_key}", None)
                     st.session_state[f"floor_codes_{file_key}"] = data.get("floor_codes", [])
                     st.session_state.pop(f"editor_floor_codes_{file_key}", None)
