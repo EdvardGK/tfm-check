@@ -1056,12 +1056,34 @@ def reset_results():
 FREETEXT_LABEL = "Fritekst…"
 _BLOCK_OPTIONS_WITH_FREETEXT = ALL_BLOCK_OPTIONS + [FREETEXT_LABEL]
 
-# CSS for the sortable chip strip. Pill-shaped tags. Color coding via attribute
-# selectors on the label text:
-#   - Parts: green (default), label is just the part name (no parens)
-#   - Separators: brown/tan, label always contains "(" because of "(punktum)" etc.
-#   - Free-text: indigo, label always contains "—" (em-dash before user text)
-SORTABLE_CSS = """
+# Per-part-type color palette. Each part gets a distinct hue so the user can
+# visually trace which chip maps to which slot in the preview string. The same
+# palette is used for the sortable chips, the preview-example spans, and the
+# per-section caption colors.
+PART_COLORS = {
+    "Lokasjon":    {"bg": "#fef3c7", "border": "#d97706", "text": "#78350f"},  # amber
+    "Rom":         {"bg": "#fed7aa", "border": "#ea580c", "text": "#7c2d12"},  # orange
+    "Bygningsdel": {"bg": "#dcfce7", "border": "#16a34a", "text": "#14532d"},  # green
+    "Etasje":      {"bg": "#dbeafe", "border": "#2563eb", "text": "#1e3a8a"},  # blue
+    "Subnr":       {"bg": "#ccfbf1", "border": "#0d9488", "text": "#134e4a"},  # teal
+    "Løpenummer":  {"bg": "#fee2e2", "border": "#dc2626", "text": "#7f1d1d"},  # red
+    "Komponent":   {"bg": "#e0e7ff", "border": "#4f46e5", "text": "#1e1b4b"},  # indigo
+    "Komp.nr":     {"bg": "#fce7f3", "border": "#db2777", "text": "#831843"},  # pink
+    "T-suffiks":   {"bg": "#f3e8ff", "border": "#9333ea", "text": "#581c87"},  # violet
+}
+SEP_COLOR    = {"bg": "#f5f0e8", "border": "#8a7350", "text": "#4a3a1e"}      # tan
+FREETEXT_COLOR = {"bg": "#f1f5f9", "border": "#475569", "text": "#1e293b"}    # slate
+
+_PART_SELECTOR_OVERRIDE = {
+    # Both contain "Komp" — match by the more specific form so they don't collide.
+    "Komponent": "Komponent",
+    "Komp.nr":   "Komp.nr",
+}
+
+
+def _build_sortable_css() -> str:
+    """Compose the chip strip CSS with one rule per part type."""
+    base = """
 .sortable-component {
     background: #ffffff;
     border-radius: 10px;
@@ -1096,18 +1118,61 @@ SORTABLE_CSS = """
 }
 /* Separators — labels like "1·. (punktum)" — match the "(" */
 .sortable-item[data-id*="("] {
-    background: #f5f0e8;
-    border-color: #8a7350;
-    color: #4a3a1e;
+    background: %(sep_bg)s;
+    border-color: %(sep_border)s;
+    color: %(sep_text)s;
     font-family: 'Consolas', 'Courier New', monospace;
 }
 /* Free-text — labels like "1·Fritekst — abc" — match the em-dash */
 .sortable-item[data-id*="—"] {
-    background: #eef2ff;
-    border-color: #4f46e5;
-    color: #1e1b4b;
+    background: %(ft_bg)s;
+    border-color: %(ft_border)s;
+    color: %(ft_text)s;
 }
-"""
+""" % {
+        "sep_bg": SEP_COLOR["bg"], "sep_border": SEP_COLOR["border"], "sep_text": SEP_COLOR["text"],
+        "ft_bg": FREETEXT_COLOR["bg"], "ft_border": FREETEXT_COLOR["border"], "ft_text": FREETEXT_COLOR["text"],
+    }
+    # One rule per part type. CSS substring match on the part name.
+    part_rules = []
+    for part, colors in PART_COLORS.items():
+        selector_text = _PART_SELECTOR_OVERRIDE.get(part, part)
+        part_rules.append(
+            f'.sortable-item[data-id*="{selector_text}"]'
+            f' {{ background: {colors["bg"]}; border-color: {colors["border"]};'
+            f' color: {colors["text"]}; }}'
+        )
+    return base + "\n".join(part_rules)
+
+
+SORTABLE_CSS = _build_sortable_css()
+
+
+def _color_span(text: str, palette: dict) -> str:
+    """Render text inside a colored pill span (for the preview string)."""
+    return (f'<span style="background:{palette["bg"]};color:{palette["text"]};'
+            f'border:1px solid {palette["border"]};border-radius:5px;'
+            f'padding:1px 6px;margin:0 1px;font-weight:600;">{text}</span>')
+
+
+def sequence_to_example_html(seq: list[str]) -> str:
+    """Like sequence_to_example, but returns HTML with per-token color spans
+    that match the chip palette — so users can visually trace each block to
+    its slot in the example string."""
+    parts = []
+    for item in seq:
+        if item in PART_EXAMPLE:
+            parts.append(_color_span(PART_EXAMPLE[item], PART_COLORS[item]))
+        elif item in SEP_TO_CHAR:
+            ch = SEP_TO_CHAR[item]
+            display = " " if ch == " " else ch
+            parts.append(
+                f'<span style="color:{SEP_COLOR["text"]};font-family:monospace;'
+                f'font-weight:700;padding:0 2px;">{display}</span>'
+            )
+        elif is_freetext(item):
+            parts.append(_color_span(freetext_value(item) or "(tom)", FREETEXT_COLOR))
+    return "".join(parts) or "<i>(tomt)</i>"
 
 
 def _chip_label(idx: int, item: str) -> str:
@@ -1157,27 +1222,44 @@ def _parse_chip_label(label: str) -> tuple[int, str]:
 def _block_config_popover(key: str, idx: int, item: str) -> str:
     """Per-block "Configure" popover. Returns possibly-mutated item.
 
-    Free-text blocks expose a text input. Part blocks expose a type-change
-    dropdown + (for digit-lockable parts) a digit-lock selectbox stored under
-    the global file-scoped digit-lock key (handled in main()).
-
-    `key` looks like 'seq_p<patternIdx>_<file_key>'. We strip the 'seq_pN_'
-    prefix to recover the file_key used by main() for shared session_state.
+    Two-level type picker keeps content (kodeledd) cleanly separated from
+    skilletegn and fritekst:
+        Type:    [ Innhold ] [ Skilletegn ] [ Fritekst ]
+        Value:   <selectbox or text input scoped to the chosen kind>
     """
     file_key = re.sub(r"^seq_p\d+_", "", key)
 
     if is_freetext(item):
-        cur_label = FREETEXT_LABEL
+        cur_kind = "Fritekst"
+    elif item in SEP_TO_CHAR:
+        cur_kind = "Skilletegn"
     else:
-        cur_label = VALUE_TO_BLOCK_LABEL.get(item, _BLOCK_OPTIONS_WITH_FREETEXT[0])
-    sel_idx = (_BLOCK_OPTIONS_WITH_FREETEXT.index(cur_label)
-               if cur_label in _BLOCK_OPTIONS_WITH_FREETEXT else 0)
+        cur_kind = "Innhold"
 
-    new_label = st.selectbox(
-        "Type", _BLOCK_OPTIONS_WITH_FREETEXT, index=sel_idx,
-        key=f"cfg_type_{key}_{idx}",
+    KINDS = ["Innhold", "Skilletegn", "Fritekst"]
+    kind = st.radio(
+        "Type blokk", KINDS,
+        index=KINDS.index(cur_kind),
+        key=f"cfg_kind_{key}_{idx}",
+        horizontal=True,
     )
-    if new_label == FREETEXT_LABEL:
+
+    if kind == "Innhold":
+        current = item if item in PART_TYPES else PART_TYPES[0]
+        new_val = st.selectbox(
+            "Velg kodeledd", PART_TYPES,
+            index=PART_TYPES.index(current),
+            key=f"cfg_part_{key}_{idx}",
+        )
+    elif kind == "Skilletegn":
+        current = item if item in SEP_TO_CHAR else "."
+        new_val = st.selectbox(
+            "Velg skilletegn", SEP_OPTIONS_DISPLAY,
+            index=SEP_OPTIONS_DISPLAY.index(current),
+            format_func=_sep_display_label,
+            key=f"cfg_sep_{key}_{idx}",
+        )
+    else:  # Fritekst
         default_text = freetext_value(item) if is_freetext(item) else ""
         new_text = st.text_input(
             "Fritekst", value=default_text,
@@ -1185,8 +1267,6 @@ def _block_config_popover(key: str, idx: int, item: str) -> str:
             placeholder="Skriv fritekst…",
         )
         new_val = FREETEXT_PREFIX + new_text
-    else:
-        new_val = BLOCK_LABEL_TO_VALUE[new_label]
 
     # Inline digit-lock for digit-lockable parts (mirrors main()'s legacy key)
     if new_val in PART_KEY_TO_LABEL.values() and file_key:
@@ -1256,31 +1336,42 @@ def block_builder(key: str, seed: list[str]) -> list[str]:
     else:
         st.caption("Tom sekvens — klikk en knapp under for å legge til en blokk.")
 
-    # --- Add block row ---
-    st.markdown("**Legg til blokk:**")
-    add_options: list[tuple[str, str]] = []  # (button_label, value_to_append)
-    for p in PART_TYPES:
-        add_options.append((p, p))
-    for s in SEP_OPTIONS_DISPLAY:
-        add_options.append((_sep_display_label(s), s))
-    add_options.append(("Fritekst…", FREETEXT_PREFIX))
+    # --- Add block: separated into Innhold / Skilletegn / Fritekst ---
+    def _render_add_section(title: str, options: list[tuple[str, str]],
+                             section_key: str, per_row: int = 6):
+        st.markdown(f"**{title}**")
+        for row_start in range(0, len(options), per_row):
+            cols = st.columns(per_row)
+            for j, col in enumerate(cols):
+                i = row_start + j
+                if i >= len(options):
+                    break
+                label, val = options[i]
+                with col:
+                    if st.button(label, key=f"add_{section_key}_{key}_{i}",
+                                 use_container_width=True):
+                        seq.append(val)
+                        st.session_state[key] = seq
+                        st.session_state[remount_key] += 1
+                        reset_results()
+                        st.rerun()
 
-    per_row = 6
-    for row_start in range(0, len(add_options), per_row):
-        cols = st.columns(per_row)
-        for j, col in enumerate(cols):
-            i = row_start + j
-            if i >= len(add_options):
-                break
-            label, val = add_options[i]
-            with col:
-                if st.button(label, key=f"add_{key}_{i}",
-                             use_container_width=True):
-                    seq.append(val)
-                    st.session_state[key] = seq
-                    st.session_state[remount_key] += 1
-                    reset_results()
-                    st.rerun()
+    _render_add_section(
+        "Innhold (kodeledd):",
+        [(p, p) for p in PART_TYPES],
+        "innhold",
+    )
+    _render_add_section(
+        "Skilletegn:",
+        [(_sep_display_label(s), s) for s in SEP_OPTIONS_DISPLAY],
+        "skilletegn",
+    )
+    _render_add_section(
+        "Fritekst:",
+        [("Fritekst…", FREETEXT_PREFIX)],
+        "fritekst",
+        per_row=4,
+    )
 
     # --- Edit row: one popover per current block ---
     if seq:
@@ -1401,22 +1492,27 @@ def main():
         }
 
         .pattern-preview {
-            background: #1e293b; border-radius: 10px;
+            background: #fafaf6; border-radius: 10px;
             padding: 0.9rem 1.1rem; margin: 0.7rem 0 0.4rem 0;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.12);
-            border-left: 4px solid #a7f3d0;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+            border-left: 4px solid #2d4a3e;
         }
         .pattern-preview .preview-label {
-            font-size: 0.65rem; color: #94a3b8; text-transform: uppercase;
-            letter-spacing: 0.1em; font-weight: 700; margin-bottom: 4px;
+            font-size: 0.65rem; color: #64748b; text-transform: uppercase;
+            letter-spacing: 0.1em; font-weight: 700; margin-bottom: 8px;
         }
         .pattern-preview .preview-example {
             font-family: 'Consolas', 'Courier New', monospace;
-            font-size: 1.6rem; font-weight: 700; color: #a7f3d0;
-            letter-spacing: 0.05em; line-height: 1.1;
+            font-size: 1.35rem; line-height: 1.6;
+            display: flex; flex-wrap: wrap; align-items: center; gap: 1px;
         }
         .pattern-preview .preview-template {
-            font-size: 0.78rem; color: #94a3b8; margin-top: 6px;
+            font-size: 0.78rem; color: #64748b; margin-top: 8px;
+        }
+        .pattern-preview .preview-template code {
+            background: #e2e8f0; color: #334155;
+            padding: 1px 6px; border-radius: 4px;
+            font-family: 'Consolas', 'Courier New', monospace;
         }
         .pattern-preview .preview-template code {
             background: rgba(255,255,255,0.06); color: #cbd5e1;
@@ -1565,12 +1661,12 @@ hva hver blokk inneholder, og klikke ✕ for å fjerne.
             new_seq = block_builder(seq_key, st.session_state[seq_key])
             patterns[idx] = {"sequence": new_seq}
             template_i = sequence_to_template(new_seq)
-            example_i = sequence_to_example(new_seq)
+            example_html = sequence_to_example_html(new_seq)
             templates.append(template_i)
             st.markdown(f"""
             <div class="pattern-preview">
                 <div class="preview-label">Eksempel-streng</div>
-                <div class="preview-example">{example_i or "(tomt)"}</div>
+                <div class="preview-example">{example_html}</div>
                 <div class="preview-template">Mal: <code>{template_i or "(tomt)"}</code></div>
             </div>
             """, unsafe_allow_html=True)
