@@ -72,7 +72,7 @@ FILENAME_DISCIPLINE_PATTERNS = [
 ]
 
 BYGNINGSDEL_SYSTEMS = {
-    "NS3451": dict(label="NS3451 — Bygningsdelstabell (norsk)",
+    "NS3451": dict(label="NS3451 — Systemkodestabell (norsk)",
                    file="ns3451_codes.json"),
     "Ingen":  dict(label="Ingen sjekk", file=None),
 }
@@ -86,7 +86,7 @@ KOMPONENT_SYSTEMS = {
 # Part types — kodeledd that get parsed as named regex groups
 PART_TYPES = [
     "Lokasjon", "Rom",
-    "Bygningsdel", "Etasje",
+    "Systemkode", "Etasje",
     "Subnr", "Løpenummer",
     "Komponent", "Komp.nr",
     "T-suffiks",
@@ -94,7 +94,7 @@ PART_TYPES = [
 PART_TO_TEMPLATE = {
     "Lokasjon":    "{lokasjon}",
     "Rom":         "{rom}",
-    "Bygningsdel": "{bygningsdel}",
+    "Systemkode": "{systemkode}",
     "Etasje":      "{etasje}",
     "Subnr":       "{subnr}",
     "Løpenummer":  "{lopenummer}",
@@ -115,15 +115,15 @@ SEP_TO_CHAR = {
 SEP_OPTIONS_DISPLAY = list(SEP_TO_CHAR.keys())
 
 # Default starting sequence — minimal system aspect
-DEFAULT_SEQUENCE = ["Bygningsdel", ".", "Etasje", "-", "Komponent", "Løpenummer"]
+DEFAULT_SEQUENCE = ["Systemkode", ".", "Etasje", "-", "Komponent", "Løpenummer"]
 
 # Statsbygg PA-0802 rev.3 TFM-veiledning structure.
 # PA-0802 §3.1.1: aspect marker for Lokasjon is "+" (single plus, NOT "++").
 # Example from §3 of the standard: +123456=360.001-JV401
-# (location 6-siffer Statsbygg-byggnummer · system bygningsdel.løpenummer · komponent)
+# (location 6-siffer Statsbygg-byggnummer · system systemkode.løpenummer · komponent)
 STATSBYGG_SEQUENCE = [
     "+", "Lokasjon", "=",
-    "Bygningsdel", ".", "Løpenummer", "-",
+    "Systemkode", ".", "Løpenummer", "-",
     "Komponent", "Komp.nr",
 ]
 
@@ -156,7 +156,7 @@ BLOCK_LABEL_TO_VALUE = {v: k for k, v in VALUE_TO_BLOCK_LABEL.items()}
 # PA-0802 rev.3 canonical forms (with looser project-extension fallbacks where the
 # standard doesn't directly specify):
 #   lokasjon:    6 alphanumeric (Statsbygg-byggnummer); §1 / §3.1.1
-#   bygningsdel: 3 digits NS3451 systemkode; §3.1.2
+#   systemkode: 3 digits NS3451 systemkode; §3.1.2
 #   lopenummer:  001-999 pure 3-digit løpenummer; §3.1.2 / §3.1.3
 #   komponent:   exactly 2 UPPERCASE letters (TFM komponentkode, vedlegg 9.2)
 #   kompnr:      3-digit løpenummer for komponent (001-999); §3.1.3
@@ -165,7 +165,7 @@ BLOCK_LABEL_TO_VALUE = {v: k for k, v in VALUE_TO_BLOCK_LABEL.items()}
 PLACEHOLDER_FALLBACK = {
     "lokasjon":    r"[A-Za-z0-9]{6}",
     "rom":         r"\d{1,5}",
-    "bygningsdel": r"\d{3}",
+    "systemkode": r"\d{3}",
     "etasje":      r"[A-Za-z0-9æøåÆØÅ_\- ]{1,12}",
     "subnr":       r"\d{1,4}",
     "lopenummer":  r"\d{3}",
@@ -224,7 +224,7 @@ def sequence_to_template(seq: list[str]) -> str:
 PART_EXAMPLE = {
     "Lokasjon":    "123456",
     "Rom":         "012",
-    "Bygningsdel": "244",
+    "Systemkode": "244",
     "Etasje":      "01",
     "Subnr":       "01",
     "Løpenummer":  "001",
@@ -445,7 +445,7 @@ def run_checks(ifc, products, rules: TFMRules,
     structures = rules.structures()
     floor_set = set(rules.floor_codes)
     has_floor = bool(floor_set) and rules.has_part("Etasje")
-    has_bd = bool(bygningsdel_codes) and rules.has_part("Bygningsdel")
+    has_bd = bool(bygningsdel_codes) and rules.has_part("Systemkode")
     has_komp = bool(komponent_codes) and rules.has_part("Komponent")
     expected_ns = set(rules.expected_ns_range)
 
@@ -461,10 +461,10 @@ def run_checks(ifc, products, rules: TFMRules,
     cross_disc = Counter(); invalid_bd = Counter(); invalid_komp = Counter()
     field_hits = Counter(); pattern_hits = Counter()
     seen_systems = Counter(); seen_components = Counter()
-    seen_bygningsdel = Counter(); seen_floors = Counter()
+    seen_systemkode = Counter(); seen_floors = Counter()
     floor_mismatch = Counter()
     # VVS løpenummer bands per PA-0802 §3.1.3 (only counted when discipline=RIV
-    # and bygningsdel matches 3xx — see vvs_bands aggregation below)
+    # and systemkode matches 3xx — see vvs_bands aggregation below)
     vvs_lopenummer = Counter()
     missing, invalid, code_samples = [], [], []
 
@@ -505,13 +505,13 @@ def run_checks(ifc, products, rules: TFMRules,
         g = m.groupdict()
         any_invalid = False
 
-        bd = g.get("bygningsdel")
+        bd = g.get("systemkode")
         if bd is not None:
-            seen_bygningsdel[bd] += 1
+            seen_systemkode[bd] += 1
             if has_bd:
-                part_total["bygningsdel"] += 1; n_bd_total += 1
+                part_total["systemkode"] += 1; n_bd_total += 1
                 if bd in bygningsdel_codes:
-                    part_ok["bygningsdel"] += 1; n_bd_valid += 1
+                    part_ok["systemkode"] += 1; n_bd_valid += 1
                     if expected_ns:
                         n_disc_total += 1
                         if bd[:1] in expected_ns: n_in_disc += 1
@@ -550,10 +550,10 @@ def run_checks(ifc, products, rules: TFMRules,
                 part_total[nm] += 1; part_ok[nm] += 1
 
         # PA-0802 §3.1.3 VVS-funksjonsområder. Only meaningful when this is a
-        # VVS-discipline check on a 3xx bygningsdel. Collect kompnr (3-digit
+        # VVS-discipline check on a 3xx systemkode. Collect kompnr (3-digit
         # løpenummer that follows komponent-bokstavene) into 4 functional bands.
         if rules.discipline_key == "RIV":
-            bd_for_vvs = g.get("bygningsdel") or ""
+            bd_for_vvs = g.get("systemkode") or ""
             knr = g.get("kompnr") or ""
             if bd_for_vvs.startswith("3") and knr.isdigit() and len(knr) == 3:
                 vvs_lopenummer[knr] += 1
@@ -648,7 +648,7 @@ def run_checks(ifc, products, rules: TFMRules,
         "has_code":      dict(n=n_has_code, total=n_total, pct=pct(n_has_code, n_total),
                               label="Element har TFM-kode"),
         "bd_valid":      dict(n=n_bd_valid, total=n_bd_total, pct=pct(n_bd_valid, n_bd_total),
-                              label=f"Bygningsdel i {rules.bygningsdel_system}"),
+                              label=f"Systemkode i {rules.bygningsdel_system}"),
         "in_discipline": dict(n=n_in_disc, total=n_disc_total, pct=pct(n_in_disc, n_disc_total),
                               label=f"I forventet område for {rules.discipline_key}"),
         "floor_valid":   dict(n=part_ok["etasje"], total=part_total["etasje"],
@@ -681,7 +681,7 @@ def run_checks(ifc, products, rules: TFMRules,
         "invalid_bd": dict(invalid_bd.most_common(40)),
         "invalid_komp": dict(invalid_komp.most_common(20)),
         "floor_mismatch": dict(floor_mismatch.most_common(40)),
-        "seen_bygningsdel": dict(seen_bygningsdel.most_common(50)),
+        "seen_systemkode": dict(seen_systemkode.most_common(50)),
         "seen_systems": dict(seen_systems.most_common(80)),
         "seen_components": dict(seen_components.most_common(50)),
         "seen_floors": dict(seen_floors.most_common(50)),
@@ -745,7 +745,7 @@ def build_excel(rules, facts, results, file_name, file_size, duration) -> bytes:
             ["Etasjer (modell)", len(facts["storey_names"])],
             ["IfcSystems", facts["n_systems"]],
             ["TFM-mønstre", " | ".join(results.get("structures") or [])],
-            ["Bygningsdel-system", results["bd_sys_label"]],
+            ["Systemkode-system", results["bd_sys_label"]],
             ["Komponent-system", results["komp_sys_label"]],
             ["TFM-kode hentes fra", loc_str],
             ["Tillatte etasjekoder", ", ".join(rules.floor_codes) or "(ingen — sjekk hoppes over)"],
@@ -766,11 +766,11 @@ def build_excel(rules, facts, results, file_name, file_size, duration) -> bytes:
         if results.get("seen_systems"):
             pd.DataFrame(list(results["seen_systems"].items()),
                          columns=["Systemkode", "Antall"]).to_excel(
+                xw, sheet_name="TFM-koder_funnet", index=False)
+        if results.get("seen_systemkode"):
+            pd.DataFrame(list(results["seen_systemkode"].items()),
+                         columns=["Systemkode", "Antall"]).to_excel(
                 xw, sheet_name="Systemkoder_funnet", index=False)
-        if results.get("seen_bygningsdel"):
-            pd.DataFrame(list(results["seen_bygningsdel"].items()),
-                         columns=["Bygningsdel", "Antall"]).to_excel(
-                xw, sheet_name="Bygningsdeler_funnet", index=False)
         if results.get("seen_components"):
             pd.DataFrame(list(results["seen_components"].items()),
                          columns=["Komponentkode", "Antall"]).to_excel(
@@ -789,12 +789,12 @@ def build_excel(rules, facts, results, file_name, file_size, duration) -> bytes:
                 xw, sheet_name="Mønstertreff", index=False)
         if results["cross_disc"]:
             pd.DataFrame(list(results["cross_disc"].items()),
-                         columns=["Bygningsdel utenfor disiplin", "Antall"]).to_excel(
+                         columns=["Systemkode utenfor disiplin", "Antall"]).to_excel(
                 xw, sheet_name="Kryssfag", index=False)
         if results["invalid_bd"]:
             pd.DataFrame(list(results["invalid_bd"].items()),
                          columns=[f"Ikke-{rules.bygningsdel_system} kode", "Antall"]).to_excel(
-                xw, sheet_name="Ugyldig_bygningsdel", index=False)
+                xw, sheet_name="Ugyldig_systemkode", index=False)
         if results["invalid_komp"]:
             pd.DataFrame(list(results["invalid_komp"].items()),
                          columns=[f"Ikke-{rules.komponent_system} bokstav", "Antall"]).to_excel(
@@ -848,7 +848,7 @@ def build_pdf(rules, facts, results, file_name, file_size, duration) -> bytes:
         ["Antall etasjer i modell", str(len(facts["storey_names"]))],
         ["Antall IfcSystems", str(facts["n_systems"])],
         ["TFM-mønstre", " | ".join(results.get("structures") or [])],
-        ["Bygningsdel-system", results["bd_sys_label"]],
+        ["Systemkode-system", results["bd_sys_label"]],
         ["Komponent-system", results["komp_sys_label"]],
         ["TFM-kode hentes fra", loc_str],
         ["Generert", datetime.now().strftime("%Y-%m-%d %H:%M")],
@@ -893,7 +893,7 @@ def build_pdf(rules, facts, results, file_name, file_size, duration) -> bytes:
 
     if results["cross_disc"]:
         story.append(Paragraph("Kryssfagsmarkører (utenfor disiplinens forventede område)", h2))
-        d = [["Bygningsdel", "Antall"]]
+        d = [["Systemkode", "Antall"]]
         for k, v in list(results["cross_disc"].items())[:20]:
             d.append([k, str(v)])
         t = Table(d, colWidths=[40*mm, 25*mm])
@@ -1063,7 +1063,7 @@ _BLOCK_OPTIONS_WITH_FREETEXT = ALL_BLOCK_OPTIONS + [FREETEXT_LABEL]
 PART_COLORS = {
     "Lokasjon":    {"bg": "#fef3c7", "border": "#d97706", "text": "#78350f"},  # amber
     "Rom":         {"bg": "#fed7aa", "border": "#ea580c", "text": "#7c2d12"},  # orange
-    "Bygningsdel": {"bg": "#dcfce7", "border": "#16a34a", "text": "#14532d"},  # green
+    "Systemkode": {"bg": "#dcfce7", "border": "#16a34a", "text": "#14532d"},  # green
     "Etasje":      {"bg": "#dbeafe", "border": "#2563eb", "text": "#1e3a8a"},  # blue
     "Subnr":       {"bg": "#ccfbf1", "border": "#0d9488", "text": "#134e4a"},  # teal
     "Løpenummer":  {"bg": "#fee2e2", "border": "#dc2626", "text": "#7f1d1d"},  # red
@@ -1091,7 +1091,27 @@ def _build_sortable_css() -> str:
     box-shadow: 0 1px 4px rgba(0,0,0,0.05);
     border-left: 3px solid #2d4a3e;
 }
-.sortable-container { background: transparent; }
+.sortable-container { background: transparent; margin-bottom: 6px; }
+.sortable-container-header {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #64748b;
+    font-weight: 700;
+    padding: 4px 0 6px 2px;
+}
+/* Second container = trash zone */
+.sortable-container:nth-of-type(2) {
+    background: #fef2f2;
+    border: 2px dashed #f87171;
+    border-radius: 10px;
+    padding: 6px 10px;
+    margin-top: 8px;
+    min-height: 56px;
+}
+.sortable-container:nth-of-type(2) .sortable-container-header {
+    color: #b91c1c;
+}
 .sortable-container-body {
     display: flex;
     flex-wrap: wrap;
@@ -1297,14 +1317,17 @@ def _block_config_popover(key: str, idx: int, item: str) -> str:
 def block_builder(key: str, seed: list[str]) -> list[str]:
     """Chip-based sortable structure builder.
 
-    UI shape:
-        [chip] [chip] [chip] [chip]      ← sort_items (drag to reorder)
-        [Add: 📦 Bygningsdel] [Add: 📦 Etasje] … [Add: 🔗 .] [Add: 🆎 Fritekst]
-        [⚙ Edit 1] [⚙ Edit 2] [⚙ Edit 3] …   ← each opens a popover
+    The pattern (chip strip) is the *only* UI for add/delete:
+        Mønster:  [chip] [chip] [chip] ...           ← drag to reorder
+        Slipp her for å fjerne:  [drop-zone]         ← drag a chip here to delete
 
-    Uses a remount counter (`_remount_{key}`) baked into the sortables key so
-    add/remove forces a clean remount (avoids streamlit-sortables issue #4
-    flicker).
+    Add new blocks via the palette below (separated Innhold / Skilletegn /
+    Fritekst sections). Free-text content is set at add-time via the inline
+    text input. To change an existing block, drag it to trash and add a fresh
+    one — there is no per-block edit popover.
+
+    Uses a remount counter so add/delete forces a clean remount (avoids
+    streamlit-sortables issue #4 flicker).
     """
     if key not in st.session_state:
         st.session_state[key] = list(seed or DEFAULT_SEQUENCE)
@@ -1312,32 +1335,39 @@ def block_builder(key: str, seed: list[str]) -> list[str]:
     remount_key = f"_remount_{key}"
     st.session_state.setdefault(remount_key, 0)
 
-    # --- Sortable chip strip ---
+    # --- Sortable: Mønster zone + Trash zone ---
     chip_labels = [_chip_label(i, item) for i, item in enumerate(seq)]
-    if chip_labels:
-        sorted_labels = sort_items(
-            chip_labels,
-            direction="horizontal",
-            custom_style=SORTABLE_CSS,
-            key=f"sortable_{key}_v{st.session_state[remount_key]}",
-        )
-        # Recover new order from labels (each label encodes its old index)
-        if sorted_labels != chip_labels:
-            new_seq = []
-            for lbl in sorted_labels:
-                old_idx, val = _parse_chip_label(lbl)
-                if 0 <= old_idx < len(seq):
-                    new_seq.append(seq[old_idx])
-                else:
-                    new_seq.append(val)
-            seq = new_seq
-            st.session_state[key] = seq
-            reset_results()
-            st.rerun()
-    else:
-        st.caption("Tom sekvens — klikk en knapp under for å legge til en blokk.")
+    result = sort_items(
+        items=[
+            {"header": "Mønster",                       "items": chip_labels},
+            {"header": "🗑  Slipp her for å fjerne",   "items": []},
+        ],
+        multi_containers=True,
+        direction="horizontal",
+        custom_style=SORTABLE_CSS,
+        key=f"sortable_{key}_v{st.session_state[remount_key]}",
+    )
+    new_chip_labels = result[0].get("items", []) if result and len(result) >= 1 else chip_labels
+    trashed = result[1].get("items", []) if result and len(result) >= 2 else []
 
-    # --- Add block: separated into Innhold / Skilletegn / Fritekst ---
+    # Reorder + delete in one pass: rebuild seq from whichever chips ended up
+    # in the Mønster zone, in their new order.
+    if new_chip_labels != chip_labels or trashed:
+        new_seq = []
+        for lbl in new_chip_labels:
+            old_idx, val = _parse_chip_label(lbl)
+            if 0 <= old_idx < len(seq):
+                new_seq.append(seq[old_idx])
+            else:
+                new_seq.append(val)
+        st.session_state[key] = new_seq
+        if trashed:
+            # Force remount so the trash zone empties cleanly
+            st.session_state[remount_key] += 1
+        reset_results()
+        st.rerun()
+
+    # --- Add palette: Innhold / Skilletegn / Fritekst ---
     def _render_add_section(title: str, options: list[tuple[str, str]],
                              section_key: str, per_row: int = 6):
         st.markdown(f"**{title}**")
@@ -1367,46 +1397,28 @@ def block_builder(key: str, seed: list[str]) -> list[str]:
         [(_sep_display_label(s), s) for s in SEP_OPTIONS_DISPLAY],
         "skilletegn",
     )
-    _render_add_section(
-        "Fritekst:",
-        [("Fritekst…", FREETEXT_PREFIX)],
-        "fritekst",
-        per_row=4,
-    )
 
-    # --- Edit row: one popover per current block ---
-    if seq:
-        st.markdown("**Rediger blokk:**")
-        per_row_e = 6
-        for row_start in range(0, len(seq), per_row_e):
-            cols = st.columns(per_row_e)
-            for j, col in enumerate(cols):
-                idx = row_start + j
-                if idx >= len(seq):
-                    break
-                item = seq[idx]
-                if is_freetext(item):
-                    btn_lbl = f"⚙ {idx+1}·🆎"
-                elif item in PART_TYPES:
-                    btn_lbl = f"⚙ {idx+1}·📦"
-                elif item in SEP_TO_CHAR:
-                    btn_lbl = f"⚙ {idx+1}·🔗"
-                else:
-                    btn_lbl = f"⚙ {idx+1}"
-                with col:
-                    with st.popover(btn_lbl, use_container_width=True):
-                        st.caption(f"Blokk {idx+1}")
-                        new_val = _block_config_popover(key, idx, item)
-                        if new_val == "__REMOVE__":
-                            seq.pop(idx)
-                            st.session_state[key] = seq
-                            st.session_state[remount_key] += 1
-                            reset_results()
-                            st.rerun()
-                        elif new_val != item:
-                            seq[idx] = new_val
-                            st.session_state[key] = seq
-                            reset_results()
+    # Free-text needs the user to type its content at add-time, since there's
+    # no edit popover any more. Text input + Add button.
+    st.markdown("**Fritekst:**")
+    ftc1, ftc2 = st.columns([3, 1])
+    with ftc1:
+        ft_value = st.text_input(
+            "Fritekst-innhold",
+            key=f"ft_input_{key}",
+            label_visibility="collapsed",
+            placeholder="Skriv tekst og klikk «Legg til»",
+        )
+    with ftc2:
+        if st.button("Legg til Fritekst", key=f"add_fritekst_{key}",
+                     use_container_width=True):
+            seq.append(FREETEXT_PREFIX + ft_value)
+            st.session_state[key] = seq
+            st.session_state[remount_key] += 1
+            # Clear the input on the next rerun
+            st.session_state[f"ft_input_{key}"] = ""
+            reset_results()
+            st.rerun()
 
     return seq
 
@@ -1556,7 +1568,7 @@ def main():
             st.markdown(f"""
 **Hva sjekkes:**
 - Element har TFM-kode i valgt felt
-- Bygningsdel-kode gyldig i valgt klassifikasjon (f.eks. NS3451)
+- Systemkode-kode gyldig i valgt klassifikasjon (f.eks. NS3451)
 - Etasjekode er i tillatt liste
 - Etasje-leddet matcher elementets faktiske storey (`IfcRelContainedInSpatialStructure`)
 - Komponentbokstav gyldig i valgt system (f.eks. IEC 81346-2)
@@ -1612,7 +1624,7 @@ hva hver blokk inneholder, og klikke ✕ for å fjerne.
 
     with st.expander("📋 Sett inn PA-0802 (Statsbygg TFM rev.3) som utgangspunkt"):
         st.caption("Erstatter mønster 1 med Statsbyggs kanoniske form "
-                   "(`+lokasjon=bygningsdel.løpenummer-komponentkomp.nr`). "
+                   "(`+lokasjon=systemkode.løpenummer-komponentkomp.nr`). "
                    "Eksempel: `+123456=244.001-DI001`. Aspektmarkør er ett `+` "
                    "(ikke `++`) ifølge §3.1.1.")
         if st.button("Bruk PA-0802-mønster", key=f"use_statsbygg_{file_key}",
@@ -1691,12 +1703,12 @@ hva hver blokk inneholder, og klikke ✕ for å fjerne.
     bd_sys = st.session_state.get(f"bd_sys_{file_key}", "NS3451")
     komp_sys = st.session_state.get(f"komp_sys_{file_key}", "IEC81346")
 
-    if used_parts & {"Bygningsdel", "Etasje", "Komponent", "Rom"}:
+    if used_parts & {"Systemkode", "Etasje", "Komponent", "Rom"}:
         st.markdown("##### Blokk-innstillinger")
         st.caption("⚙️ Trykk knappene under for å justere klassifikasjon, etasjeliste "
                    "eller låsning av sifre per blokk.")
         cfg_cols = []
-        if "Bygningsdel" in used_parts: cfg_cols.append("Bygningsdel")
+        if "Systemkode" in used_parts: cfg_cols.append("Systemkode")
         if "Etasje" in used_parts:      cfg_cols.append("Etasje")
         if "Komponent" in used_parts:   cfg_cols.append("Komponent")
         if "Rom" in used_parts:         cfg_cols.append("Rom")
@@ -1704,10 +1716,10 @@ hva hver blokk inneholder, og klikke ✕ for å fjerne.
         cols = st.columns(max(len(cfg_cols), 1))
         for col, name in zip(cols, cfg_cols):
             with col:
-                if name == "Bygningsdel":
-                    with st.popover("📦 Bygningsdel", use_container_width=True):
+                if name == "Systemkode":
+                    with st.popover("📦 Systemkode", use_container_width=True):
                         st.caption("Klassifikasjonssystem som validerer "
-                                   "`{bygningsdel}`-leddet.")
+                                   "`{systemkode}`-leddet.")
                         bd_sys = st.selectbox(
                             "Klassifikasjonssystem",
                             list(BYGNINGSDEL_SYSTEMS.keys()),
@@ -1966,7 +1978,7 @@ hva hver blokk inneholder, og klikke ✕ for å fjerne.
     if cd_total:
         flag_specs.append(("cross_disc",
                            f"⚠️ {cd_total} kryssfag",
-                           "Bygningsdel utenfor disiplinens forventede område",
+                           "Systemkode utenfor disiplinens forventede område",
                            results.get("cross_disc", {})))
     if bd_total:
         flag_specs.append(("invalid_bd",
@@ -1985,7 +1997,7 @@ hva hver blokk inneholder, og klikke ✕ for å fjerne.
                 with st.popover(label, use_container_width=True):
                     st.caption(caption)
                     if data:
-                        # Try to enrich with NS3451 name for bygningsdel-style
+                        # Try to enrich with NS3451 name for systemkode-style
                         if key_ in ("cross_disc", "invalid_bd"):
                             ns_view = load_codes(BYGNINGSDEL_SYSTEMS.get(
                                 bd_sys, {}).get("file"))
@@ -2010,7 +2022,7 @@ hva hver blokk inneholder, og klikke ✕ for å fjerne.
             metric_card(c["bd_valid"]["label"], c["bd_valid"]["pct"],
                         f"{c['bd_valid']['n']:,} / {c['bd_valid']['total']:,}")
         else:
-            info_card("Bygningsdel", "—",
+            info_card("Systemkode", "—",
                       "Hoppes over" if not results["has_bd_check"] else "Ingen koder")
     with r1c3:
         if results["has_disc_check"] and c["in_discipline"]["total"]:
@@ -2099,7 +2111,7 @@ hva hver blokk inneholder, og klikke ✕ for å fjerne.
 
     agg_pairs = [
         ("Systemkoder funnet",  results.get("seen_systems",   {})),
-        ("Bygningsdeler funnet", results.get("seen_bygningsdel", {})),
+        ("Systemkodeer funnet", results.get("seen_systemkode", {})),
         ("Komponentkoder funnet", results.get("seen_components", {})),
         ("Etasjekoder funnet",  results.get("seen_floors",    {})),
     ]
