@@ -128,8 +128,27 @@ STATSBYGG_SEQUENCE = [
 ]
 
 # Block dropdown options (a single list with emoji-prefixed labels)
-_BLOCK_PART_LABELS = {p: f"📦 {p}" for p in PART_TYPES}
-_BLOCK_SEP_LABELS = {s: f"🔗 {s}" for s in SEP_OPTIONS_DISPLAY}
+SEP_NORWEGIAN_NAMES = {
+    "+":  "pluss",
+    ".":  "punktum",
+    "-":  "bindestrek",
+    "_":  "understrek",
+    "/":  "skråstrek",
+    "=":  "likhetstegn",
+    "++": "dobbeltpluss",
+    "mellomrom": "mellomrom",
+}
+
+
+def _sep_display_label(s: str) -> str:
+    """Descriptive separator label: '. (punktum)' instead of '🔗 .'."""
+    if s == "mellomrom":
+        return "␣ (mellomrom)"
+    return f"{s}  ({SEP_NORWEGIAN_NAMES.get(s, s)})"
+
+
+_BLOCK_PART_LABELS = {p: p for p in PART_TYPES}
+_BLOCK_SEP_LABELS = {s: _sep_display_label(s) for s in SEP_OPTIONS_DISPLAY}
 ALL_BLOCK_OPTIONS = list(_BLOCK_PART_LABELS.values()) + list(_BLOCK_SEP_LABELS.values())
 VALUE_TO_BLOCK_LABEL = {**_BLOCK_PART_LABELS, **_BLOCK_SEP_LABELS}
 BLOCK_LABEL_TO_VALUE = {v: k for k, v in VALUE_TO_BLOCK_LABEL.items()}
@@ -1034,14 +1053,14 @@ def reset_results():
             del st.session_state[k]
 
 
-FREETEXT_LABEL = "🆎 Fritekst"
+FREETEXT_LABEL = "Fritekst…"
 _BLOCK_OPTIONS_WITH_FREETEXT = ALL_BLOCK_OPTIONS + [FREETEXT_LABEL]
 
-# CSS for the sortable chip strip. Pill-shaped tags, green palette, flex-wrap so
-# longer sequences flow onto multiple rows. Three tints by emoji prefix:
-#   📦 Part (template placeholder)
-#   🔗 Separator (literal char)
-#   🆎 Free-text (literal)
+# CSS for the sortable chip strip. Pill-shaped tags. Color coding via attribute
+# selectors on the label text:
+#   - Parts: green (default), label is just the part name (no parens)
+#   - Separators: brown/tan, label always contains "(" because of "(punktum)" etc.
+#   - Free-text: indigo, label always contains "—" (em-dash before user text)
 SORTABLE_CSS = """
 .sortable-component {
     background: #ffffff;
@@ -1075,12 +1094,15 @@ SORTABLE_CSS = """
     box-shadow: 0 2px 6px rgba(0,0,0,0.12);
     transform: translateY(-1px);
 }
-.sortable-item[data-id*="🔗"] {
+/* Separators — labels like "1·. (punktum)" — match the "(" */
+.sortable-item[data-id*="("] {
     background: #f5f0e8;
     border-color: #8a7350;
     color: #4a3a1e;
+    font-family: 'Consolas', 'Courier New', monospace;
 }
-.sortable-item[data-id*="🆎"] {
+/* Free-text — labels like "1·Fritekst — abc" — match the em-dash */
+.sortable-item[data-id*="—"] {
     background: #eef2ff;
     border-color: #4f46e5;
     color: #1e1b4b;
@@ -1091,39 +1113,45 @@ SORTABLE_CSS = """
 def _chip_label(idx: int, item: str) -> str:
     """Render a sequence item as a sortable chip label.
 
-    Format: "<1-based-idx>·<emoji> <value>". Index prefix lets us recover order
-    + identity even when the user drags items around (sort_items returns the
-    moved labels, not indexes).
+    Format: "<1-based-idx>·<descriptive-text>". Each chip type produces a
+    label that CSS attribute-selectors can target:
+      - Parts:       "1·Bygningsdel"           (no parens, no em-dash)
+      - Separators:  "2·. (punktum)"           (always contains "(")
+      - Free-text:   "3·Fritekst — abc"        (always contains em-dash)
     """
     if is_freetext(item):
-        return f"{idx+1}·🆎 {freetext_value(item) or '(tom)'}"
+        return f"{idx+1}·Fritekst — {freetext_value(item) or '(tom)'}"
     if item in PART_TYPES:
-        return f"{idx+1}·📦 {item}"
+        return f"{idx+1}·{item}"
     if item in SEP_TO_CHAR:
-        return f"{idx+1}·🔗 {item}"
-    return f"{idx+1}·? {item}"
+        return f"{idx+1}·{_sep_display_label(item)}"
+    return f"{idx+1}·{item}"
 
 
 def _parse_chip_label(label: str) -> tuple[int, str]:
-    """Reverse of _chip_label: return (orig_index, original_value).
-
-    Splits on the first '·'. The right side has emoji + space + value; we
-    parse the value back to a sequence item ('Bygningsdel' / '.' / 'T:foo' …).
-    """
+    """Reverse of _chip_label: return (orig_index, original_value)."""
     head, _, tail = label.partition("·")
     try:
         idx = int(head) - 1
     except ValueError:
         idx = 0
-    # tail looks like "📦 Bygningsdel" or "🔗 ." or "🆎 my text"
-    if tail.startswith("📦 "):
-        return idx, tail[2:].strip()
-    if tail.startswith("🔗 "):
-        return idx, tail[2:].strip()
-    if tail.startswith("🆎 "):
-        v = tail[2:].strip()
+    tail = tail.strip()
+    # Free-text: "Fritekst — <user text>"
+    if tail.startswith("Fritekst — "):
+        v = tail[len("Fritekst — "):]
         return idx, FREETEXT_PREFIX + ("" if v == "(tom)" else v)
-    return idx, tail.strip()
+    # Mellomrom (special separator)
+    if tail.startswith("␣"):
+        return idx, "mellomrom"
+    # Part name? (matches PART_TYPES exactly)
+    if tail in PART_TYPES:
+        return idx, tail
+    # Separator pattern "<char>  (<name>)"
+    m = re.match(r"^(\S+)\s+\(", tail)
+    if m and m.group(1) in SEP_TO_CHAR:
+        return idx, m.group(1)
+    # Fallback — treat as raw value
+    return idx, tail
 
 
 def _block_config_popover(key: str, idx: int, item: str) -> str:
@@ -1232,10 +1260,10 @@ def block_builder(key: str, seed: list[str]) -> list[str]:
     st.markdown("**Legg til blokk:**")
     add_options: list[tuple[str, str]] = []  # (button_label, value_to_append)
     for p in PART_TYPES:
-        add_options.append((f"📦 {p}", p))
+        add_options.append((p, p))
     for s in SEP_OPTIONS_DISPLAY:
-        add_options.append((f"🔗 {s}", s))
-    add_options.append(("🆎 Fritekst", FREETEXT_PREFIX))
+        add_options.append((_sep_display_label(s), s))
+    add_options.append(("Fritekst…", FREETEXT_PREFIX))
 
     per_row = 6
     for row_start in range(0, len(add_options), per_row):
