@@ -1175,48 +1175,49 @@ def sequence_to_example_html(seq: list[str]) -> str:
     return "".join(parts) or "<i>(tomt)</i>"
 
 
+_IDX_MARKER = "​"  # zero-width space — invisible identity-tag for duplicate labels
+
+
 def _chip_label(idx: int, item: str) -> str:
     """Render a sequence item as a sortable chip label.
 
-    Format: "<1-based-idx>·<descriptive-text>". Each chip type produces a
-    label that CSS attribute-selectors can target:
-      - Parts:       "1·Bygningsdel"           (no parens, no em-dash)
-      - Separators:  "2·. (punktum)"           (always contains "(")
-      - Free-text:   "3·Fritekst — abc"        (always contains em-dash)
+    The visible body is just the descriptive text — no number prefix. To keep
+    sort_items able to distinguish duplicate chips (e.g. two ".") we append N+1
+    zero-width spaces; users don't see them, but they're part of the data-id so
+    each label stays unique across the sequence.
     """
     if is_freetext(item):
-        return f"{idx+1}·Fritekst — {freetext_value(item) or '(tom)'}"
-    if item in PART_TYPES:
-        return f"{idx+1}·{item}"
-    if item in SEP_TO_CHAR:
-        return f"{idx+1}·{_sep_display_label(item)}"
-    return f"{idx+1}·{item}"
+        body = f"Fritekst — {freetext_value(item) or '(tom)'}"
+    elif item in PART_TYPES:
+        body = item
+    elif item in SEP_TO_CHAR:
+        body = _sep_display_label(item)
+    else:
+        body = item
+    return body + _IDX_MARKER * (idx + 1)
 
 
 def _parse_chip_label(label: str) -> tuple[int, str]:
     """Reverse of _chip_label: return (orig_index, original_value)."""
-    head, _, tail = label.partition("·")
-    try:
-        idx = int(head) - 1
-    except ValueError:
-        idx = 0
-    tail = tail.strip()
+    n_marker = label.count(_IDX_MARKER)
+    idx = n_marker - 1 if n_marker > 0 else 0
+    body = label.replace(_IDX_MARKER, "").strip()
     # Free-text: "Fritekst — <user text>"
-    if tail.startswith("Fritekst — "):
-        v = tail[len("Fritekst — "):]
+    if body.startswith("Fritekst — "):
+        v = body[len("Fritekst — "):]
         return idx, FREETEXT_PREFIX + ("" if v == "(tom)" else v)
     # Mellomrom (special separator)
-    if tail.startswith("␣"):
+    if body.startswith("␣"):
         return idx, "mellomrom"
     # Part name? (matches PART_TYPES exactly)
-    if tail in PART_TYPES:
-        return idx, tail
+    if body in PART_TYPES:
+        return idx, body
     # Separator pattern "<char>  (<name>)"
-    m = re.match(r"^(\S+)\s+\(", tail)
+    m = re.match(r"^(\S+)\s+\(", body)
     if m and m.group(1) in SEP_TO_CHAR:
         return idx, m.group(1)
     # Fallback — treat as raw value
-    return idx, tail
+    return idx, body
 
 
 def _block_config_popover(key: str, idx: int, item: str) -> str:
