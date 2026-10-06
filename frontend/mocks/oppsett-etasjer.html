@@ -10,16 +10,16 @@
   /* ifc-check src/design/directions.css, :root[data-design] */
   --color-ground: #dfe5ec; --color-panel: #eef2f6; --color-input: #e4e9ef; --color-cream: #f7f9fb;
   --color-ink: #141a22; --color-muted: #536070; --color-line: #d3dae3; --color-green: #2f7d4f;
-  --color-palegreen: #e1eee6; --color-gold: #b5811a; --color-bad: #bf3b2c;
+  --color-gold: #b5811a; --color-bad: #bf3b2c;
   --d-accent: #a24808; --d-accent-dim: #8c3f09; --d-on-accent: #f7f9fb; --d-label-color: #475264;
-  --d-warn-ink: #7e560a; --d-tint: rgba(20,26,34,.05); --d-tint-strong: rgba(20,26,34,.085);
+  --d-tint: rgba(20,26,34,.05); --d-tint-strong: rgba(20,26,34,.085);
   --d-shade: 22, 34, 54; --d-ring: rgba(var(--d-shade), .08); --d-hair: rgba(var(--d-shade), .1);
   --d-field:
     radial-gradient(1200px 780px at 8% -12%, rgba(126,156,204,.34), transparent 62%),
     radial-gradient(1000px 760px at 104% 14%, rgba(206,176,150,.28), transparent 60%),
     radial-gradient(1100px 820px at 58% 118%, rgba(132,176,168,.3), transparent 62%),
     linear-gradient(168deg, #e8edf3 0%, #dde3ea 52%, #d6dde6 100%);
-  --d-glass: rgba(246,249,252,.64); --d-glass-solid: #edf1f5; --d-glass-blur: 22px; --d-glass-edge: rgba(250,252,255,.72);
+  --d-glass: rgba(246,249,252,.64); --d-glass-blur: 22px; --d-glass-edge: rgba(250,252,255,.72);
   --d-radius: 6px; --d-radius-lg: 14px; --d-pill: 999px;
   --d-ease: cubic-bezier(.2,.8,.2,1);
   --d-card-shadow:
@@ -33,8 +33,13 @@
   --sel-wash: color-mix(in srgb, var(--sel) 12%, transparent);
   --font-sans: "Archivo", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
-  /* module grid, ifc-check src/ui/alt/module-grid.ts */
-  --M: 12px; --G: 16px; --bar: 56px;
+
+  /* THE MEASURE: one for the whole flow (rail + canvas), so the rail never
+     moves between steps. Past it the margins grow (composition converges). */
+  --measure: 1344px; --ceiling: 860px;
+  --rail: 264px; --seam: 24px;
+  /* the canvas: 13 tracks, 8 : 5; row gap = phi x column gap */
+  --gtrack: 16px; --grow: 26px;
 }
 * { box-sizing: border-box; scrollbar-color: var(--color-muted) transparent; scrollbar-width: thin; }
 html, body { height: 100%; margin: 0; }
@@ -43,210 +48,156 @@ body {
   font-family: var(--font-sans); font-size: 14px; line-height: 1.3; overflow: hidden;
   font-variant-numeric: tabular-nums;
 }
-button { font: inherit; color: inherit; }
+button, input { font: inherit; color: inherit; }
 .mono { font-family: var(--font-mono); }
 .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1, "zero" 1; text-align: right; }
-.lbl { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--d-label-color); }
+.lbl { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--d-label-color); white-space: nowrap; }
 .sub { color: var(--d-label-color); }
+.ell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.scroll { overflow: auto; min-height: 0; flex: 1 1 auto; }
 
-/* The wizard is a WINDOW: bounded, centred on the field. Ceiling 1280 x 840
-   (composition converges: past it only the margins grow). */
-main { height: 100%; padding: 24px 48px; display: grid; place-items: center; }
-.window {
-  width: min(1280px, 100%); height: min(840px, 100%); display: flex; flex-direction: column;
-  border-radius: 18px;
-  box-shadow: inset 0 0 0 1px var(--d-glass-edge), 0 0 0 1px rgba(var(--d-shade), .06),
-    0 2px 4px rgba(var(--d-shade), .06), 0 18px 40px -12px rgba(var(--d-shade), .22),
-    0 48px 96px -32px rgba(var(--d-shade), .32);
+main { height: 100%; display: flex; align-items: center; justify-content: center; }
+.flow {
+  width: min(var(--measure), calc(100vw - 96px)); height: min(var(--ceiling), calc(100vh - 48px));
+  display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); column-gap: var(--seam);
 }
 
-/* glass tile */
 .tile {
   border-radius: var(--d-radius-lg); background-color: var(--d-glass);
   -webkit-backdrop-filter: blur(var(--d-glass-blur)) saturate(150%);
   backdrop-filter: blur(var(--d-glass-blur)) saturate(150%);
   box-shadow: var(--d-card-shadow); min-width: 0; min-height: 0; overflow: hidden;
 }
+.card { display: flex; flex-direction: column; padding: 16px 18px; gap: 10px; }
 
-/* step bar: the window's head, on the window's measure */
-.steps { flex: 0 0 auto; display: grid; grid-template-columns: repeat(6, 1fr); column-gap: 8px; padding: 12px; box-shadow: inset 0 -1px 0 var(--d-hair); }
-.step {
-  display: flex; align-items: center; gap: 10px; padding: 0 14px; min-width: 0; height: 46px; border-radius: var(--d-pill);
-  color: var(--color-muted); font-weight: 600; font-size: 14px;
+/* ── the rail: flow index + the options that govern the step ── */
+.railcol { display: flex; flex-direction: column; gap: 16px; align-self: start; min-height: 0; }
+.rail { display: flex; flex-direction: column; padding: 8px; }
+.rail .file { display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px 10px; font-family: var(--font-mono); font-size: 12px; color: var(--d-label-color); }
+.rail .file b { color: var(--color-ink); font-weight: 500; }
+.ri {
+  display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; column-gap: 8px; row-gap: 3px;
+  align-items: center; padding: 9px 10px; border-radius: 10px; text-decoration: none; color: inherit; cursor: pointer;
+  transition: background-color 120ms var(--d-ease);
 }
-.step .n {
-  flex: 0 0 24px; height: 24px; border-radius: var(--d-pill); display: grid; place-items: center;
-  font-size: 12px; font-weight: 700; box-shadow: inset 0 0 0 1.5px currentColor;
+.ri:hover { background: var(--sel-wash); }
+.ri .nm { font-weight: 600; font-size: 14px; }
+.ri .k { font-family: var(--font-mono); font-size: 12px; color: var(--d-label-color); }
+.ri .ans { grid-column: 2 / span 2; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
+.ri .ans .a { font-family: var(--font-mono); font-size: 11.5px; color: var(--d-label-color); overflow-wrap: normal; min-width: 0; }
+.ri.pending .nm { color: var(--color-muted); font-weight: 500; }
+.ri[aria-current="step"], .ri[aria-current="step"]:hover { outline: 2px solid var(--sel); outline-offset: -2px; background: var(--sel-wash); }
+.dot { width: 10px; height: 10px; border-radius: var(--d-pill); box-shadow: inset 0 0 0 1.5px var(--color-muted); }
+.dot[data-s="ok"] { background: var(--color-green); box-shadow: none; }
+.dot[data-s="bad"] { background: var(--color-bad); box-shadow: none; }
+.tag { font-family: var(--font-mono); font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: var(--d-tint-strong); color: var(--d-label-color); white-space: nowrap; }
+.rsec { display: flex; flex-direction: column; gap: 6px; padding: 10px; }
+.rsec .lbl { padding: 2px 4px 4px; }
+.rtile {
+  width: 100%; text-align: left; border: 0; border-radius: 10px; padding: 8px 10px; cursor: pointer;
+  background: var(--color-panel); box-shadow: 0 0 0 1px var(--d-ring), var(--d-key-shadow);
+  display: flex; flex-direction: column; gap: 2px;
 }
-.step .t { display: flex; flex-direction: column; min-width: 0; }
-.step .v { font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--d-label-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.step.done { color: var(--color-ink); }
-.step.done .n { background: var(--color-ink); color: var(--color-panel); box-shadow: none; }
-.step[aria-current="step"] { background: var(--color-ink); color: var(--color-panel); }
-.step[aria-current="step"] .n { background: var(--color-panel); color: var(--color-ink); box-shadow: none; }
+.rtile .x { font-family: var(--font-mono); font-size: 13px; font-weight: 600; }
+.rtile .t { font-size: 12px; color: var(--d-label-color); font-weight: 600; }
+.rtile[aria-pressed="true"] { background: var(--sel-soft); box-shadow: inset 0 0 0 2px var(--sel); }
 
-/* the golden split inside the window: work 61.8 % | answer 38.2 % */
-.board { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 1.618fr 1fr; }
-.work, .answer { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.work { box-shadow: inset -1px 0 0 var(--d-hair); }
-.head { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px 14px; }
-.h { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -.025em; line-height: 1; }
+/* ── the canvas: 13 golden tracks, composed in bands ── */
+.canvas {
+  display: grid; grid-template-columns: repeat(13, minmax(0, 1fr));
+  column-gap: var(--gtrack); row-gap: var(--grow); min-height: 0; min-width: 0;
+}
+.full { grid-column: 1 / -1; }
+.major { grid-column: 1 / span 8; }
+.minor { grid-column: span 5 / span 5; }
+.stepbar { display: flex; align-items: center; gap: 10px; padding: 12px 14px 12px 20px; }
+.stepbar h1 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -.025em; line-height: 1; }
+.stepbar .of { font-family: var(--font-mono); font-size: 14px; color: var(--d-label-color); margin-left: 4px; }
+.stepbar .sp { flex: 1; }
 
-/* buttons, ifc-check: raised keys, pressed = ink pill, primary = accent pill */
 .key {
-  height: 44px; border: 0; border-radius: var(--d-pill); background: var(--color-panel); cursor: pointer;
+  height: 40px; border: 0; border-radius: var(--d-pill); background: var(--color-panel); cursor: pointer;
   box-shadow: 0 0 0 1px var(--d-ring), var(--d-key-shadow); font-weight: 600; font-size: 14px; padding: 0 18px;
-  transition: background-color 120ms var(--d-ease), box-shadow 180ms var(--d-ease);
 }
-.key:hover { box-shadow: 0 0 0 1px rgba(var(--d-shade), .16), 0 2px 0 var(--d-key), 0 4px 8px -3px rgba(var(--d-shade), .24); }
 .key[aria-pressed="true"] { background: var(--color-ink); color: var(--color-panel); box-shadow: none; }
 .primary {
-  height: 44px; border: 0; border-radius: var(--d-pill); padding: 0 34px; cursor: pointer;
+  height: 40px; border: 0; border-radius: var(--d-pill); padding: 0 30px; cursor: pointer;
   background: var(--d-accent); color: var(--d-on-accent); font-weight: 700; font-size: 15px;
   box-shadow: 0 2px 0 var(--d-accent-dim), 0 4px 10px -4px rgba(var(--d-shade), .35);
 }
-.primary:hover { background: var(--d-accent-dim); }
-.ghost { height: 40px; border: 0; background: transparent; color: var(--d-label-color); font-weight: 600; padding: 0 12px; border-radius: var(--d-radius); cursor: pointer; }
-.ghost:hover { background: var(--d-tint); color: var(--color-ink); }
 :focus-visible { outline: 2px solid var(--d-accent); outline-offset: 1px; }
 
-.foot {
-  flex: 0 0 auto; display: flex; align-items: center; gap: 4px; padding: 14px 20px 18px;
-  box-shadow: inset 0 1px 0 var(--d-hair);
-}
-.foot .primary { margin-left: auto; }
-
-/* segmented control = ifc-check's sunken tab tray */
-.tray { display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--d-pill); background: var(--d-tint-strong); box-shadow: inset 0 1px 2px rgba(var(--d-shade), .14); }
-.tray button { border: 0; background: transparent; border-radius: var(--d-pill); color: var(--color-muted); font-weight: 600; padding: 0 16px; height: 34px; cursor: pointer; white-space: nowrap; }
-.tray button:hover { color: var(--color-ink); }
-.tray button[aria-selected="true"] { background: var(--color-panel); color: var(--color-ink); box-shadow: 0 0 0 1px var(--d-ring), 0 1px 3px rgba(var(--d-shade), .16); }
-
-/* rows, ifc-check: rules not zebra, the one highlight is teal */
+.badge { display: inline-flex; align-items: center; gap: .35em; white-space: nowrap; border-radius: var(--d-pill); padding: 2px 10px; font-family: var(--font-mono); font-weight: 600; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.badge[data-verdict="fail"] { background: var(--color-bad); color: var(--color-cream); }
+.lamp { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 5px; font-size: 11px; font-weight: 700; font-family: var(--font-mono); }
+.lamp[data-verdict="pass"] { background: var(--color-green); color: var(--color-cream); }
+.lamp[data-verdict="fail"] { background: var(--color-bad); color: var(--color-cream); }
+.lamp[data-verdict="warn"] { background: var(--color-gold); color: var(--color-ink); }
+.fig { font-size: 24px; font-weight: 700; letter-spacing: -.01em; line-height: 1.05; }
+.fig .o { font-size: .6em; font-weight: 600; color: var(--d-label-color); }
+.fig[data-verdict="fail"] { color: var(--color-bad); }
+.fig[data-verdict="pass"] { color: var(--color-green); }
+.meter { height: 4px; border-radius: var(--d-pill); background: var(--d-tint-strong); overflow: hidden; }
+.meter > span { display: block; height: 100%; border-radius: inherit; background: rgba(22,19,15,.55); }
+.meter.pass > span { background: var(--color-green); }
+.bar { height: 10px; border-radius: 3px; background: var(--d-tint); overflow: hidden; }
+.bar > span { display: block; height: 100%; border-radius: 0 3px 3px 0; background: rgba(22,19,15,.42); }
 .rule { box-shadow: inset 0 -1px 0 var(--d-hair); }
 .pick { cursor: pointer; transition: background-color 120ms var(--d-ease); }
 .pick:hover { background: var(--sel-wash); }
 .chosen, .chosen:hover { outline: 2px solid var(--sel); outline-offset: -2px; background: var(--sel-wash); }
 .colhead { position: sticky; top: 0; z-index: 1; background: var(--color-panel); box-shadow: inset 0 -1px 0 var(--d-hair); }
+.lh { display: flex; justify-content: space-between; align-items: baseline; }
+.lrow { display: grid; grid-template-columns: 18px minmax(0,1fr) auto; align-items: center; gap: 8px; min-height: 30px; }
+.lrow .mono { font-size: 12.5px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-family: var(--font-mono); font-size: 12px; font-weight: 500; border-radius: var(--d-pill); padding: 2px 10px; box-shadow: inset 0 0 0 1px var(--d-hair); white-space: nowrap; }
+.chip .c { color: var(--d-label-color); margin-left: 6px; }
+.chip.warn { box-shadow: inset 0 0 0 1.5px var(--color-gold); }
+.search { height: 34px; border: 0; border-radius: var(--d-radius); padding: 0 12px; background: var(--color-input); box-shadow: inset 0 0 0 1px var(--d-hair), inset 0 1px 2px rgba(var(--d-shade), .08); }
 
-.meter { height: 4px; border-radius: var(--d-pill); background: var(--d-tint-strong); overflow: hidden; }
-.meter > span { display: block; height: 100%; border-radius: inherit; background: rgba(22,19,15,.55); }
-.meter.pass > span { background: var(--color-green); }
-
-.badge { display: inline-flex; align-items: center; gap: .35em; white-space: nowrap; border-radius: var(--d-pill); padding: 2px 10px; font-family: var(--font-mono); font-weight: 600; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
-.badge[data-verdict="fail"] { background: var(--color-bad); color: var(--color-cream); }
-.badge[data-verdict="pass"] { background: var(--color-green); color: var(--color-cream); }
-.lamp { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 5px; font-size: 11px; font-weight: 700; font-family: var(--font-mono); }
-.lamp[data-verdict="pass"] { background: var(--color-green); color: var(--color-cream); }
-.lamp[data-verdict="fail"] { background: var(--color-bad); color: var(--color-cream); }
-.lamp[data-verdict="warn"] { background: var(--color-gold); color: var(--color-ink); }
-.fig { font-size: 26px; font-weight: 700; letter-spacing: -.01em; line-height: 1.05; }
-.fig .of { font-size: .6em; font-weight: 600; color: var(--d-label-color); }
-.fig[data-verdict="fail"] { color: var(--color-bad); }
-.fig[data-verdict="pass"] { color: var(--color-green); }
-.scroll { overflow: auto; min-height: 0; flex: 1 1 auto; }
-.ell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-
-/* narrow fallback: the window takes the screen, one column, the page scrolls */
-@media (max-width: 900px), (max-height: 560px) {
-  body { overflow: auto; }
-  main { height: auto; padding: 8px; display: block; }
-  .window { width: 100%; height: auto; }
-  .steps { grid-template-columns: repeat(3, 1fr); row-gap: 8px; }
-  .board { display: flex; flex-direction: column; }
-  .work, .answer { height: 86vh; }
-}
-
-.head .tray { margin-left: auto; }
-.table { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-.tcols, .trow { display: grid; grid-template-columns: minmax(96px, 1fr) 64px minmax(180px, 3.4fr) 132px; column-gap: 20px; align-items: center; padding: 0 20px; }
-.tcols { height: 36px; flex: 0 0 36px; }
-.tbody { flex: 1 1 auto; display: flex; flex-direction: column; }
-.trow { flex: 1 0 36px; max-height: 80px; }
+.canvas { grid-template-rows: auto minmax(0, 1fr); }
+.table { padding: 0; gap: 0; }
+.tcols, .trow { display: grid; grid-template-columns: minmax(84px, 1fr) 56px minmax(150px, 3fr) 128px; column-gap: 16px; align-items: center; padding: 0 18px; }
+.tcols { height: 38px; flex: 0 0 38px; }
+.tbody { display: flex; flex-direction: column; }
+.trow { flex: 1 0 36px; max-height: 64px; }
 .tn { font-weight: 600; }
-.tz { color: var(--color-ink); }
-.tc { display: grid; grid-template-columns: 56px 1fr; align-items: center; gap: 12px; }
-.bar { height: 14px; border-radius: 3px; background: var(--d-tint); overflow: hidden; }
-.bar > span { display: block; height: 100%; border-radius: 0 3px 3px 0; background: rgba(22,19,15,.42); }
+.tc { display: grid; grid-template-columns: 46px 1fr; align-items: center; gap: 10px; }
+.tc .bar { height: 12px; }
 .tk { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
-.code {
-  width: 96px; height: 32px; border: 0; border-radius: var(--d-radius); padding: 0 10px; font-size: 14px;
+.code { width: 88px; height: 30px; border: 0; border-radius: var(--d-radius); padding: 0 10px; font-size: 14px;
   background: var(--color-input); box-shadow: inset 0 0 0 1px var(--d-hair), inset 0 1px 2px rgba(var(--d-shade), .08);
-  color: var(--d-label-color); font-weight: 500;
-}
+  color: var(--d-label-color); font-weight: 500; }
 .code[data-src="manual"] { color: var(--color-ink); font-weight: 700; background: var(--color-cream); box-shadow: inset 0 0 0 1.5px var(--color-ink); }
-.rev, .rev-sp { flex: 0 0 30px; width: 30px; height: 30px; }
-.rev { border: 0; border-radius: var(--d-pill); background: var(--color-panel); box-shadow: 0 0 0 1px var(--d-ring), var(--d-key-shadow); cursor: pointer; font-size: 15px; font-weight: 700; }
-.rev:hover { background: var(--d-tint-strong); }
-
-.answer .sec { padding: 0 20px; }
-.sch { padding-top: 20px !important; display: grid; grid-template-columns: 1.618fr 1fr; gap: 16px; }
-.sch > div { display: flex; flex-direction: column; gap: 6px; }
-.codes { display: flex; flex-direction: column; }
-.codes .lrow { flex: 1 0 32px; max-height: 56px; grid-template-columns: 18px 96px minmax(0,1fr) 56px; gap: 10px; }
-.codes .bar { height: 10px; }
-.sch .pp { font-size: 22px; font-weight: 700; }
-.figs { display: grid; grid-template-columns: 1.618fr 1fr; gap: 16px; padding-top: 16px !important; padding-bottom: 16px !important; box-shadow: inset 0 -1px 0 var(--d-hair); }
-.figs > div { display: flex; flex-direction: column; gap: 6px; }
-.lists { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding-top: 16px !important; padding-bottom: 4px !important; }
-.list { flex: 1 1 auto; }
-.list { display: flex; flex-direction: column; min-height: 0; }
-.list .lh { display: flex; justify-content: space-between; align-items: baseline; padding: 0 0 8px; box-shadow: inset 0 -1px 0 var(--d-hair); }
-.lrow { display: grid; grid-template-columns: 18px minmax(0,1fr) auto; align-items: center; gap: 8px; min-height: 32px; }
-.lrow .mono { font-size: 13px; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 2px; }
-.chip { font-family: var(--font-mono); font-size: 13px; font-weight: 600; border-radius: var(--d-pill); padding: 3px 12px; box-shadow: inset 0 0 0 1px var(--d-hair); }
+.rev { flex: 0 0 28px; width: 28px; height: 28px; }
+button.rev { border: 0; border-radius: var(--d-pill); background: var(--color-panel); box-shadow: 0 0 0 1px var(--d-ring), var(--d-key-shadow); cursor: pointer; font-size: 14px; font-weight: 700; padding: 0; }
+.ev2 .figs { display: grid; grid-template-columns: 1.618fr 1fr; gap: 16px; }
+.ev2 .figs > div { display: flex; flex-direction: column; gap: 5px; }
+.ev2 .codes { display: flex; flex-direction: column; }
+.crow { grid-template-columns: 18px 84px minmax(0, 1fr) 48px; gap: 10px; flex: 1 0 30px; max-height: 44px; }
 </style>
 </head>
 <body>
-<main>
-<div class="window tile">
-<nav class="steps" aria-label="Oppsett">
-<a class="step done"><span class="n">✓</span><span class="t"><span>Åpne IFC</span><span class="v">ST28_RIE.ifc</span></span></a>
-<a class="step done"><span class="n">✓</span><span class="t"><span>Kilde</span><span class="v">NOSSB_Reference.RefString</span></span></a>
-<a class="step done"><span class="n">✓</span><span class="t"><span>Format</span></span></a>
-<a class="step" aria-current="step"><span class="n">4</span><span class="t"><span>Etasjer</span></span></a>
-<a class="step"><span class="n">5</span><span class="t"><span>Scope</span></span></a>
-<a class="step"><span class="n">6</span><span class="t"><span>Oppsummering</span></span></a>
-</nav>
-<div class="board">
-  <section class="work">
-    <div class="head"><h1 class="h">Etasjer</h1>
-      <div class="tray" role="tablist" aria-label="Ordning">
-        <button role="tab" aria-selected="false">Statsbygg</button>
-        <button role="tab" aria-selected="true">U1 · 01</button>
-        <button role="tab" aria-selected="false">Egendefinert</button>
-      </div>
-    </div>
-    <div class="table">
-      <div class="tcols colhead"><span class="lbl">Etasje</span><span class="lbl num">Kote</span><span class="lbl">Elementer</span><span class="lbl" style="text-align:right;padding-right:36px">Kode</span></div>
-      <div class="tbody scroll"><div class="trow rule"><span class="tn">Plan 09</span><span class="num tz">39,47</span><span class="tc"><span class="num">18</span><span class="bar"><span style="width:0.8%"></span></span></span><span class="tk"><input class="code mono" value="09" aria-label="Kode Plan 09" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan 08</span><span class="num tz">36,80</span><span class="tc"><span class="num">394</span><span class="bar"><span style="width:18.0%"></span></span></span><span class="tk"><input class="code mono" value="08" aria-label="Kode Plan 08" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan 07</span><span class="num tz">33,44</span><span class="tc"><span class="num">1 648</span><span class="bar"><span style="width:75.2%"></span></span></span><span class="tk"><input class="code mono" value="07" aria-label="Kode Plan 07" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan 06</span><span class="num tz">30,07</span><span class="tc"><span class="num">1 983</span><span class="bar"><span style="width:90.5%"></span></span></span><span class="tk"><input class="code mono" value="06" aria-label="Kode Plan 06" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan 05</span><span class="num tz">26,75</span><span class="tc"><span class="num">2 123</span><span class="bar"><span style="width:96.9%"></span></span></span><span class="tk"><input class="code mono" value="05" aria-label="Kode Plan 05" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan 04</span><span class="num tz">23,40</span><span class="tc"><span class="num">2 191</span><span class="bar"><span style="width:100.0%"></span></span></span><span class="tk"><input class="code mono" value="04" aria-label="Kode Plan 04" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan 03</span><span class="num tz">20,07</span><span class="tc"><span class="num">1 804</span><span class="bar"><span style="width:82.3%"></span></span></span><span class="tk"><input class="code mono" value="03" aria-label="Kode Plan 03" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan 02</span><span class="num tz">16,11</span><span class="tc"><span class="num">2 060</span><span class="bar"><span style="width:94.0%"></span></span></span><span class="tk"><input class="code mono" value="02" aria-label="Kode Plan 02" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan 1M</span><span class="num tz">13,10</span><span class="tc"><span class="num">733</span><span class="bar"><span style="width:33.5%"></span></span></span><span class="tk"><input class="code mono" value="01M" aria-label="Kode Plan 1M" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan 01</span><span class="num tz">12,12</span><span class="tc"><span class="num">1 301</span><span class="bar"><span style="width:59.4%"></span></span></span><span class="tk"><input class="code mono" value="01" aria-label="Kode Plan 01" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan U1M</span><span class="num tz">10,11</span><span class="tc"><span class="num">543</span><span class="bar"><span style="width:24.8%"></span></span></span><span class="tk"><input class="code mono" value="U1M" aria-label="Kode Plan U1M" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan U1</span><span class="num tz">8,47</span><span class="tc"><span class="num">1 266</span><span class="bar"><span style="width:57.8%"></span></span></span><span class="tk"><input class="code mono" value="U1" aria-label="Kode Plan U1" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan U2M</span><span class="num tz">6,22</span><span class="tc"><span class="num">750</span><span class="bar"><span style="width:34.2%"></span></span></span><span class="tk"><input class="code mono" value="U2M" aria-label="Kode Plan U2M" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan U2</span><span class="num tz">4,74</span><span class="tc"><span class="num">1 676</span><span class="bar"><span style="width:76.5%"></span></span></span><span class="tk"><input class="code mono" value="U2" aria-label="Kode Plan U2" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan U3</span><span class="num tz">1,45</span><span class="tc"><span class="num">1 262</span><span class="bar"><span style="width:57.6%"></span></span></span><span class="tk"><input class="code mono" value="U3" aria-label="Kode Plan U3" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule manual"><span class="tn">Havnivå</span><span class="num tz">0,00</span><span class="tc"><span class="num">315</span><span class="bar"><span style="width:14.4%"></span></span></span><span class="tk"><input class="code mono" value="XX" aria-label="Kode Havnivå" data-src="manual"><button class="rev" title="Tilbake til auto" aria-label="Tilbake til auto">↺</button></span></div></div>
-    </div>
+<main><div class="flow">
+<div class="railcol"><nav class="rail tile" aria-label="Oppsett"><div class="file"><b class="ell">ST28_RIE.ifc</b><span>IFC4</span></div><a class="ri"><span class="dot" data-s="ok"></span><span class="nm">Åpne IFC</span><span class="k">1</span><span class="ans"><span class="a">43 345 elementer</span></span></a><a class="ri"><span class="dot" data-s="ok"></span><span class="nm">Kilde</span><span class="k">2</span><span class="ans"><span class="a">NOSSB_Reference.<wbr>RefString</span><span class=tag>Standard</span></span></a><a class="ri"><span class="dot" data-s="ok"></span><span class="nm">Format</span><span class="k">3</span><span class="ans"><span class="a"></span><span class=tag>Standard</span></span></a><a class="ri" aria-current="step"><span class="dot" data-s="open"></span><span class="nm">Etasjer</span><span class="k">4</span><span class="ans"><span class="a">U1 · 01 · 01M</span></span></a><a class="ri pending"><span class="dot" data-s="open"></span><span class="nm">Scope</span><span class="k">5</span><span class="ans"><span class="a"></span><span class=tag>Standard</span></span></a><a class="ri pending"><span class="dot" data-s="open"></span><span class="nm">Oppsummering</span><span class="k">6</span></a></nav><div class="rsec tile" role="group" aria-label="Ordning"><span class="lbl">Ordning</span><button class="rtile" aria-pressed="false"><span class="t">Statsbygg</span><span class="x">00U · 01 · 02M</span></button><button class="rtile" aria-pressed="true"><span class="x">U1 · 01 · 01M</span></button><button class="rtile" aria-pressed="false"><span class="t">Egendefinert</span></button></div></div>
+<div class="canvas">
+  <header class="stepbar tile full"><h1>Etasjer</h1><span class="of">4 / 6</span><span class="sp"></span><button class="key">Forrige</button><button class="primary" data-chrome="primary">Bruk</button></header>
+  <section class="tile card major table">
+    <div class="tcols colhead"><span class="lbl">Etasje</span><span class="lbl num">Kote</span><span class="lbl">Elementer</span><span class="lbl" style="text-align:right;padding-right:34px">Kode</span></div>
+    <div class="tbody scroll"><div class="trow rule"><span class="tn">Plan 09</span><span class="num">39,47</span><span class="tc"><span class="num">18</span><span class="bar"><span style="width:0.8%"></span></span></span><span class="tk"><input class="code mono" value="09" aria-label="Kode Plan 09" data-src="auto"><span class="rev"></span></span></div><div class="trow rule"><span class="tn">Plan 08</span><span class="num">36,80</span><span class="tc"><span class="num">394</span><span class="bar"><span style="width:18.0%"></span></span></span><span class="tk"><input class="code mono" value="08" aria-label="Kode Plan 08" data-src="auto"><span class="rev"></span></span></div><div class="trow rule"><span class="tn">Plan 07</span><span class="num">33,44</span><span class="tc"><span class="num">1 648</span><span class="bar"><span style="width:75.2%"></span></span></span><span class="tk"><input class="code mono" value="07" aria-label="Kode Plan 07" data-src="auto"><span class="rev"></span></span></div><div class="trow rule"><span class="tn">Plan 06</span><span class="num">30,07</span><span class="tc"><span class="num">1 983</span><span class="bar"><span style="width:90.5%"></span></span></span><span class="tk"><input class="code mono" value="06" aria-label="Kode Plan 06" data-src="auto"><span class="rev"></span></span></div><div class="trow rule"><span class="tn">Plan 05</span><span class="num">26,75</span><span class="tc"><span class="num">2 123</span><span class="bar"><span style="width:96.9%"></span></span></span><span class="tk"><input class="code mono" value="05" aria-label="Kode Plan 05" data-src="auto"><span class="rev"></span></span></div><div class="trow rule"><span class="tn">Plan 04</span><span class="num">23,40</span><span class="tc"><span class="num">2 191</span><span class="bar"><span style="width:100.0%"></span></span></span><span class="tk"><input class="code mono" value="04" aria-label="Kode Plan 04" data-src="auto"><span class="rev"></span></span></div><div class="trow rule"><span class="tn">Plan 03</span><span class="num">20,07</span><span class="tc"><span class="num">1 804</span><span class="bar"><span style="width:82.3%"></span></span></span><span class="tk"><input class="code mono" value="03" aria-label="Kode Plan 03" data-src="auto"><span class="rev"></span></span></div><div class="trow rule"><span class="tn">Plan 02</span><span class="num">16,11</span><span class="tc"><span class="num">2 060</span><span class="bar"><span style="width:94.0%"></span></span></span><span class="tk"><input class="code mono" value="02" aria-label="Kode Plan 02" data-src="auto"><span class="rev"></span></span></div><div class="trow rule"><span class="tn">Plan 1M</span><span class="num">13,10</span><span class="tc"><span class="num">733</span><span class="bar"><span style="width:33.5%"></span></span></span><span class="tk"><input class="code mono" value="01M" aria-label="Kode Plan 1M" data-src="auto"><span class="rev"></span></span></div><div class="trow rule"><span class="tn">Plan 01</span><span class="num">12,12</span><span class="tc"><span class="num">1 301</span><span class="bar"><span style="width:59.4%"></span></span></span><span class="tk"><input class="code mono" value="01" aria-label="Kode Plan 01" data-src="auto"><span class="rev"></span></span></div><div class="trow rule"><span class="tn">Plan U1M</span><span class="num">10,11</span><span class="tc"><span class="num">543</span><span class="bar"><span style="width:24.8%"></span></span></span><span class="tk"><input class="code mono" value="U1M" aria-label="Kode Plan U1M" data-src="auto"><span class="rev"></span></span></div><div class="trow rule"><span class="tn">Plan U1</span><span class="num">8,47</span><span class="tc"><span class="num">1 266</span><span class="bar"><span style="width:57.8%"></span></span></span><span class="tk"><input class="code mono" value="U1" aria-label="Kode Plan U1" data-src="auto"><span class="rev"></span></span></div><div class="trow rule"><span class="tn">Plan U2M</span><span class="num">6,22</span><span class="tc"><span class="num">750</span><span class="bar"><span style="width:34.2%"></span></span></span><span class="tk"><input class="code mono" value="U2M" aria-label="Kode Plan U2M" data-src="auto"><span class="rev"></span></span></div><div class="trow rule"><span class="tn">Plan U2</span><span class="num">4,74</span><span class="tc"><span class="num">1 676</span><span class="bar"><span style="width:76.5%"></span></span></span><span class="tk"><input class="code mono" value="U2" aria-label="Kode Plan U2" data-src="auto"><span class="rev"></span></span></div><div class="trow rule"><span class="tn">Plan U3</span><span class="num">1,45</span><span class="tc"><span class="num">1 262</span><span class="bar"><span style="width:57.6%"></span></span></span><span class="tk"><input class="code mono" value="U3" aria-label="Kode Plan U3" data-src="auto"><span class="rev"></span></span></div><div class="trow rule"><span class="tn">Havnivå</span><span class="num">0,00</span><span class="tc"><span class="num">315</span><span class="bar"><span style="width:14.4%"></span></span></span><span class="tk"><input class="code mono" value="XX" aria-label="Kode Havnivå" data-src="manual"><button class="rev" title="Tilbake til auto" aria-label="Tilbake til auto">↺</button></span></div></div>
   </section>
-  <aside class="answer">
-    <div class="sec sch"><div><span class="lbl">Ordning</span><span class="pp">U1 · 01</span></div><div><span class="lbl">Ikke i modellen</span><div class="chips"><span class="chip">09</span><span class="chip">XX</span></div></div></div>
-    <div class="sec figs">
-      <div><span class="lbl">Treff i modellen</span><span class="fig num" data-verdict="pass" style="text-align:left">12 769 <span class="of">/ 12 838</span></span><span class="meter pass"><span style="width:99.5%"></span></span></div>
-      <div><span class="lbl">Uten kode</span><span class="fig num" style="text-align:left">0 <span class="of">/ 16</span></span></div>
+  <section class="tile card minor ev2">
+    <div class="figs">
+      <div><span class="lbl">Treff i modellen</span><span class="fig num" data-verdict="pass" style="text-align:left">12 769 <span class="o">/ 12 838</span></span><span class="meter pass"><span style="width:99.5%"></span></span></div>
+      <div><span class="lbl">Uten kode</span><span class="fig num" style="text-align:left">0 <span class="o">/ 16</span></span></div>
     </div>
-    <div class="sec lists">
-      <div class="list"><div class="lh"><span class="lbl">Koder i modellen</span><span class="lbl num">Verdier</span></div><div class="scroll codes"><div class="lrow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">08</span><span class="bar"><span style="width:15.8%"></span></span><span class="num sub">265</span></div><div class="lrow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">07</span><span class="bar"><span style="width:61.0%"></span></span><span class="num sub">1 025</span></div><div class="lrow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">06</span><span class="bar"><span style="width:76.4%"></span></span><span class="num sub">1 285</span></div><div class="lrow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">05</span><span class="bar"><span style="width:75.0%"></span></span><span class="num sub">1 261</span></div><div class="lrow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">04</span><span class="bar"><span style="width:78.6%"></span></span><span class="num sub">1 322</span></div><div class="lrow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">03</span><span class="bar"><span style="width:83.1%"></span></span><span class="num sub">1 397</span></div><div class="lrow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">02</span><span class="bar"><span style="width:74.4%"></span></span><span class="num sub">1 250</span></div><div class="lrow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">01M</span><span class="bar"><span style="width:20.0%"></span></span><span class="num sub">336</span></div><div class="lrow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">01</span><span class="bar"><span style="width:75.3%"></span></span><span class="num sub">1 265</span></div><div class="lrow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">U1M</span><span class="bar"><span style="width:4.7%"></span></span><span class="num sub">79</span></div><div class="lrow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">U1</span><span class="bar"><span style="width:65.6%"></span></span><span class="num sub">1 102</span></div><div class="lrow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">U2M</span><span class="bar"><span style="width:3.9%"></span></span><span class="num sub">65</span></div><div class="lrow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">U2</span><span class="bar"><span style="width:100.0%"></span></span><span class="num sub">1 681</span></div><div class="lrow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">U3</span><span class="bar"><span style="width:25.9%"></span></span><span class="num sub">436</span></div><div class="lrow rule"><span class="lamp" data-verdict="fail">✕</span><span class="mono">02M</span><span class="bar"><span style="width:2.0%"></span></span><span class="num sub">34</span></div><div class="lrow rule"><span class="lamp" data-verdict="fail">✕</span><span class="mono">Stolrekke</span><span class="bar"><span style="width:1.2%"></span></span><span class="num sub">20</span></div><div class="lrow rule"><span class="lamp" data-verdict="fail">✕</span><span class="mono">3</span><span class="bar"><span style="width:0.5%"></span></span><span class="num sub">8</span></div><div class="lrow rule"><span class="lamp" data-verdict="fail">✕</span><span class="mono">07-FS</span><span class="bar"><span style="width:0.3%"></span></span><span class="num sub">5</span></div><div class="lrow rule"><span class="lamp" data-verdict="fail">✕</span><span class="mono">1M +1720</span><span class="bar"><span style="width:0.1%"></span></span><span class="num sub">2</span></div></div></div>
-    </div>
-    <div class="foot"><button class="ghost">Forrige</button><button class="ghost">Hopp over</button><button class="primary" data-chrome="primary">Bruk</button></div>
-  </aside>
+    <div class="lh"><span class="lbl">Ikke i modellen</span></div>
+    <div class="chips"><span class="chip">09</span><span class="chip">XX</span></div>
+    <div class="lh" style="margin-top:6px"><span class="lbl">Koder i modellen</span><span class="lbl num">Verdier</span></div>
+    <div class="scroll codes"><div class="lrow crow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">08</span><span class="bar"><span style="width:15.8%"></span></span><span class="num sub">265</span></div><div class="lrow crow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">07</span><span class="bar"><span style="width:61.0%"></span></span><span class="num sub">1 025</span></div><div class="lrow crow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">06</span><span class="bar"><span style="width:76.4%"></span></span><span class="num sub">1 285</span></div><div class="lrow crow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">05</span><span class="bar"><span style="width:75.0%"></span></span><span class="num sub">1 261</span></div><div class="lrow crow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">04</span><span class="bar"><span style="width:78.6%"></span></span><span class="num sub">1 322</span></div><div class="lrow crow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">03</span><span class="bar"><span style="width:83.1%"></span></span><span class="num sub">1 397</span></div><div class="lrow crow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">02</span><span class="bar"><span style="width:74.4%"></span></span><span class="num sub">1 250</span></div><div class="lrow crow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">01M</span><span class="bar"><span style="width:20.0%"></span></span><span class="num sub">336</span></div><div class="lrow crow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">01</span><span class="bar"><span style="width:75.3%"></span></span><span class="num sub">1 265</span></div><div class="lrow crow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">U1M</span><span class="bar"><span style="width:4.7%"></span></span><span class="num sub">79</span></div><div class="lrow crow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">U1</span><span class="bar"><span style="width:65.6%"></span></span><span class="num sub">1 102</span></div><div class="lrow crow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">U2M</span><span class="bar"><span style="width:3.9%"></span></span><span class="num sub">65</span></div><div class="lrow crow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">U2</span><span class="bar"><span style="width:100.0%"></span></span><span class="num sub">1 681</span></div><div class="lrow crow rule"><span class="lamp" data-verdict="pass">✓</span><span class="mono">U3</span><span class="bar"><span style="width:25.9%"></span></span><span class="num sub">436</span></div><div class="lrow crow rule"><span class="lamp" data-verdict="fail">✕</span><span class="mono">02M</span><span class="bar"><span style="width:2.0%"></span></span><span class="num sub">34</span></div><div class="lrow crow rule"><span class="lamp" data-verdict="fail">✕</span><span class="mono">Stolrekke</span><span class="bar"><span style="width:1.2%"></span></span><span class="num sub">20</span></div><div class="lrow crow rule"><span class="lamp" data-verdict="fail">✕</span><span class="mono">3</span><span class="bar"><span style="width:0.5%"></span></span><span class="num sub">8</span></div><div class="lrow crow rule"><span class="lamp" data-verdict="fail">✕</span><span class="mono">07-FS</span><span class="bar"><span style="width:0.3%"></span></span><span class="num sub">5</span></div><div class="lrow crow rule"><span class="lamp" data-verdict="fail">✕</span><span class="mono">1M +1720</span><span class="bar"><span style="width:0.1%"></span></span><span class="num sub">2</span></div></div>
+  </section>
 </div>
-</div>
-</main>
-<script>
-(function () {
-  var c = document.querySelector('.prows .chosen');
-  if (c) {
-    // put the picked row near the middle, starting the view on a whole row
-    var pr = c.parentElement, want = c.offsetTop - pr.clientHeight / 2, top = 0;
-    for (var el = pr.firstElementChild; el; el = el.nextElementSibling) { if (el.offsetTop <= want) top = el.offsetTop; }
-    pr.scrollTop = top;
-  }
-})();
-</script>
+</div></main>
 </body>
 </html>
