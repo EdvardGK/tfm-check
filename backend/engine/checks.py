@@ -8,7 +8,7 @@ import ifcopenshell.util.element as eu
 
 from .constants import BYGNINGSDEL_SYSTEMS, KOMPONENT_SYSTEMS, THRESHOLDS
 from .ifc_io import build_storey_map, candidate_strings_for
-from .rules import TFMRules
+from .rules import TFMRules, loose_component
 
 
 def status_for_pct(pct: float):
@@ -112,8 +112,12 @@ def run_checks(ifc, products, rules: TFMRules,
             if chosen:
                 break
 
-        if chosen is not None and scope_comp:
-            ko_scope = (chosen[2].groupdict().get("komponent") or "").upper()
+        if scope_comp:
+            if chosen is not None:
+                ko_scope = (chosen[2].groupdict().get("komponent") or "").upper()
+            else:
+                ko_scope = next((c for c in (loose_component(v) for _, v in
+                                             candidate_strings_for(e, rules.tfm_location)) if c), "")
             if ko_scope and ko_scope in scope_comp:
                 excluded_ids.add(e.id())
                 continue

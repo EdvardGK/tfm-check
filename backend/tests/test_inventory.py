@@ -92,6 +92,7 @@ def _model():
         ("=433.101.3-UP104", lamp_type, "Plan 01"),
         ("=411.001.01-KK001", duct_type, "Plan 01"),
         ("ikke en kode", lamp_type, "Plan 01"),
+        ("++ST28=4111%KK003", duct_type, "Plan 01"),
         (None, lamp_type, "Plan 01"),
     ]
     for i, (code, typ, storey) in enumerate(codes):
@@ -127,38 +128,39 @@ def test_inventory(model):
     _, products, index = model
     presets = [TFMRules.from_dict(preset_to_rules_dict(p)) for p in PRESETS]
     inv = inventory_payload(index, presets)
-    assert inv["products"] == len(products) == 7
-    assert inv["standard"] == {"location": ["pset", "NOSSB_Reference", "RefString"], "n": 6}
+    assert inv["products"] == len(products) == 8
+    assert inv["standard"] == {"location": ["pset", "NOSSB_Reference", "RefString"], "n": 7}
     names = [s["name"] for s in inv["sets"]]
     assert names == ["Annet_Sett", "NOSSB_Reference"]
     ref = inv["sets"][1]
-    assert ref["n"] == 6
+    assert ref["n"] == 7
     assert ref["props"][0]["name"] == "RefString"
-    assert ref["props"][0]["distinct"] == 6
+    assert ref["props"][0]["distinct"] == 7
     assert len(ref["props"][0]["samples"]) == 3
     # No bundled preset reads X0..X6: no candidates.
     assert inv["candidates"] == []
     assert [s["name"] for s in inv["storeys"]] == ["Plan 01", "Plan U1", "Havnivå"]
     assert inv["storeys"][2]["floor"] is None
-    assert inv["storeys"][0]["n"] == 6
+    assert inv["storeys"][0]["n"] == 7
 
 
 def test_preview_counts(model):
     _, _, index = model
     p = preview(index, _rules(floor_codes=["01", "U1"]))
-    assert p["products"] == 7
-    assert p["valued"] == 6
+    assert p["products"] == 8
+    assert p["valued"] == 7
     assert p["matched"] == 5
-    assert p["off"] == [{"v": "ikke en kode", "n": 1}]
+    assert {o["v"] for o in p["off"]} == {"ikke en kode", "++ST28=4111%KK003"}
     assert p["floors"]["total"] == 5
     assert p["floors"]["ok"] == 4
-    assert {c["code"]: c["n"] for c in p["components"]} == {"UP": 4, "KK": 1}
+    # The malformed KK003 value still counts as KK.
+    assert {c["code"]: c["n"] for c in p["components"]} == {"UP": 4, "KK": 2}
 
 
 def test_preview_scope(model):
     _, _, index = model
     p = preview(index, _rules(scope_components=["KK"]))
-    assert p["excluded"] == 1 and p["in_scope"] == 6
+    assert p["excluded"] == 2 and p["in_scope"] == 6
     assert p["matched"] == 4
     p = preview(index, _rules(scope_types=["Lampe A"]))
     assert p["excluded"] == 6
@@ -179,7 +181,7 @@ def test_run_checks_scope_and_storey_codes(model):
         storey_codes={"Plan 01": "01", "Plan U1": "U1", "Havnivå": "XX"},
     )
     res = run_checks(f, products, rules, {}, {})
-    assert res["n_excluded"] == 1
+    assert res["n_excluded"] == 2
     assert res["checks"]["has_code"]["total"] == 6
     assert res["checks"]["has_code"]["n"] == 4
     # Code floor against the storey's mapped code: 01, 01, U1 agree; 3 ≠ 01.

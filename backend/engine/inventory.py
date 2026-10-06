@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 
-from .rules import TFMRules
+from .rules import TFMRules, loose_component
 
 # The Statsbygg standard source (PA 0802 / NOSSB property sets).
 STANDARD_SOURCE = ("NOSSB_Reference", "RefString")
@@ -237,7 +237,8 @@ def preview(index: ModelIndex, rules: TFMRules) -> dict:
             types_all[tname] += 1
         v = values.get(pid) if values is not None else None
         g = parse(v) if v else None
-        comp = (g.get("komponent") or "").upper() if g else ""
+        # The component of a value off the format still counts for Scope.
+        comp = (g.get("komponent") or "").upper() if g else (loose_component(v) if v else "")
         if comp:
             components[comp] += 1
         if (comp and comp in scope_comp) or (tname and tname in scope_types):

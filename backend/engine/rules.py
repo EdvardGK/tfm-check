@@ -11,6 +11,17 @@ from .constants import (
 )
 
 
+# A component code at the end of a value that does not take the format:
+# two letters and their number after a separator (=411%KK003 -> KK).
+_LOOSE_COMPONENT = re.compile(r"(?<![A-Za-zÆØÅæøå])([A-ZÆØÅ]{2})\d{0,4}$")
+
+
+def loose_component(value: str) -> str:
+    """The component code a malformed value still ends with, else ""."""
+    m = _LOOSE_COMPONENT.search((value or "").strip())
+    return m.group(1) if m else ""
+
+
 @dataclass
 class TFMRules:
     project_name: str = ""
