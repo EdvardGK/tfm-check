@@ -1,7 +1,16 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
+.venv/
+usage.db
+
+# Node / frontend
+node_modules/
+frontend/dist/
+**/smoke-fail.png
+
+# Secrets / data
 .env
 *.ifc
-usage.db
 .streamlit/secrets.toml

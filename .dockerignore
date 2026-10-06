@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+**/__pycache__
+.venv
+legacy
+*.ifc
+backend/usage.db
+frontend/smoke-fail.png
+.git

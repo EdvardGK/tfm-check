@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+/* Skiplum design tokens — mirrors nettside/app/globals.css.
+   Cream + amber + gunmetal. Exposed as Tailwind utilities (bg-bg, text-fg,
+   bg-accent, border-line, …) via the @theme block. */
+@theme {
+  --color-bg: #f4ede0;          /* cream */
+  --color-fg: #2d2a26;          /* warm graphite */
+  --color-muted: #5e564b;       /* warm grey */
+  --color-subtle: #b8ad9a;      /* taupe */
+  --color-line: #ddd2bf;        /* cream-line */
+  --color-accent: #c89544;      /* amber gold */
+  --color-accent-fg: #1a1612;
+  --color-accent-soft: #f3e6cd; /* pale amber */
+  --color-surface: #4b4f55;     /* gunmetal */
+  --color-surface-fg: #f4ede0;
+  --color-card: #fbf7ef;        /* near-white cream — raised panels */
+
+  --color-ok: #059669;
+  --color-warn: #d97706;
+  --color-bad: #dc2626;
+
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "Consolas", monospace;
+}
+
+html {
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "ss01", "ss02", "cv11";
+}
+
+::selection {
+  background: color-mix(in oklab, var(--color-accent) 35%, transparent);
+  color: var(--color-fg);
+}
+
+/* Thin, on-brand scrollbars inside the framed tool */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-subtle) transparent;
+}
+
+/* Stage entrance — a calm fade-up between upload → confirm → results */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.stage-in {
+  animation: fade-up 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-in {
+    animation: none;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+  }
+}
