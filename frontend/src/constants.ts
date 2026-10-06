@@ -57,8 +57,8 @@ export const PART_COLORS: Record<string, Palette> = {
   "Komp.nr": { bg: "#f0e8e0", border: "#c0a487", text: "#5e4a36" },
   "T-suffiks": { bg: "#e9e6e0", border: "#a89f90", text: "#4a4438" },
 };
-export const SEP_COLOR: Palette = { bg: "#4b4f55", border: "#3a3d42", text: "#f4ede0" };
-export const FREETEXT_COLOR: Palette = { bg: "#fbf7ef", border: "#ddd2bf", text: "#5e564b" };
+export const SEP_COLOR: Palette = { bg: "var(--color-ink)", border: "var(--color-ink)", text: "var(--color-cream)" };
+export const FREETEXT_COLOR: Palette = { bg: "var(--color-input)", border: "var(--color-line)", text: "var(--color-muted)" };
 
 export function tokenPalette(token: string): Palette {
   if (isFreetext(token)) return FREETEXT_COLOR;

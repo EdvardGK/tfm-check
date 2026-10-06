@@ -60,9 +60,9 @@ export default function App() {
       </div>
 
       {showResults && accepted && check ? (
-        <div className="min-h-screen bg-bg text-fg">
+        <div className="min-h-screen text-ink">
           <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10">
-            <header className="mb-6 flex items-center gap-3">
+            <div className="mb-6 flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface text-surface-fg shadow-sm">
                 <ScanSearch size={22} strokeWidth={2.2} />
               </div>
@@ -70,7 +70,7 @@ export default function App() {
                 <h1 className="text-xl font-semibold tracking-tight">TFM-sjekk</h1>
                 <p className="text-sm text-muted">Mottakskontroll på TFM-merking i IFC-fagmodeller</p>
               </div>
-            </header>
+            </div>
 
             {error && (
               <div className="mb-5 rounded-xl border border-bad/30 bg-bad/10 px-4 py-3 text-sm text-bad">{error}</div>

@@ -8,7 +8,7 @@
  *  the check. A summary row opens its step, and the step's «Bruk» returns
  *  to the summary. */
 
-import { useCallback, useRef, useState, type DragEvent } from "react";
+import { useRef, useState, type DragEvent } from "react";
 import { getInventory, uploadIfc } from "../api";
 import type { Inventory, Location, Preset, RulesDict, UploadResponse } from "../types";
 import Choice from "./Choice";
@@ -28,6 +28,9 @@ import {
 import { ConfirmSlotProvider, Landed, ResultChip, SECONDARY, StepConfirm, WalkProgress, type SegmentState } from "./ui";
 
 const FRAME = "max-w-5xl 2xl:max-w-7xl min-[137.5rem]:max-w-[100rem]";
+/** ifc-check's walk column (`SetupPage.tsx` `COLUMN`): every step but the
+ *  IFC stage, the landed strip and the action row, 1152 px at most. */
+const COLUMN = "mx-auto w-full max-w-[72rem]";
 
 const framed = (() => {
   try {
@@ -41,12 +44,6 @@ const nextOf = (s: Step): Step => {
   if (s === "start") return "ifc";
   const i = WALK.indexOf(s as WalkStep);
   return i < 0 || i === WALK.length - 1 ? "end" : WALK[i + 1];
-};
-const prevOf = (s: Step): Step | null => {
-  if (s === "start") return null;
-  if (s === "end") return WALK[WALK.length - 1];
-  const i = WALK.indexOf(s as WalkStep);
-  return i <= 0 ? "start" : WALK[i - 1];
 };
 
 export interface Accepted {
@@ -68,6 +65,10 @@ export default function Oppsett({
   onAccept: (a: Accepted) => void;
 }) {
   const [step, setStep] = useState<Step>("start");
+  // The steps the walk came through, so «Forrige» returns to the screen
+  // before this one (Statsbygg goes Åpne IFC → Oppsummering, a summary row
+  // to its step and back), not to the step before it in WALK.
+  const [trail, setTrail] = useState<Step[]>([]);
   const [visit, setVisit] = useState(0);
   const [base, setBase] = useState<Base | null>(null);
   const [rules, setRules] = useState<RulesDict | null>(null);
@@ -88,10 +89,20 @@ export default function Oppsett({
   const preview = usePreview(upload?.upload_id ?? null, rules);
   const loaded = upload !== null && inv !== null;
 
-  const go = useCallback((s: Step) => {
+  const go = (s: Step) => {
+    if (s !== step) setTrail((t) => [...t, step]);
     setStep(s);
     setVisit((v) => v + 1);
-  }, []);
+  };
+
+  const back: Step | null = trail.length > 0 ? trail[trail.length - 1] : null;
+  const goBack = () => {
+    if (back === null) return;
+    setTrail((t) => t.slice(0, -1));
+    setLanded(null);
+    setStep(back);
+    setVisit((v) => v + 1);
+  };
 
   // ---- The choice ----
   const begin = (b: Base, r: RulesDict, file: SetupFile | null) => {
@@ -219,7 +230,6 @@ export default function Oppsett({
 
   // ---- The step ----
   const stage = step === "ifc" && !loaded;
-  const centered = stage || step === "start";
   const uid = upload?.upload_id ?? "";
 
   let body: React.ReactNode = null;
@@ -235,8 +245,8 @@ export default function Oppsett({
     body = (
       <div className={"mx-auto flex flex-col gap-4 " + STAGE_WIDTH}>
         <IfcStage dragging={dragging} busy={reading} pct={pct} fileName={fileName} onFile={(f) => void readIfc(f)} />
-        {!loaded && !reading ? (
-          <button type="button" onClick={() => go("start")} className="w-fit px-1 py-2 text-[13px] text-muted hover:text-ink">
+        {!loaded && !reading && back !== null ? (
+          <button type="button" onClick={goBack} className="w-fit px-1 py-2 text-[13px] text-muted hover:text-ink">
             ← Forrige
           </button>
         ) : null}
@@ -297,92 +307,95 @@ export default function Oppsett({
     }
   }
 
-  const back = prevOf(step);
-  const showFoot = !centered;
+  const showFoot = !stage && step !== "start";
   const canSkip = step !== "ifc" && step !== "end" && step !== "start";
 
   return (
     <ConfirmSlotProvider value={slot}>
-      <div className="oppsett flex h-dvh flex-col" {...dropProps}>
+      <div className="flex h-dvh flex-col" {...dropProps}>
         {framed ? null : (
-          <header className="shrink-0 px-3 pt-3">
-            <div className={"mx-auto w-full text-[15px] font-semibold tracking-tight text-ink " + FRAME}>TFM-sjekk</div>
+          <header className="flex shrink-0 items-center gap-3 border-b border-line bg-panel px-1.5 py-1">
+            <span className="text-[15px] font-semibold tracking-tight text-ink">TFM-sjekk</span>
           </header>
         )}
 
-        {centered ? null : (
-          <div className="shrink-0 px-3 pt-3">
-            <div className={"mx-auto flex w-full items-center gap-4 " + FRAME}>
-              <WalkProgress steps={WALK} current={step === "end" ? null : (step as WalkStep)} state={segment} onStep={onBar} />
-              {rules ? (
-                <button
-                  type="button"
-                  onClick={() => download(setupFileName(rules, upload), setupJson(base ?? "custom", rules))}
-                  className={SECONDARY}
-                >
-                  Lagre oppsett
-                </button>
-              ) : null}
+        <main className="flex min-h-0 flex-1 flex-col">
+          {stage ? null : (
+            <div className="shrink-0 px-3 pt-3">
+              <div className={"mx-auto flex w-full items-center gap-4 " + FRAME}>
+                {step === "start" ? (
+                  <div className="flex-1" />
+                ) : (
+                  <WalkProgress steps={WALK} current={step === "end" ? null : (step as WalkStep)} state={segment} onStep={onBar} />
+                )}
+                {rules ? (
+                  <button
+                    type="button"
+                    onClick={() => download(setupFileName(rules, upload), setupJson(base ?? "custom", rules))}
+                    className={SECONDARY}
+                  >
+                    Lagre oppsett
+                  </button>
+                ) : null}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {centered ? null : (
-          <div className="shrink-0 px-3 pt-2">
-            <div className={"mx-auto flex min-h-12 w-full flex-col justify-center " + FRAME}>
-              {landed !== null && landed.to === step ? (
-                <Landed key={landed.from} label={STEP_NAME[landed.from]}>
-                  <ResultChip result={resultOf(landed.from)} />
-                  {landedText(landed.from) ? (
-                    <span className="font-mono text-[12px] tabular-nums text-muted">{landedText(landed.from)}</span>
-                  ) : null}
-                </Landed>
-              ) : null}
+          {stage ? null : (
+            <div className="shrink-0 px-3 pt-2">
+              <div className={"mx-auto flex min-h-12 w-full flex-col justify-center " + FRAME}>
+                {landed !== null && landed.to === step ? (
+                  <div className={COLUMN}>
+                    <Landed key={landed.from} label={STEP_NAME[landed.from]}>
+                      <ResultChip result={resultOf(landed.from)} />
+                      {landedText(landed.from) ? (
+                        <span className="font-mono text-[12px] tabular-nums text-muted">{landedText(landed.from)}</span>
+                      ) : null}
+                    </Landed>
+                  </div>
+                ) : null}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        <div data-walk className="min-h-0 flex-1 overflow-auto px-3 pb-3 [container-type:size] [scrollbar-gutter:stable_both-edges]">
-          <div className={"mx-auto flex min-h-full w-full flex-col " + FRAME}>
-            <div aria-hidden="true" className={centered ? "min-h-6 flex-[2_1_0%]" : "h-4 shrink-0"} />
-            <div className="flex min-w-0 flex-col gap-4">
-              {error !== null ? (
-                <pre className="m-0 bg-bad px-3 py-2 font-mono text-[12px] leading-snug whitespace-pre-wrap text-cream">{error}</pre>
-              ) : null}
-              <section key={`${step}-${visit}`} aria-label={STEP_NAME[step]} className="flex min-w-0 flex-col gap-4">
-                {body}
-              </section>
-              {showFoot ? (
-                <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 border border-line bg-panel px-4 py-3">
-                  {back ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLanded(null);
-                        go(back);
-                      }}
-                      className="min-h-12 px-1 text-[15px] text-muted hover:text-ink"
-                    >
-                      ← Forrige
-                    </button>
-                  ) : null}
-                  <span className="flex-1" />
-                  {canSkip ? (
-                    <button
-                      type="button"
-                      onClick={skip}
-                      className="flex min-h-12 items-center border border-line bg-panel px-6 text-[15px] text-ink hover:border-green hover:text-green"
-                    >
-                      Hopp over
-                    </button>
-                  ) : null}
-                  <div ref={setSlot} className="flex flex-wrap items-center gap-3" />
-                </div>
-              ) : null}
+          <div data-walk className="min-h-0 flex-1 overflow-auto px-3 pb-3 [container-type:size] [scrollbar-gutter:stable_both-edges]">
+            <div className={"mx-auto flex min-h-full w-full flex-col " + FRAME}>
+              <div aria-hidden="true" className={stage ? "min-h-6 flex-[2_1_0%]" : "h-4 shrink-0"} />
+              <div data-walk-content className={"flex min-w-0 flex-col gap-4" + (stage ? "" : " " + COLUMN)}>
+                {error !== null ? (
+                  <pre className="m-0 bg-bad px-3 py-2 font-mono text-[12px] leading-snug whitespace-pre-wrap text-cream">{error}</pre>
+                ) : null}
+                <section key={`${step}-${visit}`} aria-label={STEP_NAME[step]} className="flex min-w-0 flex-col gap-4">
+                  {body}
+                </section>
+                {showFoot ? (
+                  <div
+                    data-walk-actions
+                    className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 border border-line bg-panel px-4 py-3"
+                  >
+                    {back !== null ? (
+                      <button type="button" onClick={goBack} className="min-h-12 px-1 text-[15px] text-muted hover:text-ink">
+                        ← Forrige
+                      </button>
+                    ) : null}
+                    <span className="flex-1" />
+                    {canSkip ? (
+                      <button
+                        type="button"
+                        onClick={skip}
+                        className="flex min-h-12 items-center border border-line bg-panel px-6 text-[15px] text-ink hover:border-green hover:text-green"
+                      >
+                        Hopp over
+                      </button>
+                    ) : null}
+                    <div ref={setSlot} className="flex flex-wrap items-center gap-3" />
+                  </div>
+                ) : null}
+              </div>
+              {stage ? <div aria-hidden="true" className="min-h-6 flex-[3_1_0%]" /> : null}
             </div>
-            {centered ? <div aria-hidden="true" className="min-h-6 flex-[3_1_0%]" /> : null}
           </div>
-        </div>
+        </main>
       </div>
     </ConfirmSlotProvider>
   );

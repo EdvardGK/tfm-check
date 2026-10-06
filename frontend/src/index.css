@@ -1,52 +1,56 @@
 @import "tailwindcss";
 
-/* Skiplum design tokens — mirrors nettside/app/globals.css.
-   Cream + amber + gunmetal. Exposed as Tailwind utilities (bg-bg, text-fg,
-   bg-accent, border-line, …) via the @theme block. */
+/* ifc-check's look, for the whole app (2026-10-06, edkjo on the cream and
+   amber build: "this seems to not be built on the ifc-check format").
+   The palette and the component rules below are copied from
+   toolkit/ifc-check: `src/index.css` (the tokens, `--sel`) and
+   `src/design/directions.css` (the `:root[data-design]` palette and the
+   generic component rules; ifc-check always renders direction "b", so
+   `index.html` sets `data-design="b"` here too). The dashboard-only rules
+   (`.alt-*`, the graph, the treemaps) are left out. */
 @theme {
-  --color-bg: #f4ede0;          /* cream */
-  --color-fg: #2d2a26;          /* warm graphite */
-  --color-muted: #5e564b;       /* warm grey */
-  --color-subtle: #b8ad9a;      /* taupe */
-  --color-line: #ddd2bf;        /* cream-line */
-  --color-accent: #c89544;      /* amber gold */
-  --color-accent-fg: #1a1612;
-  --color-accent-soft: #f3e6cd; /* pale amber */
-  --color-surface: #4b4f55;     /* gunmetal */
-  --color-surface-fg: #f4ede0;
-  --color-card: #fbf7ef;        /* near-white cream — raised panels */
-
-  --color-ok: #059669;
-  --color-warn: #d97706;
-  --color-bad: #dc2626;
-
-  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Geist Mono Variable", ui-monospace, "Consolas", monospace;
-
-  /* ifc-check's default palette (toolkit/ifc-check/src/index.css), for the
-     Oppsett walk, so the two apps read as siblings. */
   --color-ground: #f4eedc;
   --color-cream: #f4eedc;
   --color-panel: #eae0c5;
   --color-input: #fcf8ec;
   --color-ink: #23291e;
+  --color-muted: #8a8061;
+  --color-line: #dbd0b2;
   --color-green: #2c5e3f;
   --color-palegreen: #e6efdd;
   --color-gold: #a8821e;
+  --color-bad: #a8473a;
+
+  --font-mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", "JetBrains Mono", Menlo,
+    Consolas, monospace;
+  --font-sans: "Inter", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
 }
 
-/* The walk takes ifc-check's values where the two palettes share a name,
-   and its type. Results keep the Skiplum look. */
-.oppsett {
-  --color-muted: #8a8061;
-  --color-line: #dbd0b2;
-  --color-bad: #a8473a;
-  --font-sans: "Inter", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
-  --font-mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", "JetBrains Mono", Menlo, Consolas, monospace;
-  font-family: var(--font-sans);
+/* The May app's token names (Results), on ifc-check's values. */
+@theme inline {
+  --color-bg: var(--color-ground);
+  --color-fg: var(--color-ink);
+  --color-subtle: var(--color-muted);
+  --color-accent: var(--d-accent);
+  --color-accent-fg: var(--d-on-accent);
+  --color-accent-soft: color-mix(in srgb, var(--d-accent) 14%, var(--color-panel));
+  --color-surface: var(--color-ink);
+  --color-surface-fg: var(--color-cream);
+  --color-card: var(--color-panel);
+  --color-ok: var(--color-green);
+  --color-warn: var(--color-gold);
+}
+
+body {
+  margin: 0;
   background: var(--color-ground);
   color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+* {
   scrollbar-color: var(--color-muted) var(--color-panel);
+  scrollbar-width: thin;
 }
 
 @keyframes ifc-sweep {
@@ -75,29 +79,6 @@
   animation: pick-in 150ms ease-out;
 }
 
-html {
-  background: var(--color-bg);
-  color: var(--color-fg);
-}
-
-body {
-  margin: 0;
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-  font-feature-settings: "ss01", "ss02", "cv11";
-}
-
-::selection {
-  background: color-mix(in oklab, var(--color-accent) 35%, transparent);
-  color: var(--color-fg);
-}
-
-/* Thin, on-brand scrollbars inside the framed tool */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-subtle) transparent;
-}
-
 /* Stage entrance — a calm fade-up between upload → confirm → results */
 @keyframes fade-up {
   from {
@@ -121,5 +102,302 @@ body {
   }
   * {
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── The selection mark (ifc-check `src/index.css`) ────────────────────── */
+:root {
+  --sel: #1d8a8a;
+  --sel-soft: color-mix(in srgb, var(--sel) 22%, var(--color-panel));
+  --sel-halo: var(--color-cream);
+  --sel-wash: color-mix(in srgb, var(--sel) 12%, transparent);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * ifc-check `src/design/directions.css`: THE PALETTE
+ * ══════════════════════════════════════════════════════════════════════════ */
+:root[data-design] {
+  --color-ground: #dfe5ec;
+  --color-panel: #eef2f6;
+  --color-input: #e4e9ef;
+  --color-cream: #f7f9fb;
+  --color-ink: #141a22;
+  --color-muted: #536070;
+  --color-line: #d3dae3;
+  --color-green: #2f7d4f;
+  --color-palegreen: #e1eee6;
+  --color-gold: #b5811a;
+  --color-bad: #bf3b2c;
+
+  --d-accent: #a24808;
+  --d-accent-dim: #8c3f09;
+  --d-on-accent: #f7f9fb;
+  --d-label-color: #475264;
+  --d-warn-ink: #7e560a;
+  --d-tint: rgba(20, 26, 34, 0.05);
+  --d-tint-strong: rgba(20, 26, 34, 0.085);
+  --d-shade: 22, 34, 54;
+  --d-ring: rgba(var(--d-shade), 0.08);
+  --d-hair: rgba(var(--d-shade), 0.1);
+
+  --d-field:
+    radial-gradient(1200px 780px at 8% -12%, rgba(126, 156, 204, 0.34), transparent 62%),
+    radial-gradient(1000px 760px at 104% 14%, rgba(206, 176, 150, 0.28), transparent 60%),
+    radial-gradient(1100px 820px at 58% 118%, rgba(132, 176, 168, 0.3), transparent 62%),
+    linear-gradient(168deg, #e8edf3 0%, #dde3ea 52%, #d6dde6 100%);
+  --d-glass: rgba(246, 249, 252, 0.64);
+  --d-glass-solid: #edf1f5;
+  --d-glass-blur: 22px;
+  --d-glass-edge: rgba(250, 252, 255, 0.72);
+
+  --d-radius: 6px;
+  --d-radius-lg: 14px;
+  --d-pill: 999px;
+
+  --d-dur: 120ms;
+  --d-dur-slow: 180ms;
+  --d-dur-panel: 280ms;
+  --d-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --d-card-shadow:
+    inset 0 0 0 1px var(--d-glass-edge), 0 0 0 1px rgba(var(--d-shade), 0.05),
+    0 1px 2px rgba(var(--d-shade), 0.06), 0 8px 20px -6px rgba(var(--d-shade), 0.14),
+    0 26px 52px -20px rgba(var(--d-shade), 0.24);
+  --d-card-shadow-hover:
+    inset 0 0 0 1px var(--d-glass-edge), 0 0 0 1px rgba(var(--d-shade), 0.07),
+    0 2px 4px rgba(var(--d-shade), 0.08), 0 14px 28px -8px rgba(var(--d-shade), 0.2),
+    0 34px 64px -22px rgba(var(--d-shade), 0.3);
+  --d-overlay-shadow: 0 0 0 1px var(--d-ring), 0 8px 24px -8px rgba(var(--d-shade), 0.3);
+  --d-key: #c6ced8;
+  --d-key-shadow: 0 1px 0 var(--d-key), 0 2px 4px -2px rgba(var(--d-shade), 0.2);
+  --d-lift: translateY(-2px);
+
+  --font-sans: "Archivo", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+:root[data-design] body {
+  font-family: var(--font-sans);
+  background: var(--d-field);
+  background-attachment: fixed;
+}
+:root[data-design] body .bg-ground {
+  background: transparent;
+}
+:root[data-design] main {
+  padding: 12px;
+}
+
+/* ── CHROME: the app bar ─────────────────────────────────────────────── */
+:root[data-design] header {
+  position: relative;
+  z-index: 5;
+  border-color: transparent;
+  background-color: var(--d-glass);
+  -webkit-backdrop-filter: blur(var(--d-glass-blur)) saturate(150%);
+  backdrop-filter: blur(var(--d-glass-blur)) saturate(150%);
+  box-shadow: inset 0 -1px 0 var(--d-glass-edge), 0 1px 0 rgba(var(--d-shade), 0.06),
+    0 10px 24px -14px rgba(var(--d-shade), 0.22);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root[data-design] header {
+    background-color: var(--d-glass-solid);
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-design] header {
+    background-color: var(--d-glass-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* Tabs: a sunken tray, the active tab a raised pill standing in it. */
+:root[data-design] [role="tablist"] {
+  border-bottom-color: transparent;
+  gap: 2px;
+  align-self: flex-start;
+  align-items: center;
+  width: fit-content;
+  padding: 3px;
+  border-radius: var(--d-pill);
+  background-color: var(--d-tint-strong);
+  box-shadow: inset 0 1px 2px rgba(var(--d-shade), 0.14);
+}
+:root[data-design] [role="tab"] {
+  margin-bottom: 0;
+  border-color: transparent;
+  border-radius: var(--d-pill);
+  color: var(--color-muted);
+  font-weight: 600;
+  padding-inline: 0.85rem;
+}
+:root[data-design] [role="tab"]:hover {
+  color: var(--color-ink);
+}
+:root[data-design] [role="tab"][aria-selected="true"] {
+  background-color: var(--color-panel);
+  border-color: transparent;
+  color: var(--color-ink);
+  box-shadow: 0 0 0 1px var(--d-ring), 0 1px 3px rgba(var(--d-shade), 0.16);
+}
+
+/* Controls: raised keys on a solid edge, down on press. */
+:root[data-design] button.bg-input {
+  border-color: transparent;
+  background-color: var(--color-panel);
+  box-shadow: 0 0 0 1px var(--d-ring), var(--d-key-shadow);
+  font-weight: 600;
+}
+:root[data-design] button.bg-input:hover {
+  border-color: transparent;
+  color: var(--color-ink);
+  background-color: var(--color-panel);
+  box-shadow: 0 0 0 1px rgba(var(--d-shade), 0.16), 0 2px 0 var(--d-key),
+    0 4px 8px -3px rgba(var(--d-shade), 0.24);
+}
+:root[data-design] button:not([role="tab"]):active {
+  transform: translateY(1px);
+}
+:root[data-design] button[aria-pressed="true"] {
+  background-color: var(--color-ink);
+  border-color: transparent;
+  color: var(--color-panel);
+  box-shadow: none;
+}
+:root[data-design] button[aria-pressed="true"]:hover {
+  background-color: var(--color-ink);
+  color: var(--color-panel);
+}
+:root[data-design] button[aria-pressed] {
+  border-radius: var(--d-pill);
+}
+
+/* Filter chips: pills. */
+:root[data-design] span.border.border-line.bg-input {
+  border-color: transparent;
+  border-radius: var(--d-pill);
+  background-color: var(--color-panel);
+  box-shadow: 0 0 0 1px var(--d-ring);
+}
+
+/* Fields: a shallow well. */
+:root[data-design] :is(input, select, textarea).border {
+  border-color: transparent;
+  background-color: var(--color-input);
+  box-shadow: inset 0 0 0 1px var(--d-hair), inset 0 1px 2px rgba(var(--d-shade), 0.08);
+}
+
+/* ── TABLES AND ROWS: rules, not zebra; heads that stay ──────────────── */
+:root[data-design] thead th {
+  border-right-color: transparent;
+  border-bottom-color: var(--d-hair);
+  background-color: var(--color-panel);
+}
+:root[data-design] tbody td {
+  border-right-color: transparent;
+  border-bottom-color: var(--d-hair);
+}
+:root[data-design] .border-line {
+  border-color: var(--d-hair);
+}
+:root[data-design] .hover\:bg-palegreen:hover {
+  background-color: var(--sel-wash);
+}
+:root[data-design] .outline-ink {
+  outline-width: 2px;
+  outline-offset: -2px;
+  outline-color: var(--sel);
+  background-color: var(--sel-wash);
+}
+:root[data-design] .bg-ink {
+  background-color: var(--sel);
+  color: var(--d-on-accent);
+}
+
+/* ── CARDS ───────────────────────────────────────────────────────────── */
+:root[data-design] :is(section, dialog, div).border.border-line.bg-panel {
+  border-radius: var(--d-radius-lg);
+  border-color: transparent;
+  box-shadow: var(--d-card-shadow);
+}
+
+/* The pinned band: an overlay, so it gets the one real shadow. */
+:root[data-design] .sticky.bottom-0 {
+  border-radius: var(--d-radius-lg) var(--d-radius-lg) 0 0;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--d-ring), 0 -12px 28px -14px rgba(var(--d-shade), 0.32);
+}
+
+/* ── SHARED DETAILS ──────────────────────────────────────────────────── */
+:root[data-design] button,
+:root[data-design] .bg-input,
+:root[data-design] [role="tab"],
+:root[data-design] input,
+:root[data-design] select,
+:root[data-design] textarea {
+  border-radius: var(--d-radius);
+}
+
+:root[data-design] button,
+:root[data-design] [role="tab"],
+:root[data-design] .cursor-pointer,
+:root[data-design] input,
+:root[data-design] select {
+  transition:
+    background-color var(--d-dur) var(--d-ease),
+    border-color var(--d-dur) var(--d-ease),
+    color var(--d-dur) var(--d-ease),
+    box-shadow var(--d-dur-slow) var(--d-ease),
+    transform var(--d-dur) var(--d-ease),
+    opacity var(--d-dur) var(--d-ease);
+}
+
+:root[data-design] .text-gold {
+  color: var(--d-label-color);
+}
+:root[data-design] .tracking-\[0\.12em\] {
+  font-family: var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+
+:root[data-design] .tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
+}
+
+/* The interaction accent, off green so the traffic light keeps green. */
+:root[data-design] .hover\:text-green:hover,
+:root[data-design] .group:hover .group-hover\:text-ink,
+:root[data-design] .hover\:text-ink:hover {
+  color: var(--d-accent);
+}
+:root[data-design] .hover\:border-green:hover {
+  border-color: var(--d-accent);
+}
+:root[data-design] .hover\:bg-ink:hover,
+:root[data-design] .group:hover .group-hover\:bg-ink {
+  background-color: var(--d-accent-dim);
+  color: var(--d-on-accent);
+}
+
+:root[data-design] * {
+  scrollbar-color: var(--color-muted) transparent;
+}
+
+:root[data-design] :focus-visible {
+  outline: 2px solid var(--d-accent);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-design] * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+  :root[data-design] {
+    --d-lift: none;
   }
 }
