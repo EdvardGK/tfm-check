@@ -49,7 +49,16 @@ button { font: inherit; color: inherit; }
 .lbl { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--d-label-color); }
 .sub { color: var(--d-label-color); }
 
-main { height: 100%; padding: var(--M); display: flex; flex-direction: column; gap: var(--G); }
+/* The wizard is a WINDOW: bounded, centred on the field. Ceiling 1280 x 840
+   (composition converges: past it only the margins grow). */
+main { height: 100%; padding: 24px 48px; display: grid; place-items: center; }
+.window {
+  width: min(1280px, 100%); height: min(840px, 100%); display: flex; flex-direction: column;
+  border-radius: 18px;
+  box-shadow: inset 0 0 0 1px var(--d-glass-edge), 0 0 0 1px rgba(var(--d-shade), .06),
+    0 2px 4px rgba(var(--d-shade), .06), 0 18px 40px -12px rgba(var(--d-shade), .22),
+    0 48px 96px -32px rgba(var(--d-shade), .32);
+}
 
 /* glass tile */
 .tile {
@@ -59,11 +68,10 @@ main { height: 100%; padding: var(--M); display: flex; flex-direction: column; g
   box-shadow: var(--d-card-shadow); min-width: 0; min-height: 0; overflow: hidden;
 }
 
-/* step bar: six steps, the gap is the grid gutter, so on 12 and 18 columns
-   every step edge is a grid edge */
-.steps { flex: 0 0 var(--bar); height: var(--bar); display: grid; grid-template-columns: repeat(6, 1fr); column-gap: var(--G); }
+/* step bar: the window's head, on the window's measure */
+.steps { flex: 0 0 auto; display: grid; grid-template-columns: repeat(6, 1fr); column-gap: 8px; padding: 12px; box-shadow: inset 0 -1px 0 var(--d-hair); }
 .step {
-  display: flex; align-items: center; gap: 10px; padding: 0 16px; min-width: 0;
+  display: flex; align-items: center; gap: 10px; padding: 0 14px; min-width: 0; height: 46px; border-radius: var(--d-pill);
   color: var(--color-muted); font-weight: 600; font-size: 14px;
 }
 .step .n {
@@ -77,15 +85,12 @@ main { height: 100%; padding: var(--M); display: flex; flex-direction: column; g
 .step[aria-current="step"] { background: var(--color-ink); color: var(--color-panel); }
 .step[aria-current="step"] .n { background: var(--color-panel); color: var(--color-ink); box-shadow: none; }
 
-/* the board: one module grid */
-.board {
-  flex: 1 1 auto; min-height: 0; display: grid; gap: var(--G);
-  grid-template-columns: repeat(var(--C, 12), var(--u, 100px));
-  grid-template-rows: repeat(var(--R, 6), var(--r, 100px));
-}
-.work, .answer { display: flex; flex-direction: column; }
+/* the golden split inside the window: work 61.8 % | answer 38.2 % */
+.board { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 1.618fr 1fr; }
+.work, .answer { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.work { box-shadow: inset -1px 0 0 var(--d-hair); }
 .head { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px 14px; }
-.h { margin: 0; font-size: clamp(24px, 1.75vw, 34px); font-weight: 800; letter-spacing: -.025em; line-height: 1; }
+.h { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -.025em; line-height: 1; }
 
 /* buttons, ifc-check: raised keys, pressed = ink pill, primary = accent pill */
 .key {
@@ -135,23 +140,26 @@ main { height: 100%; padding: var(--M); display: flex; flex-direction: column; g
 .lamp[data-verdict="pass"] { background: var(--color-green); color: var(--color-cream); }
 .lamp[data-verdict="fail"] { background: var(--color-bad); color: var(--color-cream); }
 .lamp[data-verdict="warn"] { background: var(--color-gold); color: var(--color-ink); }
-.fig { font-size: clamp(22px, 1.7vw, 32px); font-weight: 700; letter-spacing: -.01em; line-height: 1.05; }
+.fig { font-size: 26px; font-weight: 700; letter-spacing: -.01em; line-height: 1.05; }
 .fig .of { font-size: .6em; font-weight: 600; color: var(--d-label-color); }
 .fig[data-verdict="fail"] { color: var(--color-bad); }
 .fig[data-verdict="pass"] { color: var(--color-green); }
 .scroll { overflow: auto; min-height: 0; flex: 1 1 auto; }
 .ell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
-/* narrow fallback: one column, the page scrolls */
-:root[data-narrow="1"] body { overflow: auto; }
-:root[data-narrow="1"] main { height: auto; }
-:root[data-narrow="1"] .steps { grid-template-columns: repeat(3, 1fr); height: auto; row-gap: 8px; }
-:root[data-narrow="1"] .board { display: flex; flex-direction: column; }
-:root[data-narrow="1"] .work, :root[data-narrow="1"] .answer { height: 86vh; }
+/* narrow fallback: the window takes the screen, one column, the page scrolls */
+@media (max-width: 900px), (max-height: 560px) {
+  body { overflow: auto; }
+  main { height: auto; padding: 8px; display: block; }
+  .window { width: 100%; height: auto; }
+  .steps { grid-template-columns: repeat(3, 1fr); row-gap: 8px; }
+  .board { display: flex; flex-direction: column; }
+  .work, .answer { height: 86vh; }
+}
 
 .head .tray { margin-left: auto; }
 .table { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-.tcols, .trow { display: grid; grid-template-columns: minmax(120px, 1.1fr) 92px minmax(200px, 4fr) 150px; column-gap: 24px; align-items: center; padding: 0 20px; }
+.tcols, .trow { display: grid; grid-template-columns: minmax(96px, 1fr) 64px minmax(180px, 3.4fr) 132px; column-gap: 20px; align-items: center; padding: 0 20px; }
 .tcols { height: 36px; flex: 0 0 36px; }
 .tbody { flex: 1 1 auto; display: flex; flex-direction: column; }
 .trow { flex: 1 0 36px; max-height: 80px; }
@@ -192,16 +200,17 @@ main { height: 100%; padding: var(--M); display: flex; flex-direction: column; g
 </head>
 <body>
 <main>
+<div class="window tile">
 <nav class="steps" aria-label="Oppsett">
-<a class="step tile done"><span class="n">✓</span><span class="t"><span>Åpne IFC</span><span class="v">ST28_RIE.ifc</span></span></a>
-<a class="step tile done"><span class="n">✓</span><span class="t"><span>Kilde</span><span class="v">NOSSB_Reference.RefString</span></span></a>
-<a class="step tile done"><span class="n">✓</span><span class="t"><span>Format</span></span></a>
-<a class="step tile" aria-current="step"><span class="n">4</span><span class="t"><span>Etasjer</span></span></a>
-<a class="step tile"><span class="n">5</span><span class="t"><span>Scope</span></span></a>
-<a class="step tile"><span class="n">6</span><span class="t"><span>Oppsummering</span></span></a>
+<a class="step done"><span class="n">✓</span><span class="t"><span>Åpne IFC</span><span class="v">ST28_RIE.ifc</span></span></a>
+<a class="step done"><span class="n">✓</span><span class="t"><span>Kilde</span><span class="v">NOSSB_Reference.RefString</span></span></a>
+<a class="step done"><span class="n">✓</span><span class="t"><span>Format</span></span></a>
+<a class="step" aria-current="step"><span class="n">4</span><span class="t"><span>Etasjer</span></span></a>
+<a class="step"><span class="n">5</span><span class="t"><span>Scope</span></span></a>
+<a class="step"><span class="n">6</span><span class="t"><span>Oppsummering</span></span></a>
 </nav>
 <div class="board">
-  <section class="work tile">
+  <section class="work">
     <div class="head"><h1 class="h">Etasjer</h1>
       <div class="tray" role="tablist" aria-label="Ordning">
         <button role="tab" aria-selected="false">Statsbygg</button>
@@ -214,7 +223,7 @@ main { height: 100%; padding: var(--M); display: flex; flex-direction: column; g
       <div class="tbody scroll"><div class="trow rule"><span class="tn">Plan 09</span><span class="num tz">39,47</span><span class="tc"><span class="num">18</span><span class="bar"><span style="width:0.8%"></span></span></span><span class="tk"><input class="code mono" value="09" aria-label="Kode Plan 09" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan 08</span><span class="num tz">36,80</span><span class="tc"><span class="num">394</span><span class="bar"><span style="width:18.0%"></span></span></span><span class="tk"><input class="code mono" value="08" aria-label="Kode Plan 08" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan 07</span><span class="num tz">33,44</span><span class="tc"><span class="num">1 648</span><span class="bar"><span style="width:75.2%"></span></span></span><span class="tk"><input class="code mono" value="07" aria-label="Kode Plan 07" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan 06</span><span class="num tz">30,07</span><span class="tc"><span class="num">1 983</span><span class="bar"><span style="width:90.5%"></span></span></span><span class="tk"><input class="code mono" value="06" aria-label="Kode Plan 06" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan 05</span><span class="num tz">26,75</span><span class="tc"><span class="num">2 123</span><span class="bar"><span style="width:96.9%"></span></span></span><span class="tk"><input class="code mono" value="05" aria-label="Kode Plan 05" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan 04</span><span class="num tz">23,40</span><span class="tc"><span class="num">2 191</span><span class="bar"><span style="width:100.0%"></span></span></span><span class="tk"><input class="code mono" value="04" aria-label="Kode Plan 04" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan 03</span><span class="num tz">20,07</span><span class="tc"><span class="num">1 804</span><span class="bar"><span style="width:82.3%"></span></span></span><span class="tk"><input class="code mono" value="03" aria-label="Kode Plan 03" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan 02</span><span class="num tz">16,11</span><span class="tc"><span class="num">2 060</span><span class="bar"><span style="width:94.0%"></span></span></span><span class="tk"><input class="code mono" value="02" aria-label="Kode Plan 02" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan 1M</span><span class="num tz">13,10</span><span class="tc"><span class="num">733</span><span class="bar"><span style="width:33.5%"></span></span></span><span class="tk"><input class="code mono" value="01M" aria-label="Kode Plan 1M" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan 01</span><span class="num tz">12,12</span><span class="tc"><span class="num">1 301</span><span class="bar"><span style="width:59.4%"></span></span></span><span class="tk"><input class="code mono" value="01" aria-label="Kode Plan 01" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan U1M</span><span class="num tz">10,11</span><span class="tc"><span class="num">543</span><span class="bar"><span style="width:24.8%"></span></span></span><span class="tk"><input class="code mono" value="U1M" aria-label="Kode Plan U1M" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan U1</span><span class="num tz">8,47</span><span class="tc"><span class="num">1 266</span><span class="bar"><span style="width:57.8%"></span></span></span><span class="tk"><input class="code mono" value="U1" aria-label="Kode Plan U1" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan U2M</span><span class="num tz">6,22</span><span class="tc"><span class="num">750</span><span class="bar"><span style="width:34.2%"></span></span></span><span class="tk"><input class="code mono" value="U2M" aria-label="Kode Plan U2M" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan U2</span><span class="num tz">4,74</span><span class="tc"><span class="num">1 676</span><span class="bar"><span style="width:76.5%"></span></span></span><span class="tk"><input class="code mono" value="U2" aria-label="Kode Plan U2" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule"><span class="tn">Plan U3</span><span class="num tz">1,45</span><span class="tc"><span class="num">1 262</span><span class="bar"><span style="width:57.6%"></span></span></span><span class="tk"><input class="code mono" value="U3" aria-label="Kode Plan U3" data-src="auto"><span class="rev-sp"></span></span></div><div class="trow rule manual"><span class="tn">Havnivå</span><span class="num tz">0,00</span><span class="tc"><span class="num">315</span><span class="bar"><span style="width:14.4%"></span></span></span><span class="tk"><input class="code mono" value="XX" aria-label="Kode Havnivå" data-src="manual"><button class="rev" title="Tilbake til auto" aria-label="Tilbake til auto">↺</button></span></div></div>
     </div>
   </section>
-  <aside class="answer tile">
+  <aside class="answer">
     <div class="sec sch"><div><span class="lbl">Ordning</span><span class="pp">U1 · 01</span></div><div><span class="lbl">Ikke i modellen</span><div class="chips"><span class="chip">09</span><span class="chip">XX</span></div></div></div>
     <div class="sec figs">
       <div><span class="lbl">Treff i modellen</span><span class="fig num" data-verdict="pass" style="text-align:left">12 769 <span class="of">/ 12 838</span></span><span class="meter pass"><span style="width:99.5%"></span></span></div>
@@ -226,34 +235,17 @@ main { height: 100%; padding: var(--M); display: flex; flex-direction: column; g
     <div class="foot"><button class="ghost">Forrige</button><button class="ghost">Hopp over</button><button class="primary" data-chrome="primary">Bruk</button></div>
   </aside>
 </div>
+</div>
 </main>
 <script>
 (function () {
-  // ifc-check module-grid.ts mgGrid(): C = round((W - 2M + 16) / 116), u, R, r.
-  var M = 12, G = 16, MOD = 100, BAR = 56, root = document.documentElement;
-  function lay() {
-    var W = root.clientWidth, H = root.clientHeight;
-    var C = Math.max(1, Math.round((W - 2 * M + G) / (MOD + G)));
-    var u = (W - 2 * M - (C - 1) * G) / C;
-    var avail = H - 2 * M - BAR - G;
-    var R = Math.max(1, Math.floor((avail + G) / (u + G)));
-    var r = Math.max(u, (avail - (R - 1) * G) / R);
-    var L = Math.round(C * 0.618);           // golden major, whole columns
-    var S = Math.round(L * 0.3);             // first pane of a split work tile
-    var s = root.style;
-    s.setProperty('--C', C); s.setProperty('--u', u + 'px');
-    s.setProperty('--R', R); s.setProperty('--r', r + 'px');
-    s.setProperty('--L', L); s.setProperty('--S', S);
-    root.dataset.narrow = C < 8 ? '1' : '';
-    root.dataset.grid = C + 'x' + R;
-    var w = document.querySelector('.work'), a = document.querySelector('.answer');
-    w.style.gridColumn = '1 / span ' + L; w.style.gridRow = '1 / span ' + R;
-    a.style.gridColumn = (L + 1) + ' / span ' + (C - L); a.style.gridRow = '1 / span ' + R;
-    var p1 = document.querySelector('.pane1'), p2 = document.querySelector('.pane2');
-    if (p1 && p2) { p1.style.gridColumn = '1 / span ' + S; p2.style.gridColumn = (S + 1) + ' / span ' + (L - S); }
+  var c = document.querySelector('.prows .chosen');
+  if (c) {
+    // put the picked row near the middle, starting the view on a whole row
+    var pr = c.parentElement, want = c.offsetTop - pr.clientHeight / 2, top = 0;
+    for (var el = pr.firstElementChild; el; el = el.nextElementSibling) { if (el.offsetTop <= want) top = el.offsetTop; }
+    pr.scrollTop = top;
   }
-  lay(); addEventListener('resize', lay);
-  var c = document.querySelector('.prows .chosen'); if (c) { var pr = c.parentElement, h = c.offsetHeight; pr.scrollTop = Math.max(0, c.offsetTop - Math.floor(pr.clientHeight / 2 / h) * h); }
 })();
 </script>
 </body>
