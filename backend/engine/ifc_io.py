@@ -129,10 +129,12 @@ def candidate_strings_for(elem, location: tuple):
                 yield (f"{pn}.{k}", v)
 
 
-def build_storey_map(ifc) -> dict[int, str]:
+def build_storey_map(ifc, storey_codes: dict | None = None) -> dict[int, str]:
+    """Element id -> its storey's floor code: the Etasjer step's code for the
+    storey when one is set, else the code read from the storey's name."""
     out = {}
     for st_ in ifc.by_type("IfcBuildingStorey"):
-        code = parse_storey_name_to_code(st_.Name or "")
+        code = (storey_codes or {}).get(st_.Name or "") or parse_storey_name_to_code(st_.Name or "")
         for rel in getattr(st_, "ContainsElements", []) or []:
             for elem in rel.RelatedElements:
                 out[elem.id()] = code

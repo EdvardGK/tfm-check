@@ -26,6 +26,10 @@ class Upload:
     file_name: str
     file_size: int
     load_seconds: float
+    # The Oppsett walk's model index (engine.inventory.ModelIndex), built on
+    # the first inventory request and kept with the model.
+    index: Any = None
+    index_lock: threading.Lock = field(default_factory=threading.Lock)
     created: float = field(default_factory=time.time)
     last_used: float = field(default_factory=time.time)
 

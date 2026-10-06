@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections import Counter
 
+import ifcopenshell.util.element as eu
+
 from .constants import BYGNINGSDEL_SYSTEMS, KOMPONENT_SYSTEMS, THRESHOLDS
 from .ifc_io import build_storey_map, candidate_strings_for
 from .rules import TFMRules
@@ -53,9 +55,18 @@ def run_checks(ifc, products, rules: TFMRules,
     has_komp = bool(komponent_codes) and rules.has_part("Komponent")
     expected_ns = set(rules.expected_ns_range)
 
-    storey_map = build_storey_map(ifc)
+    storey_map = build_storey_map(ifc, rules.storey_codes)
 
-    n_total = len(products)
+    # Scope: elements whose component code or type name is out of scope
+    # take part in no check.
+    scope_comp = {c.upper() for c in rules.scope_components}
+    scope_types = set(rules.scope_types)
+    excluded_ids: set[int] = set()
+
+    def _type_name(elem) -> str:
+        t = eu.get_type(elem)
+        return (t.Name or "") if t is not None else ""
+
     n_has_code = n_struct_ok = 0
     part_total = Counter()
     part_ok = Counter()
@@ -85,7 +96,9 @@ def run_checks(ifc, products, rules: TFMRules,
 
     for e in products:
         typ = e.is_a()
-        _bump(typ, total=1)
+        if scope_types and _type_name(e) in scope_types:
+            excluded_ids.add(e.id())
+            continue
 
         chosen = None
         chosen_idx = None
@@ -98,6 +111,13 @@ def run_checks(ifc, products, rules: TFMRules,
                     break
             if chosen:
                 break
+
+        if chosen is not None and scope_comp:
+            ko_scope = (chosen[2].groupdict().get("komponent") or "").upper()
+            if ko_scope and ko_scope in scope_comp:
+                excluded_ids.add(e.id())
+                continue
+        _bump(typ, total=1)
 
         if chosen is None:
             if len(missing) < 500:
@@ -221,6 +241,8 @@ def run_checks(ifc, products, rules: TFMRules,
     n_assigned = n_tfm_assigned = 0
     unassigned_types = Counter()
     for e in products:
+        if e.id() in excluded_ids:
+            continue
         sf = []
         for rel in getattr(e, "HasAssignments", []) or []:
             if rel.is_a("IfcRelAssignsToGroup"):
@@ -236,6 +258,9 @@ def run_checks(ifc, products, rules: TFMRules,
 
     def pct(a, b):
         return (a / b * 100) if b else 0.0
+
+    n_excluded = len(excluded_ids)
+    n_total = len(products) - n_excluded
 
     type_rows = []
     for t, d in sorted(type_stats.items(), key=lambda kv: -kv[1]["total"]):
@@ -299,7 +324,7 @@ def run_checks(ifc, products, rules: TFMRules,
     }
 
     return {
-        "n_total": n_total, "checks": checks,
+        "n_total": n_total, "n_excluded": n_excluded, "checks": checks,
         "has_floor_check": has_floor, "has_komp_check": has_komp,
         "has_bd_check": has_bd, "has_disc_check": bool(expected_ns) and has_bd,
         "has_floor_consistency_check": n_floor_match_total > 0,

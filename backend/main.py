@@ -28,6 +28,8 @@ from engine import (
     list_presets, suggest_preset, suggest_field,
 )
 from engine.ifc_io import load_codes
+from engine.inventory import ModelIndex, inventory_payload, preview
+from engine.presets import PRESETS, preset_to_rules_dict
 from store import UploadStore
 
 HERE = Path(__file__).resolve().parent
@@ -70,6 +72,11 @@ class CheckRequest(BaseModel):
     upload_id: str
     rules: dict
     session_id: str | None = None
+
+
+class PreviewRequest(BaseModel):
+    upload_id: str
+    rules: dict
 
 
 class ReportRequest(BaseModel):
@@ -164,6 +171,30 @@ def _resolve(upload_id: str):
         raise HTTPException(
             404, "Modellen er ikke lenger i minnet (utløpt). Last opp filen på nytt.")
     return up
+
+
+def _index(up) -> ModelIndex:
+    with up.index_lock:
+        if up.index is None:
+            up.index = ModelIndex(up.ifc, up.products)
+        return up.index
+
+
+@app.get("/api/inventory/{upload_id}")
+def inventory(upload_id: str):
+    """The loaded model's property sets, properties (elements carrying a
+    value, distinct values, samples), attributes, candidates and storeys."""
+    up = _resolve(upload_id)
+    preset_rules = [TFMRules.from_dict(preset_to_rules_dict(p)) for p in PRESETS]
+    return inventory_payload(_index(up), preset_rules)
+
+
+@app.post("/api/preview")
+def preview_rules(req: PreviewRequest):
+    """A rule set's result on the loaded model's values, without the full
+    check: matched, off values, floor codes seen, components and types."""
+    up = _resolve(req.upload_id)
+    return preview(_index(up), TFMRules.from_dict(req.rules))
 
 
 @app.post("/api/check")

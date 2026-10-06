@@ -26,6 +26,13 @@ class TFMRules:
     tfm_location: tuple = ("all", None, None)
     # Optional exact digit-counts per digit-type part. {name: int}.
     part_digits: dict = field(default_factory=dict)
+    # Etasjer: each model storey's floor code {storey name: code}, and the
+    # style the codes were proposed in (statsbygg | u | custom).
+    storey_codes: dict = field(default_factory=dict)
+    floor_style: str = ""
+    # Scope: component codes and type names left out of every check.
+    scope_components: list[str] = field(default_factory=list)
+    scope_types: list[str] = field(default_factory=list)
 
     def _pattern_for_group(self, name: str) -> str:
         n = self.part_digits.get(name) if self.part_digits else None
@@ -90,4 +97,8 @@ class TFMRules:
             floor_codes=list(data.get("floor_codes") or []),
             tfm_location=loc,
             part_digits=part_digits,
+            storey_codes={str(k): str(v) for k, v in (data.get("storey_codes") or {}).items()},
+            floor_style=str(data.get("floor_style") or ""),
+            scope_components=[str(c) for c in (data.get("scope_components") or [])],
+            scope_types=[str(t) for t in (data.get("scope_types") or [])],
         )
