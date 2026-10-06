@@ -58,7 +58,7 @@ function SortableChip({
     <span
       ref={setNodeRef}
       style={style}
-      className="inline-flex select-none items-center gap-1 rounded-full border px-2.5 py-1 text-sm font-medium shadow-sm"
+      className="inline-flex min-h-9 select-none items-center gap-1 border px-2.5 py-1 font-mono text-[13px] font-medium"
     >
       <button
         type="button"
@@ -171,11 +171,11 @@ export default function PatternBuilder({ initial, onChange }: Props) {
   );
 
   return (
-    <div className="space-y-4 rounded-xl border border-line bg-card p-4">
+    <div data-builder className="space-y-4 border border-line bg-panel p-4">
       {patterns.map((items, pi) => (
-        <div key={pi} className="rounded-lg border border-line bg-bg/50 p-3">
+        <div key={pi} className="border border-line bg-input p-3">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+            <span className="text-[12px] font-semibold uppercase tracking-[0.1em] text-gold">
               Mønster {pi + 1}
             </span>
             {patterns.length > 1 && (
@@ -198,7 +198,7 @@ export default function PatternBuilder({ initial, onChange }: Props) {
               items={items.map((x) => x.id)}
               strategy={horizontalListSortingStrategy}
             >
-              <div className="flex min-h-10 flex-wrap items-center gap-1.5 rounded-lg border border-dashed border-line bg-card p-2">
+              <div className="flex min-h-12 flex-wrap items-center gap-1.5 border border-dashed border-muted bg-cream p-2">
                 {items.length === 0 && (
                   <span className="px-1 text-xs text-subtle">
                     Legg til blokker under ↓
@@ -232,14 +232,14 @@ export default function PatternBuilder({ initial, onChange }: Props) {
               ))}
             </PaletteRow>
             <div className="flex items-center gap-2">
-              <span className="w-20 shrink-0 text-xs font-semibold text-muted">
+              <span className="w-20 shrink-0 text-[12px] font-semibold uppercase tracking-[0.1em] text-gold">
                 Fritekst
               </span>
               <input
                 value={freetext[pi] ?? ""}
                 onChange={(e) => setFreetext({ ...freetext, [pi]: e.target.value })}
                 placeholder="skriv tekst…"
-                className="min-w-0 flex-1 rounded-md border border-line bg-card px-2 py-1 text-sm focus:border-accent focus:outline-none"
+                className="min-w-0 flex-1 border border-line bg-cream px-2 py-1 font-mono text-[13px] focus:border-green focus:outline-none"
               />
               <button
                 type="button"
@@ -249,15 +249,15 @@ export default function PatternBuilder({ initial, onChange }: Props) {
                   addToken(pi, FREETEXT_PREFIX + v);
                   setFreetext({ ...freetext, [pi]: "" });
                 }}
-                className="inline-flex items-center gap-1 rounded-md border border-line bg-bg px-2 py-1 text-xs font-medium hover:border-accent"
+                className="inline-flex items-center gap-1 border border-line bg-cream px-2 py-1 text-[12px] font-medium hover:border-green hover:text-green"
               >
                 <Plus size={12} /> Legg til
               </button>
             </div>
           </div>
 
-          <div className="mt-3 rounded-lg bg-bg/70 px-3 py-2">
-            <div className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted">
+          <div className="mt-3 border border-line bg-cream px-3 py-2">
+            <div className="text-[12px] font-semibold uppercase tracking-[0.1em] text-gold">
               Eksempel
             </div>
             <div className="mt-1 text-base">
@@ -270,7 +270,7 @@ export default function PatternBuilder({ initial, onChange }: Props) {
       <button
         type="button"
         onClick={addPattern}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-bg px-3 py-1.5 text-sm font-medium hover:border-accent"
+        className="inline-flex items-center gap-1.5 border border-line bg-cream px-3 py-1.5 text-[13px] font-medium hover:border-green hover:text-green"
       >
         <Plus size={14} /> Legg til mønster
       </button>
@@ -287,7 +287,7 @@ export default function PatternBuilder({ initial, onChange }: Props) {
                   setBdSys(e.target.value);
                   emit(patterns, e.target.value, kompSys, partDigits);
                 }}
-                className="w-full rounded-md border border-line bg-card px-2 py-1.5"
+                className="w-full border border-line bg-input px-2 py-1.5"
               >
                 <option value="NS3451">NS3451 — Systemkodetabell</option>
                 <option value="Ingen">Ingen sjekk</option>
@@ -303,7 +303,7 @@ export default function PatternBuilder({ initial, onChange }: Props) {
                   setKompSys(e.target.value);
                   emit(patterns, bdSys, e.target.value, partDigits);
                 }}
-                className="w-full rounded-md border border-line bg-card px-2 py-1.5"
+                className="w-full border border-line bg-input px-2 py-1.5"
               >
                 <option value="IEC81346">IEC 81346-2 — Funksjonsbokstaver</option>
                 <option value="Ingen">Ingen sjekk</option>
@@ -316,7 +316,7 @@ export default function PatternBuilder({ initial, onChange }: Props) {
               <select
                 value={partDigits[key] ? String(partDigits[key]) : "Fri"}
                 onChange={(e) => setDigit(key, e.target.value)}
-                className="w-full rounded-md border border-line bg-card px-2 py-1.5"
+                className="w-full border border-line bg-input px-2 py-1.5"
               >
                 {["Fri", "1", "2", "3", "4"].map((o) => (
                   <option key={o} value={o}>
@@ -335,7 +335,7 @@ export default function PatternBuilder({ initial, onChange }: Props) {
 function PaletteRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex items-start gap-2">
-      <span className="mt-1 w-20 shrink-0 text-xs font-semibold text-muted">{label}</span>
+      <span className="mt-1 w-20 shrink-0 text-[12px] font-semibold uppercase tracking-[0.1em] text-gold">{label}</span>
       <div className="flex flex-wrap gap-1.5">{children}</div>
     </div>
   );
@@ -354,7 +354,7 @@ function PaletteBtn({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-md border border-line bg-bg px-2 py-0.5 text-xs font-medium hover:border-accent hover:bg-accent-soft ${
+      className={`min-h-8 border border-line bg-cream px-2 py-0.5 text-[12px] font-medium text-ink hover:border-green hover:text-green ${
         mono ? "font-mono" : ""
       }`}
     >

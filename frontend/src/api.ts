@@ -1,4 +1,4 @@
-import type { CheckResponse, Preset, RulesDict, UploadResponse } from "./types";
+import type { CheckResponse, Inventory, Preset, Preview, RulesDict, UploadResponse } from "./types";
 
 async function jsonOrThrow<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -54,6 +54,25 @@ export function uploadIfc(
     xhr.onerror = () => reject(new Error("Nettverksfeil under opplasting."));
     xhr.send(form);
   });
+}
+
+export async function getInventory(uploadId: string): Promise<Inventory> {
+  return jsonOrThrow<Inventory>(await fetch(`/api/inventory/${encodeURIComponent(uploadId)}`));
+}
+
+export async function getPreview(
+  uploadId: string,
+  rules: RulesDict,
+  signal?: AbortSignal,
+): Promise<Preview> {
+  return jsonOrThrow<Preview>(
+    await fetch("/api/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ upload_id: uploadId, rules }),
+      signal,
+    }),
+  );
 }
 
 export async function runCheck(uploadId: string, rules: RulesDict): Promise<CheckResponse> {

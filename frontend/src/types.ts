@@ -12,6 +12,12 @@ export interface RulesDict {
   floor_codes?: string[];
   tfm_location?: Location;
   part_digits?: Record<string, number>;
+  /** Etasjer: each model storey's floor code, and the style proposed. */
+  storey_codes?: Record<string, string>;
+  floor_style?: string;
+  /** Scope: component codes and type names left out of every check. */
+  scope_components?: string[];
+  scope_types?: string[];
 }
 
 export interface Preset {
@@ -89,4 +95,60 @@ export interface CheckResponse {
   results: CheckResults;
   duration: number;
   location_label: string;
+}
+
+// ---- Oppsett walk (backend/engine/inventory.py) ----
+
+export interface ValueCount {
+  v: string;
+  n: number;
+}
+
+export interface InventoryProp {
+  name: string;
+  n: number;
+  distinct: number;
+  samples: ValueCount[];
+}
+
+export interface InventorySet {
+  name: string;
+  n: number;
+  props: InventoryProp[];
+}
+
+export interface StoreyFloor {
+  kind: "below" | "above" | "loft" | "roof";
+  n: number;
+  mezz: boolean;
+}
+
+export interface InventoryStorey {
+  name: string;
+  elevation: number | null;
+  n: number;
+  floor: StoreyFloor | null;
+}
+
+export interface Inventory {
+  products: number;
+  standard: { location: Location; n: number };
+  sets: InventorySet[];
+  attributes: InventoryProp[];
+  candidates: { location: Location; n: number; matched: number }[];
+  storeys: InventoryStorey[];
+}
+
+export interface Preview {
+  products: number;
+  excluded: number;
+  in_scope: number;
+  countable: boolean;
+  valued: number;
+  matched: number;
+  off: ValueCount[];
+  floor_part: boolean;
+  floors: { total: number; ok: number; seen: { code: string; n: number; ok: boolean }[] };
+  components: { code: string; n: number }[];
+  types: { name: string; n: number; out: number }[];
 }

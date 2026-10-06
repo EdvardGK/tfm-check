@@ -22,6 +22,57 @@
 
   --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, "Consolas", monospace;
+
+  /* ifc-check's default palette (toolkit/ifc-check/src/index.css), for the
+     Oppsett walk, so the two apps read as siblings. */
+  --color-ground: #f4eedc;
+  --color-cream: #f4eedc;
+  --color-panel: #eae0c5;
+  --color-input: #fcf8ec;
+  --color-ink: #23291e;
+  --color-green: #2c5e3f;
+  --color-palegreen: #e6efdd;
+  --color-gold: #a8821e;
+}
+
+/* The walk takes ifc-check's values where the two palettes share a name,
+   and its type. Results keep the Skiplum look. */
+.oppsett {
+  --color-muted: #8a8061;
+  --color-line: #dbd0b2;
+  --color-bad: #a8473a;
+  --font-sans: "Inter", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  font-family: var(--font-sans);
+  background: var(--color-ground);
+  color: var(--color-ink);
+  scrollbar-color: var(--color-muted) var(--color-panel);
+}
+
+@keyframes ifc-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+.ifc-sweep {
+  animation: ifc-sweep 1.1s linear infinite;
+}
+
+@keyframes pick-in {
+  from {
+    opacity: 0.55;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.pick-in {
+  animation: pick-in 150ms ease-out;
 }
 
 html {
@@ -63,7 +114,9 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .stage-in {
+  .stage-in,
+  .pick-in,
+  .ifc-sweep {
     animation: none;
   }
   * {
