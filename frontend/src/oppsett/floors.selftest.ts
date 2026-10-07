@@ -1,7 +1,7 @@
 // node src/oppsett/floors.selftest.ts  (Node ≥ 22.18 strips the types)
 import assert from "node:assert/strict";
 import type { InventoryStorey } from "../types.ts";
-import { allowedFloors, floorCode, likelyStyle, mergeCodes, proposeCodes } from "./floors.ts";
+import { allowedFloors, floorCode, likelyStyle, mergeCodes, proposeCodes, readCode, reflowCodes } from "./floors.ts";
 
 const st = (name: string, floor: InventoryStorey["floor"]): InventoryStorey => ({ name, elevation: 0, n: 1, floor });
 
@@ -38,5 +38,30 @@ assert.deepEqual(mergeCodes(storeys, { "Plan 01": "1", Gone: "9" }, "u"), {
   "Plan U1": "U1",
   Havnivå: "XX",
 });
+
+// Reflow: a typed code is sticky, and the sequence resumes from it.
+const tower = [
+  st("Plan 03", { kind: "above", n: 3, mezz: false }),
+  st("Plan 2M", { kind: "above", n: 2, mezz: true }),
+  st("Plan 02", { kind: "above", n: 2, mezz: false }),
+  st("Plan 01", { kind: "above", n: 1, mezz: false }),
+  st("Plan U1", { kind: "below", n: 1, mezz: false }),
+  st("Plan U2", { kind: "below", n: 2, mezz: false }),
+  st("Havnivå", null),
+];
+assert.deepEqual(reflowCodes(tower, "u", {}), {
+  "Plan 03": "03", "Plan 2M": "02M", "Plan 02": "02", "Plan 01": "01", "Plan U1": "U1", "Plan U2": "U2", Havnivå: "XX",
+});
+assert.deepEqual(reflowCodes(tower, "u", { "Plan 02": "05" }), {
+  "Plan 03": "06", "Plan 2M": "05M", "Plan 02": "05", "Plan 01": "01", "Plan U1": "U1", "Plan U2": "U2", Havnivå: "XX",
+});
+assert.deepEqual(reflowCodes(tower, "statsbygg", { "Plan U1": "01U", Havnivå: "00" }), {
+  "Plan 03": "03", "Plan 2M": "02M", "Plan 02": "02", "Plan 01": "01", "Plan U1": "01U", "Plan U2": "02U", Havnivå: "00",
+});
+// A typed code that reads as no floor number holds, and the rest stay put.
+assert.equal(reflowCodes(tower, "u", { "Plan 02": "X" })["Plan 03"], "03");
+assert.equal(readCode("00U", "below", "statsbygg"), 1);
+assert.equal(readCode("U3M", "below", "u"), 3);
+assert.equal(readCode("XX", "above", "u"), null);
 
 console.log("floors selftest: ok");

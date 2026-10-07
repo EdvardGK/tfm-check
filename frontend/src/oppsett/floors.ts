@@ -69,6 +69,64 @@ export function likelyStyle(
   return score("u") > score("statsbygg") ? "u" : "statsbygg";
 }
 
+/** A typed code read back as a floor number in a style, or null when it
+ *  does not read as one (XX, 04L, free text). */
+export function readCode(code: string, kind: StoreyFloor["kind"], style: "statsbygg" | "u"): number | null {
+  const c = code.trim().toUpperCase();
+  if (kind === "below") {
+    const m = style === "statsbygg" ? /^(\d{1,2})UM?$/.exec(c) : /^U(\d{1,2})M?$/.exec(c);
+    if (!m) return null;
+    return style === "statsbygg" ? Number(m[1]) + 1 : Number(m[1]);
+  }
+  const m = /^(\d{1,2})M?$/.exec(c);
+  return m ? Number(m[1]) : null;
+}
+
+/** Every storey's code (canon 2026-08-16, "a config table must not hand
+ *  the user a blank row"): a typed code is sticky and is never overwritten;
+ *  every other code follows the style, and the sequence RESUMES from a
+ *  typed code. Above ground counts up from the lowest storey, below ground
+ *  down from the highest, so a typed «03» on Plan 02 makes the auto codes
+ *  above it 04, 05 …. Storeys come top to bottom (the inventory's order). */
+export function reflowCodes(
+  storeys: readonly InventoryStorey[],
+  style: "statsbygg" | "u",
+  manual: Readonly<Record<string, string>>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  // Above ground (and loft, roof): bottom-up.
+  let up = 0;
+  for (let i = storeys.length - 1; i >= 0; i--) {
+    const s = storeys[i];
+    const f = s.floor;
+    if (f === null || f.kind === "below") continue;
+    const typed = manual[s.name];
+    if (typed !== undefined) {
+      out[s.name] = typed;
+      const n = f.kind === "above" ? readCode(typed, "above", style) : null;
+      if (n !== null) up = n - f.n;
+      continue;
+    }
+    out[s.name] = floorCode({ ...f, n: f.n + up }, style);
+  }
+  // Below ground: top-down, deeper is a higher number.
+  let down = 0;
+  for (const s of storeys) {
+    const f = s.floor;
+    if (f === null || f.kind !== "below") continue;
+    const typed = manual[s.name];
+    if (typed !== undefined) {
+      out[s.name] = typed;
+      const n = readCode(typed, "below", style);
+      if (n !== null) down = n - f.n;
+      continue;
+    }
+    out[s.name] = floorCode({ ...f, n: Math.max(1, f.n + down) }, style);
+  }
+  for (const s of storeys) if (s.floor === null) out[s.name] = manual[s.name] ?? NOT_A_FLOOR;
+  return out;
+}
+
 /** A saved mapping laid over a model: the saved code for a storey the
  *  model has, else the style's proposal (Statsbygg for a custom one). */
 export function mergeCodes(
