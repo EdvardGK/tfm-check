@@ -26,6 +26,21 @@ STANDARD_SOURCE = ("NOSSB_Reference", "RefString")
 
 ATTRIBUTES = ("Name", "Tag")
 
+# How many of a source's values the preview lists (most carried first), and
+# how many of those off the form.
+VALUES_SHOWN = 200
+OFF_SHOWN = 60
+
+# A value shaped like a TFM code in any form: a system code after «=» and a
+# two-letter component after a hyphen (=433.101.01-UP101, +01=542.001-RY003).
+# Kilde reads a source by it: whether a property carries TFM codes at all is
+# a different question from whether they take the form set in Format.
+TFM_SHAPE = re.compile(r"=\d{3}(?:\.[0-9A-Za-zÆØÅæøå]+)*-[A-ZÆØÅ]{2}")
+
+
+def tfm_shaped(value: str) -> bool:
+    return TFM_SHAPE.search(value) is not None
+
 
 def _text(value) -> str | None:
     """A property's value as text, or None when it carries none."""
@@ -146,7 +161,7 @@ def _matching(values: dict[int, str], regexes) -> int:
     for v in values.values():
         ok = hit.get(v)
         if ok is None:
-            ok = any(rx.search(v) for rx in regexes)
+            ok = tfm_shaped(v) or any(rx.search(v) for rx in regexes)
             hit[v] = ok
         if ok:
             n += 1
@@ -173,7 +188,8 @@ def inventory_payload(index: ModelIndex, preset_rules: list[TFMRules]) -> dict:
     std_values = index.props.get(STANDARD_SOURCE, {})
 
     # Candidates: properties whose values take a known TFM form (a bundled
-    # preset), scored by elements matching. The standard is listed apart.
+    # preset) or the TFM shape, scored by elements matching. The standard is
+    # listed apart.
     regexes = [rx for r in preset_rules for rx in r.regexes()]
     scored = []
     sources = [(("pset", s, p), v) for (s, p), v in index.props.items() if (s, p) != STANDARD_SOURCE]
@@ -211,6 +227,7 @@ def preview(index: ModelIndex, rules: TFMRules) -> dict:
     has_floor_part = rules.has_part("Etasje")
 
     parsed: dict[str, dict | None] = {}
+    spans: dict[str, list] = {}
 
     def parse(v: str):
         if v not in parsed:
@@ -219,6 +236,12 @@ def preview(index: ModelIndex, rules: TFMRules) -> dict:
                 m = rx.search(v)
                 if m:
                     g = m.groupdict()
+                    # Where each part of the form falls in the value, for
+                    # the Format step's coloured values.
+                    spans[v] = [
+                        [name, *m.span(name)] for name in rx.groupindex
+                        if m.span(name)[0] >= 0 and m.span(name)[1] > m.span(name)[0]
+                    ]
                     break
             parsed[v] = g
         return parsed[v]
@@ -259,6 +282,18 @@ def preview(index: ModelIndex, rules: TFMRules) -> dict:
 
     floor_total = sum(seen_floors.values())
     floor_ok = sum(n for code, n in seen_floors.items() if code in floors)
+    # The source's own values, most carried first, each with whether it
+    # takes the form and where the form's parts fall in it.
+    counted = Counter(values.values()) if values is not None else Counter()
+    shown = []
+    for v, n in counted.most_common(VALUES_SHOWN):
+        ok = parse(v) is not None
+        shown.append({
+            "v": v[:80], "n": n, "ok": ok, "shaped": ok or tfm_shaped(v),
+            "spans": spans.get(v, []) if ok else [],
+        })
+    shaped = sum(n for v, n in counted.items() if parse(v) is not None or tfm_shaped(v))
+    unshaped = Counter({v: n for v, n in counted.items() if parse(v) is None and not tfm_shaped(v)})
     return {
         "products": n_products,
         "excluded": excluded,
@@ -266,7 +301,12 @@ def preview(index: ModelIndex, rules: TFMRules) -> dict:
         "countable": values is not None,
         "valued": valued,
         "matched": matched,
-        "off": [{"v": v[:80], "n": n} for v, n in off.most_common(6)],
+        "off": [{"v": v[:80], "n": n} for v, n in off.most_common(OFF_SHOWN)],
+        "off_distinct": len(off),
+        "distinct": len(counted),
+        "values": shown,
+        "shaped": shaped,
+        "unshaped": [{"v": v[:80], "n": n} for v, n in unshaped.most_common(OFF_SHOWN)],
         "floor_part": has_floor_part,
         "floors": {
             "total": floor_total,

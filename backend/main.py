@@ -112,13 +112,14 @@ def codes(system: str):
 
 @app.post("/api/upload")
 async def upload(file: UploadFile = File(...)):
-    if not file.filename.lower().endswith(".ifc"):
-        raise HTTPException(400, "Filen må være en .ifc-fil.")
+    suffix = Path(file.filename).suffix.lower()
+    if suffix not in (".ifc", ".ifczip"):
+        raise HTTPException(400, "Filen må være en .ifc- eller .ifczip-fil.")
 
     t0 = time.time()
     tmp_path = None
     try:
-        with tempfile.NamedTemporaryFile(suffix=".ifc", delete=False) as tmp:
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
             shutil.copyfileobj(file.file, tmp)
             tmp_path = tmp.name
         size = os.path.getsize(tmp_path)

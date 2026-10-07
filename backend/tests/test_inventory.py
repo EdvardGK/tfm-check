@@ -187,3 +187,28 @@ def test_run_checks_scope_and_storey_codes(model):
     # Code floor against the storey's mapped code: 01, 01, U1 agree; 3 ≠ 01.
     assert res["checks"]["floor_consistency"]["n"] == 3
     assert res["checks"]["floor_consistency"]["total"] == 4
+
+
+def test_preview_values_and_spans(model):
+    _, _, index = model
+    p = preview(index, _rules())
+    assert p["distinct"] == 7
+    assert p["off_distinct"] == 2
+    by_v = {v["v"]: v for v in p["values"]}
+    assert len(by_v) == 7
+    off = by_v["ikke en kode"]
+    assert off["ok"] is False and off["spans"] == []
+    hit = by_v["=433.101.01-UP101"]
+    assert hit["ok"] is True
+    # Each part of the form where it falls in the value.
+    parts = {name: hit["v"][a:b] for name, a, b in hit["spans"]}
+    assert parts == {"systemkode": "433", "lopenummer": "101", "etasje": "01", "komponent": "UP", "kompnr": "101"}
+
+
+def test_preview_tfm_shape(model):
+    _, _, index = model
+    # The Statsbygg form takes none of these values, but five are TFM codes.
+    p = preview(index, _rules(patterns=[{"sequence": STATSBYGG}]))
+    assert p["matched"] == 0
+    assert p["shaped"] == 5
+    assert {u["v"] for u in p["unshaped"]} == {"ikke en kode", "++ST28=4111%KK003"}
