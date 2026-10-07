@@ -253,9 +253,17 @@ def preview(index: ModelIndex, rules: TFMRules) -> dict:
             parsed[v] = g
         return parsed[v]
 
+    shapes: dict[str, bool] = {}
+
+    def shape(v: str) -> bool:
+        if v not in shapes:
+            shapes[v] = tfm_shaped(v)
+        return shapes[v]
+
     n_products = len(index.product_ids)
-    excluded = valued = matched = 0
+    excluded = valued = matched = shaped = 0
     off = Counter()
+    unshaped = Counter()
     seen_floors = Counter()
     components = Counter()
     types_all = Counter()
@@ -279,6 +287,10 @@ def preview(index: ModelIndex, rules: TFMRules) -> dict:
         if not v:
             continue
         valued += 1
+        if g is not None or shape(v):
+            shaped += 1
+        else:
+            unshaped[v] += 1
         if g is None:
             off[v] += 1
             continue
@@ -296,11 +308,9 @@ def preview(index: ModelIndex, rules: TFMRules) -> dict:
     for v, n in counted.most_common(VALUES_SHOWN):
         ok = parse(v) is not None
         shown.append({
-            "v": v[:80], "n": n, "ok": ok, "shaped": ok or tfm_shaped(v),
+            "v": v[:80], "n": n, "ok": ok, "shaped": ok or shape(v),
             "spans": spans.get(v, []) if ok else [],
         })
-    shaped = sum(n for v, n in counted.items() if parse(v) is not None or tfm_shaped(v))
-    unshaped = Counter({v: n for v, n in counted.items() if parse(v) is None and not tfm_shaped(v)})
     return {
         "products": n_products,
         "excluded": excluded,
