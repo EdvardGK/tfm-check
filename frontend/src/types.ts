@@ -15,6 +15,8 @@ export interface RulesDict {
   /** Etasjer: each model storey's floor code, and the style proposed. */
   storey_codes?: Record<string, string>;
   floor_style?: string;
+  /** The storeys whose code was typed (sticky; the others follow the style). */
+  storey_manual?: string[];
   /** Scope: component codes and type names left out of every check. */
   scope_components?: string[];
   scope_types?: string[];
@@ -139,6 +141,15 @@ export interface Inventory {
   storeys: InventoryStorey[];
 }
 
+/** A source's value: whether it takes the form, whether it is shaped like
+ *  a TFM code at all, and where each part of the form falls in it. */
+export interface PreviewValue extends ValueCount {
+  ok: boolean;
+  shaped: boolean;
+  /** [template part name, start, end] */
+  spans: [string, number, number][];
+}
+
 export interface Preview {
   products: number;
   excluded: number;
@@ -147,6 +158,11 @@ export interface Preview {
   valued: number;
   matched: number;
   off: ValueCount[];
+  off_distinct: number;
+  distinct: number;
+  values: PreviewValue[];
+  shaped: number;
+  unshaped: ValueCount[];
   floor_part: boolean;
   floors: { total: number; ok: number; seen: { code: string; n: number; ok: boolean }[] };
   components: { code: string; n: number }[];

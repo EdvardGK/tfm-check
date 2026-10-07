@@ -1,44 +1,36 @@
-/** The Oppsett walk (issue #1), after ifc-check's walk: the choice
- *  (Statsbygg, Egendefinert, Åpne regelsett), Åpne IFC, then one question
- *  per step with the answer pre-picked, «Bruk» taking it and moving on, a
- *  clickable bar, «Forrige», «Hopp over», and Oppsummering at the end.
+/** The Oppsett wizard (issue #1), built from the approved mocks
+ *  (frontend/mocks/oppsett-kilde.html, oppsett-etasjer.html): one centred
+ *  measure, the rail (file, step index, the step's options) on the left,
+ *  the step bar and the step's bands on the canvas.
  *
- *  Statsbygg lays the standard on every step and opens Oppsummering once
- *  the model is read: «Gjennomgå» walks the steps, «Aksepter oppsett» runs
- *  the check. A summary row opens its step, and the step's «Bruk» returns
- *  to the summary. */
+ *  The walk: the choice (Statsbygg, Egendefinert, Åpne regelsett), Åpne IFC,
+ *  Kilde, Format, Etasjer, Scope, Oppsummering. Statsbygg lays the standard
+ *  on every step and opens Oppsummering once the model is read. «Bruk» takes
+ *  a step's answer and moves on; a summary row opens its step and its «Bruk»
+ *  returns to the summary. «Forrige» goes back along the path taken. */
 
 import { useRef, useState, type DragEvent } from "react";
 import { getInventory, uploadIfc } from "../api";
-import type { Inventory, Location, Preset, RulesDict, UploadResponse } from "../types";
-import Choice from "./Choice";
-import IfcStage, { STAGE_WIDTH } from "./IfcStage";
-import SourceStep from "./SourceStep";
+import { sequenceToExample } from "../constants";
+import type { Inventory, Preset, RulesDict, UploadResponse } from "../types";
+import "./oppsett.css";
+import { Bar, Rail, RailSlot, type Dot, type RailItem } from "./Shell";
+import { Live, type LiveAnswer } from "./live";
+import StartStep from "./StartStep";
+import IfcStep from "./IfcStep";
+import KildeStep from "./KildeStep";
 import FormatStep from "./FormatStep";
-import FloorStep from "./FloorStep";
+import EtasjerStep, { schemeAnswer } from "./EtasjerStep";
 import ScopeStep from "./ScopeStep";
 import SummaryStep from "./SummaryStep";
-import type { FloorStyle } from "./floors";
 import { usePreview } from "./usePreview";
 import {
-  STEP_NAME, WALK, download, floorResult, fmt, formatResult, parseSetup, setupFileName, setupJson,
-  sourceResult, statsbyggRules, withStatsbyggFloors, type Base, type SetupFile, type Step, type StepResult,
-  type WalkStep,
+  STEP_NAME, WALK, floorResult, fmt, formatResult, isStandardFormat, isStandardSource, locationText, parseSetup,
+  sourceResult, statsbyggRules, withStatsbyggFloors, type Base, type SetupFile, type Step, type WalkStep,
 } from "./setup";
-import { ConfirmSlotProvider, Landed, ResultChip, SECONDARY, StepConfirm, WalkProgress, type SegmentState } from "./ui";
 
-const FRAME = "max-w-5xl 2xl:max-w-7xl min-[137.5rem]:max-w-[100rem]";
-/** ifc-check's walk column (`SetupPage.tsx` `COLUMN`): every step but the
- *  IFC stage, the landed strip and the action row, 1152 px at most. */
-const COLUMN = "mx-auto w-full max-w-[72rem]";
-
-const framed = (() => {
-  try {
-    return window.self !== window.top;
-  } catch {
-    return true;
-  }
-})();
+/** The rail's steps, numbered. */
+const INDEX: readonly (WalkStep | "end")[] = [...WALK, "end"];
 
 const nextOf = (s: Step): Step => {
   if (s === "start") return "ifc";
@@ -46,9 +38,34 @@ const nextOf = (s: Step): Step => {
   return i < 0 || i === WALK.length - 1 ? "end" : WALK[i + 1];
 };
 
+const isModelFile = (name: string) => /\.(ifc|ifczip)$/i.test(name);
+
 export interface Accepted {
   upload: UploadResponse;
   rules: RulesDict;
+}
+
+/** A step's answer as the rail prints it, from the committed rules. */
+function committedAnswer(s: WalkStep | "end", rules: RulesDict | null, inv: Inventory | null): LiveAnswer {
+  if (!rules) return { answer: "", standard: false };
+  switch (s) {
+    case "ifc":
+      return { answer: inv ? `${fmt(inv.products)} elementer` : "", standard: false };
+    case "kilde":
+      return { answer: locationText(rules.tfm_location), standard: isStandardSource(rules) };
+    case "format":
+      return isStandardFormat(rules)
+        ? { answer: "", standard: true }
+        : { answer: rules.patterns.map((p) => sequenceToExample(p.sequence)).join(" | "), standard: false };
+    case "etasjer":
+      return schemeAnswer(rules.floor_style ?? "");
+    case "scope": {
+      const out = [...(rules.scope_components ?? []), ...(rules.scope_types ?? [])];
+      return out.length ? { answer: out.join(", "), standard: false } : { answer: "", standard: true };
+    }
+    default:
+      return { answer: "", standard: false };
+  }
 }
 
 export default function Oppsett({
@@ -65,32 +82,32 @@ export default function Oppsett({
   onAccept: (a: Accepted) => void;
 }) {
   const [step, setStep] = useState<Step>("start");
-  // The steps the walk came through, so «Forrige» returns to the screen
-  // before this one (Statsbygg goes Åpne IFC → Oppsummering, a summary row
-  // to its step and back), not to the step before it in WALK.
+  // The screens the walk came through, so «Forrige» returns to the one
+  // before this (Statsbygg goes Åpne IFC → Oppsummering, a summary row to
+  // its step and back), not to the step before it in the index.
   const [trail, setTrail] = useState<Step[]>([]);
   const [visit, setVisit] = useState(0);
   const [base, setBase] = useState<Base | null>(null);
   const [rules, setRules] = useState<RulesDict | null>(null);
   const [saved, setSaved] = useState<SetupFile | null>(null);
-  const [preset, setPreset] = useState<Set<WalkStep>>(new Set());
-  const [confirmed, setConfirmed] = useState<Set<WalkStep>>(new Set());
+  const [confirmed, setConfirmed] = useState<ReadonlySet<WalkStep>>(new Set());
   const [upload, setUpload] = useState<UploadResponse | null>(null);
   const [inv, setInv] = useState<Inventory | null>(null);
-  const [pct, setPct] = useState<number | null>(null);
+  const [progress, setProgress] = useState<number | null>(null);
   const [reading, setReading] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
   const [detour, setDetour] = useState(false);
-  const [landed, setLanded] = useState<{ from: WalkStep; to: Step } | null>(null);
+  const [live, setLive] = useState<(LiveAnswer & { step: Step }) | null>(null);
   const [slot, setSlot] = useState<HTMLElement | null>(null);
 
-  const preview = usePreview(upload?.upload_id ?? null, rules);
   const loaded = upload !== null && inv !== null;
+  const preview = usePreview(loaded ? upload.upload_id : null, rules);
 
   const go = (s: Step) => {
     if (s !== step) setTrail((t) => [...t, step]);
+    setLive(null);
     setStep(s);
     setVisit((v) => v + 1);
   };
@@ -99,7 +116,7 @@ export default function Oppsett({
   const goBack = () => {
     if (back === null) return;
     setTrail((t) => t.slice(0, -1));
-    setLanded(null);
+    setLive(null);
     setStep(back);
     setVisit((v) => v + 1);
   };
@@ -108,16 +125,15 @@ export default function Oppsett({
   const begin = (b: Base, r: RulesDict, file: SetupFile | null) => {
     onError(null);
     setBase(b);
-    setRules(r);
     setSaved(file);
-    setPreset(new Set(file || b === "statsbygg" ? (["kilde", "format", "etasjer", "scope"] as WalkStep[]) : []));
     setConfirmed(new Set());
-    setLanded(null);
-    go(loaded ? (b === "statsbygg" && !file ? "end" : "kilde") : "ifc");
-    if (loaded && inv && b === "statsbygg" && !file) setRules(withStatsbyggFloors(r, inv));
+    setDetour(false);
+    const statsbygg = b === "statsbygg" && !file;
+    setRules(loaded && inv && statsbygg ? withStatsbyggFloors(r, inv) : r);
+    go(loaded ? (statsbygg ? "end" : "kilde") : "ifc");
   };
 
-  const openFile = (f: File) => {
+  const openSetup = (f: File) => {
     f.text()
       .then((text) => {
         const s = parseSetup(text);
@@ -129,31 +145,30 @@ export default function Oppsett({
   // ---- Åpne IFC ----
   const readIfc = async (file: File) => {
     if (!rules) return;
-    if (!file.name.toLowerCase().endsWith(".ifc")) {
-      onError("Filen må være en .ifc-fil.");
+    if (!isModelFile(file.name)) {
+      onError("Filen må være en .ifc- eller .ifczip-fil.");
       return;
     }
     onError(null);
     setFileName(file.name);
-    setPct(0);
+    setProgress(0);
     setReading(true);
     try {
-      const up = await uploadIfc(file, (p) => setPct(p >= 100 ? null : p));
-      setPct(null);
+      const up = await uploadIfc(file, (p) => setProgress(p >= 100 ? null : p));
+      setProgress(null);
       const inventory = await getInventory(up.upload_id);
       setUpload(up);
       setInv(inventory);
+      const statsbygg = base === "statsbygg" && !saved;
       let r: RulesDict = saved ? rules : { ...rules, discipline_key: up.detected_discipline ?? rules.discipline_key };
-      if (base === "statsbygg" && !saved) r = withStatsbyggFloors(r, inventory);
+      if (statsbygg) r = withStatsbyggFloors(r, inventory);
       setRules(r);
-      setConfirmed((c) => new Set([...c, "ifc"]));
-      setLanded({ from: "ifc", to: base === "statsbygg" && !saved ? "end" : "kilde" });
-      go(base === "statsbygg" && !saved ? "end" : "kilde");
+      go(statsbygg ? "end" : "kilde");
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
     } finally {
       setReading(false);
-      setPct(null);
+      setProgress(null);
     }
   };
 
@@ -161,27 +176,7 @@ export default function Oppsett({
   const commit = (s: WalkStep, patch: Partial<RulesDict>) => {
     setRules((r) => (r ? { ...r, ...patch } : r));
     setConfirmed((c) => new Set([...c, s]));
-    const to = detour ? "end" : nextOf(s);
-    setLanded({ from: s, to });
-    go(to);
-  };
-
-  const skip = () => {
-    setLanded(null);
-    go(detour ? "end" : nextOf(step));
-  };
-
-  const segment = (s: WalkStep): SegmentState => {
-    if (s === "ifc") return loaded ? "done" : "open";
-    if (loaded && confirmed.has(s)) return "done";
-    return preset.has(s) || confirmed.has(s) ? "saved" : "open";
-  };
-
-  const onBar = (s: WalkStep) => {
-    if (!loaded && s !== "ifc") return;
-    setDetour(false);
-    setLanded(null);
-    go(s);
+    go(detour ? "end" : nextOf(s));
   };
 
   // ---- Page drop (Åpne IFC) ----
@@ -208,55 +203,75 @@ export default function Oppsett({
         }
       : {};
 
-  // ---- What a confirmed step gave ----
-  const resultOf = (s: WalkStep): StepResult | null => {
-    if (!inv || !rules) return null;
-    if (s === "ifc") return null;
-    if (s === "kilde") return sourceResult(inv, rules);
-    if (s === "format") return formatResult(preview);
-    if (s === "etasjer") return floorResult(preview);
-    return null;
-  };
-  const landedText = (s: WalkStep): string | null => {
-    if (!inv || !rules) return null;
-    if (s === "ifc" && upload) return `${upload.file_name} · ${fmt(inv.products)}`;
-    if (s === "etasjer") {
-      const n = inv.storeys.filter((x) => (rules.storey_codes?.[x.name] ?? "").trim() !== "").length;
-      return `${n} / ${inv.storeys.length}`;
-    }
-    if (s === "scope" && preview) return `${fmt(preview.excluded)} / ${fmt(preview.products)}`;
-    return null;
+  // ---- The rail ----
+  const dotOf = (s: WalkStep | "end"): Dot => {
+    if (s === "ifc") return loaded ? "ok" : "open";
+    if (s === "end" || !inv || !rules) return "open";
+    const res = s === "kilde" ? sourceResult(inv, rules) : s === "format" ? formatResult(preview) : s === "etasjer" ? floorResult(preview) : null;
+    if (res?.verdict === "fail") return "bad";
+    return confirmed.has(s) ? "ok" : "open";
   };
 
+  const items: RailItem[] = INDEX.map((s, i) => {
+    const current = s === step;
+    const ans = base === null ? { answer: "", standard: false } : current && live?.step === s ? live : committedAnswer(s, rules, inv);
+    const done = s === "ifc" ? loaded : s !== "end" && confirmed.has(s);
+    return {
+      key: s,
+      name: STEP_NAME[s],
+      n: i + 1,
+      dot: base === null ? "open" : dotOf(s),
+      answer: ans.answer,
+      standard: ans.standard,
+      current,
+      pending: !current && !done,
+      enabled: base !== null && !reading && (s === "ifc" || loaded),
+      onClick: () => {
+        if (s === step) return;
+        setDetour(false);
+        go(s);
+      },
+    };
+  });
+
   // ---- The step ----
-  const stage = step === "ifc" && !loaded;
-  const uid = upload?.upload_id ?? "";
+  const stepIndex = step === "start" ? null : INDEX.indexOf(step as WalkStep | "end") + 1;
+  const bar = { name: STEP_NAME[step], n: stepIndex, total: INDEX.length, error, onBack: back !== null && !reading ? goBack : null };
 
   let body: React.ReactNode = null;
   if (step === "start") {
     body = (
-      <Choice
+      <StartStep
         onStatsbygg={() => begin("statsbygg", statsbyggRules(upload?.detected_discipline ?? null), null)}
         onCustom={() => begin("custom", { ...statsbyggRules(upload?.detected_discipline ?? null), floor_style: "" }, null)}
-        onOpen={openFile}
+        onOpen={openSetup}
       />
     );
   } else if (step === "ifc") {
     body = (
-      <div className={"mx-auto flex flex-col gap-4 " + STAGE_WIDTH}>
-        <IfcStage dragging={dragging} busy={reading} pct={pct} fileName={fileName} onFile={(f) => void readIfc(f)} />
-        {!loaded && !reading && back !== null ? (
-          <button type="button" onClick={goBack} className="w-fit px-1 py-2 text-[13px] text-muted hover:text-ink">
-            ← Forrige
-          </button>
-        ) : null}
-        {loaded ? <StepConfirm onClick={() => go(detour ? "end" : "kilde")} /> : null}
-      </div>
+      <IfcStep
+        dragging={dragging}
+        busy={reading}
+        progress={progress}
+        fileName={loaded ? upload.file_name : fileName}
+        loaded={loaded ? { products: inv.products } : null}
+        onFile={(f) => void readIfc(f)}
+        onUse={() => go(detour ? "end" : "kilde")}
+      />
     );
   } else if (rules && inv && upload) {
-    const savedLoc: Location | null = saved?.rules.tfm_location ?? null;
+    const uid = upload.upload_id;
     if (step === "kilde") {
-      body = <SourceStep inv={inv} current={rules.tfm_location} saved={savedLoc} onUse={(loc) => commit("kilde", { tfm_location: loc })} />;
+      body = (
+        <KildeStep
+          uploadId={uid}
+          inv={inv}
+          rules={rules}
+          saved={saved?.rules.tfm_location ?? null}
+          fresh={!confirmed.has("kilde")}
+          onUse={(loc) => commit("kilde", { tfm_location: loc })}
+        />
+      );
     } else if (step === "format") {
       body = (
         <FormatStep
@@ -268,15 +283,12 @@ export default function Oppsett({
         />
       );
     } else if (step === "etasjer") {
-      const fresh = base === "custom" && !saved && !confirmed.has("etasjer");
-      const style: FloorStyle = fresh ? "statsbygg" : (rules.floor_style as FloorStyle) || "statsbygg";
       body = (
-        <FloorStep
+        <EtasjerStep
           uploadId={uid}
           inv={inv}
-          rules={fresh ? { ...rules, storey_codes: {} } : rules}
-          initialStyle={style}
-          autoStyle={fresh}
+          rules={rules}
+          autoScheme={base === "custom" && !saved && !confirmed.has("etasjer")}
           onUse={(patch) => commit("etasjer", patch)}
         />
       );
@@ -286,18 +298,17 @@ export default function Oppsett({
       body = (
         <SummaryStep
           inv={inv}
+          upload={upload}
           rules={rules}
+          base={base ?? "custom"}
           preview={preview}
-          set={(s) => confirmed.has(s) || preset.has(s)}
           checking={checking}
           onRow={(s) => {
             setDetour(true);
-            setLanded(null);
             go(s);
           }}
           onReview={() => {
             setDetour(false);
-            setLanded(null);
             go("kilde");
           }}
           onAccept={() => onAccept({ upload, rules })}
@@ -307,96 +318,32 @@ export default function Oppsett({
     }
   }
 
-  const showFoot = !stage && step !== "start";
-  const canSkip = step !== "ifc" && step !== "end" && step !== "start";
-
   return (
-    <ConfirmSlotProvider value={slot}>
-      <div className="flex h-dvh flex-col" {...dropProps}>
-        {framed ? null : (
-          <header className="flex shrink-0 items-center gap-3 border-b border-line bg-panel px-1.5 py-1">
-            <span className="text-[15px] font-semibold tracking-tight text-ink">TFM-sjekk</span>
-          </header>
-        )}
-
-        <main className="flex min-h-0 flex-1 flex-col">
-          {stage ? null : (
-            <div className="shrink-0 px-3 pt-3">
-              <div className={"mx-auto flex w-full items-center gap-4 " + FRAME}>
-                {step === "start" ? (
-                  <div className="flex-1" />
-                ) : (
-                  <WalkProgress steps={WALK} current={step === "end" ? null : (step as WalkStep)} state={segment} onStep={onBar} />
-                )}
-                {rules ? (
-                  <button
-                    type="button"
-                    onClick={() => download(setupFileName(rules, upload), setupJson(base ?? "custom", rules))}
-                    className={SECONDARY}
-                  >
-                    Lagre oppsett
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          )}
-
-          {stage ? null : (
-            <div className="shrink-0 px-3 pt-2">
-              <div className={"mx-auto flex min-h-12 w-full flex-col justify-center " + FRAME}>
-                {landed !== null && landed.to === step ? (
-                  <div className={COLUMN}>
-                    <Landed key={landed.from} label={STEP_NAME[landed.from]}>
-                      <ResultChip result={resultOf(landed.from)} />
-                      {landedText(landed.from) ? (
-                        <span className="font-mono text-[12px] tabular-nums text-muted">{landedText(landed.from)}</span>
-                      ) : null}
-                    </Landed>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          )}
-
-          <div data-walk className="min-h-0 flex-1 overflow-auto px-3 pb-3 [container-type:size] [scrollbar-gutter:stable_both-edges]">
-            <div className={"mx-auto flex min-h-full w-full flex-col " + FRAME}>
-              <div aria-hidden="true" className={stage ? "min-h-6 flex-[2_1_0%]" : "h-4 shrink-0"} />
-              <div data-walk-content className={"flex min-w-0 flex-col gap-4" + (stage ? "" : " " + COLUMN)}>
-                {error !== null ? (
-                  <pre className="m-0 bg-bad px-3 py-2 font-mono text-[12px] leading-snug whitespace-pre-wrap text-cream">{error}</pre>
-                ) : null}
-                <section key={`${step}-${visit}`} aria-label={STEP_NAME[step]} className="flex min-w-0 flex-col gap-4">
-                  {body}
-                </section>
-                {showFoot ? (
-                  <div
-                    data-walk-actions
-                    className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 border border-line bg-panel px-4 py-3"
-                  >
-                    {back !== null ? (
-                      <button type="button" onClick={goBack} className="min-h-12 px-1 text-[15px] text-muted hover:text-ink">
-                        ← Forrige
-                      </button>
-                    ) : null}
-                    <span className="flex-1" />
-                    {canSkip ? (
-                      <button
-                        type="button"
-                        onClick={skip}
-                        className="flex min-h-12 items-center border border-line bg-panel px-6 text-[15px] text-ink hover:border-green hover:text-green"
-                      >
-                        Hopp over
-                      </button>
-                    ) : null}
-                    <div ref={setSlot} className="flex flex-wrap items-center gap-3" />
-                  </div>
-                ) : null}
-              </div>
-              {stage ? <div aria-hidden="true" className="min-h-6 flex-[3_1_0%]" /> : null}
-            </div>
-          </div>
-        </main>
+    <div id="oppsett" {...dropProps}>
+      <div className="flow">
+        <div className="railcol">
+          <Rail file={loaded ? { name: upload.file_name, schema: upload.facts.schema } : null} items={items} />
+          <div ref={setSlot} style={{ display: "contents" }} />
+        </div>
+        <RailSlot.Provider value={slot}>
+          <Bar.Provider value={bar}>
+            <Live.Provider value={setLive}>
+              <StepFrame key={`${step}-${visit}`} step={step}>
+                {body}
+              </StepFrame>
+            </Live.Provider>
+          </Bar.Provider>
+        </RailSlot.Provider>
       </div>
-    </ConfirmSlotProvider>
+    </div>
+  );
+}
+
+/** Keys the step's state to the visit, so a step opens fresh each time. */
+function StepFrame({ children, step }: { children: React.ReactNode; step: Step }) {
+  return (
+    <section aria-label={STEP_NAME[step]} style={{ display: "contents" }}>
+      {children}
+    </section>
   );
 }

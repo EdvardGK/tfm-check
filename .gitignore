@@ -14,3 +14,6 @@ frontend/dist/
 .env
 *.ifc
 .streamlit/secrets.toml
+
+# Layout gate screenshots of the built app
+frontend/mocks/shots/app/

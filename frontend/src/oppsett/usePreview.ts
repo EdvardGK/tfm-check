@@ -25,24 +25,3 @@ export function usePreview(uploadId: string | null, rules: RulesDict | null): Pr
   }, [uploadId, key]);
   return preview;
 }
-
-/** Several rule sets' results at once (Format's options). */
-export function usePreviews(uploadId: string | null, list: readonly RulesDict[]): (Preview | null)[] {
-  const [out, setOut] = useState<(Preview | null)[]>(() => list.map(() => null));
-  const key = uploadId ? JSON.stringify(list) : "";
-  useEffect(() => {
-    if (!uploadId || !key) return;
-    const ctl = new AbortController();
-    const rules = JSON.parse(key) as RulesDict[];
-    const timer = window.setTimeout(() => {
-      Promise.all(rules.map((r) => getPreview(uploadId, r, ctl.signal).catch(() => null))).then((res) => {
-        if (!ctl.signal.aborted) setOut(res);
-      });
-    }, 180);
-    return () => {
-      window.clearTimeout(timer);
-      ctl.abort();
-    };
-  }, [uploadId, key]);
-  return out;
-}

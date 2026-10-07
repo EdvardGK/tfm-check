@@ -1,17 +1,20 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { RulesDict } from "../types";
+import { Bar10, Canvas, Fig, Meter, StepBar } from "./Shell";
+import { useLiveAnswer } from "./live";
 import { usePreview } from "./usePreview";
 import { fmt } from "./setup";
-import { Figure, INPUT, LABEL, PANEL, PILL, STEP_TITLE, StepConfirm } from "./ui";
 
 export interface ScopePatch {
   scope_components: string[];
   scope_types: string[];
 }
 
-/** Scope: the component codes and types left out of every check. Both
- *  lists are the loaded model's, with the elements each carries; a code
- *  the model does not show can be typed. A click takes one out (or back). */
+const toggle = (list: string[], v: string) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
+
+/** Scope: the component codes and types left out of every check. Band 1:
+ *  the model's component codes as pills (a press takes one out) | how many
+ *  elements leave. Band 2: the model's types | what is out, with counts. */
 export default function ScopeStep({
   uploadId,
   rules,
@@ -25,56 +28,46 @@ export default function ScopeStep({
   const [types, setTypes] = useState<string[]>(() => [...(rules.scope_types ?? [])]);
   const [typed, setTyped] = useState("");
   const [q, setQ] = useState("");
-  const preview = usePreview(uploadId, { ...rules, scope_components: comps, scope_types: types });
+  const previewRules = useMemo(() => ({ ...rules, scope_components: comps, scope_types: types }), [rules, comps, types]);
+  const preview = usePreview(uploadId, previewRules);
+  // The codes and types as the model has them, before anything is taken out.
+  const all = usePreview(uploadId, useMemo(() => ({ ...rules, scope_components: [], scope_types: [] }), [rules]));
 
-  const toggle = (list: string[], v: string) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
+  const out = [...comps, ...types];
+  useLiveAnswer("scope", out.join(", "), out.length === 0);
 
-  const seenComps = preview?.components ?? [];
+  const seenComps = all?.components ?? [];
   const extraComps = comps.filter((c) => !seenComps.some((s) => s.code === c));
+  const compN = new Map(seenComps.map((c) => [c.code, c.n]));
+  const allTypes = all?.types ?? [];
+  const typeN = new Map(allTypes.map((t) => [t.name, t.n]));
   const ql = q.trim().toLowerCase();
-  const allTypes = preview?.types ?? [];
-  const shownTypes = allTypes
-    .filter((t) => ql === "" || t.name.toLowerCase().includes(ql) || types.includes(t.name))
-    .sort((a, b) => Number(types.includes(b.name)) - Number(types.includes(a.name)));
+  const shownTypes = ql === "" ? allTypes : allTypes.filter((t) => t.name.toLowerCase().includes(ql));
+  const maxType = Math.max(1, ...allTypes.map((t) => t.n));
 
   return (
-    <>
-      <h1 className={STEP_TITLE}>Scope</h1>
-      <div className="flex flex-wrap gap-6">
-        <Figure
-          label="Utenfor scope"
-          value={preview ? `${fmt(preview.excluded)} / ${fmt(preview.products)}` : "–"}
-        />
-      </div>
+    <Canvas rows="auto auto minmax(0, 1fr)">
+      <StepBar>
+        <button type="button" className="primary" onClick={() => onUse({ scope_components: comps, scope_types: types })}>
+          Bruk
+        </button>
+      </StepBar>
 
-      <section className={"flex flex-col gap-3 " + PANEL}>
-        <span className={LABEL}>Komponentkode</span>
-        <div className="flex flex-wrap gap-1.5">
+      <section className="tile card major" aria-label="Komponentkode">
+        <span className="lbl">Komponentkode</span>
+        <div className="pills">
           {seenComps.map((c) => (
-            <button
-              key={c.code}
-              type="button"
-              aria-pressed={comps.includes(c.code)}
-              onClick={() => setComps((l) => toggle(l, c.code))}
-              className={PILL + " flex items-baseline gap-2"}
-            >
-              <span className={comps.includes(c.code) ? "line-through" : ""}>{c.code}</span>
-              <span className="text-[11px] tabular-nums opacity-70">{fmt(c.n)}</span>
+            <button key={c.code} type="button" className="pill" aria-pressed={comps.includes(c.code)} onClick={() => setComps((l) => toggle(l, c.code))}>
+              {c.code}
+              <span className="c">{fmt(c.n)}</span>
             </button>
           ))}
           {extraComps.map((c) => (
-            <button
-              key={c}
-              type="button"
-              aria-pressed
-              onClick={() => setComps((l) => toggle(l, c))}
-              className={PILL}
-            >
-              <span className="line-through">{c}</span>
+            <button key={c} type="button" className="pill" aria-pressed onClick={() => setComps((l) => toggle(l, c))}>
+              {c}
             </button>
           ))}
           <form
-            className="flex"
             onSubmit={(e) => {
               e.preventDefault();
               const v = typed.trim().toUpperCase();
@@ -82,57 +75,68 @@ export default function ScopeStep({
               setTyped("");
             }}
           >
-            <input
-              value={typed}
-              onChange={(e) => setTyped(e.target.value)}
-              aria-label="Komponentkode"
-              className={INPUT + " w-20 uppercase"}
-              maxLength={4}
-            />
+            <input className="field mono" value={typed} onChange={(e) => setTyped(e.target.value)} aria-label="Komponentkode" size={5} maxLength={4} style={{ height: 30, textTransform: "uppercase" }} />
           </form>
         </div>
       </section>
 
-      <section className={"flex flex-col gap-3 " + PANEL}>
-        <div className="flex flex-wrap items-center gap-3">
-          <span className={LABEL}>Type</span>
-          <input
-            type="search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Filter"
-            aria-label="Filter"
-            className={INPUT + " w-full max-w-sm"}
-          />
+      <section className="tile card minor ev" aria-label="Utenfor scope">
+        <div className="figs fill">
+          <div>
+            <span className="lbl">Utenfor scope</span>
+            <Fig n={preview ? preview.excluded : null} total={preview ? preview.products : null} />
+            <Meter n={preview?.excluded ?? 0} total={preview?.products ?? 0} />
+          </div>
+          <div>
+            <span className="lbl">I scope</span>
+            <Fig n={preview ? preview.in_scope : null} total={preview ? preview.products : null} />
+            <Meter n={preview?.in_scope ?? 0} total={preview?.products ?? 0} />
+          </div>
         </div>
-        <ul className="m-0 grid max-h-96 list-none grid-cols-1 gap-x-4 overflow-auto p-0 md:grid-cols-2">
-          {shownTypes.map((t) => {
-            const out = types.includes(t.name);
-            return (
-              <li key={t.name}>
-                <button
-                  type="button"
-                  aria-pressed={out}
-                  onClick={() => setTypes((l) => toggle(l, t.name))}
-                  className={
-                    "flex w-full items-baseline gap-3 border-b border-line px-2 py-1.5 text-left " +
-                    (out ? "bg-ink text-cream" : "text-ink hover:bg-input")
-                  }
-                >
-                  <span className={"min-w-0 flex-1 truncate text-[13px] " + (out ? "line-through" : "")} title={t.name}>
-                    {t.name}
-                  </span>
-                  <span className={"shrink-0 font-mono text-[12px] tabular-nums " + (out ? "text-cream" : "text-muted")}>
-                    {fmt(t.n)}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
       </section>
 
-      <StepConfirm onClick={() => onUse({ scope_components: comps, scope_types: types })} />
-    </>
+      <section className="tile card major tree" aria-label="Type">
+        <div className="top">
+          <span className="lbl">Type</span>
+          <input className="search" type="search" placeholder="Søk" aria-label="Søk" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+        <div className="scroll">
+          {shownTypes.map((t) => (
+            <button key={t.name} type="button" className="typerow pick rule" aria-pressed={types.includes(t.name)} onClick={() => setTypes((l) => toggle(l, t.name))}>
+              <span className="tnm ell" title={t.name}>
+                {t.name}
+              </span>
+              <span className="num">{fmt(t.n)}</span>
+              <Bar10 n={t.n} max={maxType} />
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="tile card minor vals" aria-label="Valgt">
+        <div className="lh">
+          <span className="lbl">Valgt</span>
+          <span className="lbl num">{out.length}</span>
+        </div>
+        <div className="scroll">
+          {comps.map((c) => (
+            <button key={`c:${c}`} type="button" className="lrow outrow rule pick" onClick={() => setComps((l) => toggle(l, c))}>
+              <span className="mono ell">{c}</span>
+              <span className="num sub">{compN.has(c) ? fmt(compN.get(c) ?? 0) : "–"}</span>
+              <span aria-hidden="true">✕</span>
+            </button>
+          ))}
+          {types.map((t) => (
+            <button key={`t:${t}`} type="button" className="lrow outrow rule pick" onClick={() => setTypes((l) => toggle(l, t))}>
+              <span className="ell" title={t}>
+                {t}
+              </span>
+              <span className="num sub">{typeN.has(t) ? fmt(typeN.get(t) ?? 0) : "–"}</span>
+              <span aria-hidden="true">✕</span>
+            </button>
+          ))}
+        </div>
+      </section>
+    </Canvas>
   );
 }
