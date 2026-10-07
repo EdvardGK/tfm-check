@@ -19,6 +19,8 @@ from __future__ import annotations
 import re
 from collections import Counter
 
+import ifcopenshell.util.unit
+
 from .rules import TFMRules, loose_component
 
 # The Statsbygg standard source (PA 0802 / NOSSB property sets).
@@ -115,6 +117,11 @@ class ModelIndex:
                     for o in inherit:
                         d.setdefault(o, v)
 
+        # Storey elevations in metres, whatever the model's length unit.
+        try:
+            scale = float(ifcopenshell.util.unit.calculate_unit_scale(ifc))
+        except Exception:
+            scale = 1.0
         self.storeys: list[dict] = []
         for s in ifc.by_type("IfcBuildingStorey"):
             n = 0
@@ -123,7 +130,7 @@ class ModelIndex:
             elev = s.Elevation
             self.storeys.append({
                 "name": s.Name or "",
-                "elevation": float(elev) if elev is not None else None,
+                "elevation": float(elev) * scale if elev is not None else None,
                 "n": n,
             })
 
