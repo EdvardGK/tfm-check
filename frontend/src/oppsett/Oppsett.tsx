@@ -66,8 +66,9 @@ function committedAnswer(s: WalkStep | "end", rules: RulesDict | null, inv: Inve
     case "etasjer":
       return schemeAnswer(rules.floor_style ?? "");
     case "scope": {
-      const out = [...(rules.scope_components ?? []), ...(rules.scope_types ?? [])];
-      return out.length ? { answer: out.join(", "), standard: false } : { answer: "", standard: true };
+      const inc = (rules.scope_include ?? []).length;
+      const exc = (rules.scope_exclude ?? []).length + (rules.scope_components?.length ? 1 : 0) + (rules.scope_types?.length ? 1 : 0);
+      return inc + exc ? { answer: `${inc} / ${exc}`, standard: false } : { answer: "", standard: true };
     }
     case "status":
       return {
@@ -162,7 +163,9 @@ export default function Oppsett({
     const r = JSON.parse(prefetchKey) as RulesDict;
     const uid = upload.upload_id;
     const t = window.setTimeout(() => {
-      void getPreview(uid, { ...r, scope_components: [], scope_types: [] }).catch(() => undefined);
+      void getPreview(uid, { ...r, scope_components: [], scope_types: [], scope_include: [], scope_exclude: [] }).catch(
+        () => undefined,
+      );
       if (r.status_location) void getValues(uid, r.status_location).catch(() => undefined);
       // Status pre-picks the model's suggestion when the standard is missing.
       const cand = inv?.roles.status.candidates[0]?.location;

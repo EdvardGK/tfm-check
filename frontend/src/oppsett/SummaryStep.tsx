@@ -26,7 +26,9 @@ export function summaryRows(
   preview: Preview | null,
 ): Row[] {
   const coded = Object.values(rules.storey_codes ?? {}).filter((c) => c.trim() !== "").length;
-  const scope = [...(rules.scope_components ?? []), ...(rules.scope_types ?? [])];
+  const nInc = (rules.scope_include ?? []).length;
+  const nExc = (rules.scope_exclude ?? []).length + (rules.scope_components?.length ? 1 : 0) + (rules.scope_types?.length ? 1 : 0);
+  const scope = nInc + nExc ? [`${nInc} / ${nExc}`] : [];
   const scheme = schemeAnswer(rules.floor_style ?? "");
   return [
     { step: "ifc", text: fileName, result: inv ? { verdict: "na", figure: `${fmt(inv.products)}` } : null, standard: false },

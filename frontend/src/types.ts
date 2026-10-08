@@ -33,6 +33,21 @@ export interface RulesDict {
   part_links?: Record<string, string>;
   /** A project's own name per part key ({"sloyfe": "Sløyfe"}). */
   part_labels?: Record<string, string>;
+  /** Scope as rules: in when any include rule matches (none: all) and no
+   *  exclude rule does. */
+  scope_include?: ScopeRule[];
+  scope_exclude?: ScopeRule[];
+}
+
+export interface ScopeSource {
+  kind: "all" | "class" | "type" | "systemkode" | "komponentkode" | "mmi" | "prop";
+  loc?: Location;
+}
+
+export interface ScopeRule {
+  source: ScopeSource;
+  op: "er" | "starter" | "regex";
+  values: string[];
 }
 
 export type PartRule =

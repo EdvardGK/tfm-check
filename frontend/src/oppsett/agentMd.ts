@@ -44,7 +44,7 @@ A ruleset for TFM-sjekk (test.tfm-sjekk.skiplum.com / skiplum.com). It says, per
   A linked segment must be a real entry: not missing, not reserved, not «bør ikke benyttes».
 - Segment standard forms when no rule is set: lokasjon 6 characters, systemkode 3 digits, lopenummer 3, komponent 2 capitals, kompnr 3, subnr 1-4, rom 1-5, etasje 1-12 characters, typeflag optional "T", omrade 1-2, linje 1-2, sloyfe 2, adresse 3, typekode 1-3 capitals, typenr 3, instansnr 2.
 - "floor_style": "statsbygg" (00U, 01, 02M ...) | "u" (U1, 01, M ...) | "custom". "storey_codes": {"<IfcBuildingStorey name>": "<code>"}; "floor_codes": the accepted floor codes; "storey_manual": storeys whose code was typed.
-- "scope_components": component codes left out of every check; "scope_types": type names left out.
+- Scope: "scope_include" and "scope_exclude", lists of {"source": {"kind": "all"|"class"|"type"|"systemkode"|"komponentkode"|"mmi"|"prop", "loc": <loc> for prop}, "op": "er"|"starter"|"regex", "values": [...]}. An object is in scope when it matches any include rule (no include rules: every object) and no exclude rule. Older "scope_components" (component codes) and "scope_types" (type names) still read as exclude rules.
 - "project_name": free text for reports.
 
 ## Worked example (HI90 RIV, code composed from three properties, PA 0802 with a two-character location)

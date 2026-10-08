@@ -1,4 +1,6 @@
-import type { CheckResponse, Inventory, Location, Preset, Preview, Rollup, RulesDict, SourceValues, UploadResponse } from "./types";
+import type {
+  CheckResponse, Inventory, Location, Preset, Preview, Rollup, RulesDict, ScopeSource, SourceValues, UploadResponse,
+} from "./types";
 
 async function jsonOrThrow<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -153,6 +155,23 @@ export function getPreview(uploadId: string, rules: RulesDict): Promise<Preview>
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ upload_id: uploadId, rules }),
+      }),
+    ),
+  );
+}
+
+/** A scope rule's source: the model's values with counts. */
+export function getScopeValues(
+  uploadId: string,
+  rules: RulesDict,
+  source: ScopeSource,
+): Promise<{ values: { v: string; n: number }[] }> {
+  return cached("values", uploadId, { rules, source }, async () =>
+    jsonOrThrow<{ values: { v: string; n: number }[] }>(
+      await fetch("/api/scope_values", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ upload_id: uploadId, rules, source }),
       }),
     ),
   );
