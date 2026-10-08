@@ -58,7 +58,7 @@ def test_diagnose(code, ok, fix):
 
 def test_diagnose_reasons_name_the_segment():
     r = statsbygg(part_digits={"lokasjon": 2})
-    assert diagnose("+04=360.001-KRA.016", r).reason.startswith("Komponent «KRA», skal være 2 bokstaver")
+    assert diagnose("+04=360.001-KRA.016", r).reason.startswith("Komponentkode «KRA», skal være 2 bokstaver")
     assert diagnose("+04-SQ.001T", r).reason == "mangler «=» Systemkode"
     assert "6 tegn" in diagnose("+04=360.001", statsbygg()).reason
 

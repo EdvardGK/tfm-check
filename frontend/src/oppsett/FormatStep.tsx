@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState, type DragEvent, type ReactNode }
 import { getPreview } from "../api";
 import {
   DISCIPLINES, FREETEXT_COLOR, FREETEXT_PREFIX, PART_COLORS, PART_EXAMPLE, PART_TO_DIGITKEY, PART_TYPES, SEP_KEYS,
-  SEP_TO_CHAR, freetextValue, isFreetext, sequenceToExample, type Palette,
+  SEP_TO_CHAR, freetextValue, isFreetext, partLabel, sequenceToExample, type Palette,
 } from "../constants";
 import type { PartRule, Preset, RulesDict } from "../types";
 import { Canvas, RailOptions, RailSection, RailTile, StepBar } from "./Shell";
@@ -151,7 +151,7 @@ function PartRow({
   return (
     <div className="prow rule">
       <span className="sw" style={paint(PART_COLORS[part] ?? FREETEXT_COLOR)}>
-        {part}
+        {partLabel(part)}
       </span>
       <span className="pr">
         <select className="field" aria-label={`${part} regel`} value={shown} onChange={(e) => onMode(e.target.value)}>
@@ -241,6 +241,9 @@ export default function FormatStep({
   const [drag, setDrag] = useState<Drag | null>(null);
   const [drop, setDrop] = useState<Drop>(null);
   const [formKey, setFormKey] = useState(0);
+  // The gap whose «+» bubble is open (its blocks to pick from).
+  const [picker, setPicker] = useState<{ pi: number; at: number } | null>(null);
+  const [popText, setPopText] = useState("");
   const touched = useRef(false);
 
   const edit = (f: (d: FormatDraft) => FormatDraft) => {
@@ -321,9 +324,14 @@ export default function FormatStep({
     if (to < 0 || to >= draft.patterns[sel.pi].sequence.length) return;
     place(sel, sel.pi, by > 0 ? to + 1 : to);
   };
-  const addPattern = () => {
-    setPatterns((ps) => [...ps, ["Systemkode", "-", "Komponent"]]);
+  /** A new, empty variant at `at` (between rows or after the last). */
+  const addPatternAt = (at: number) => {
+    setPatterns((ps) => {
+      ps.splice(at, 0, []);
+      return ps;
+    });
     setSel(null);
+    setPicker({ pi: at, at: 0 });
   };
   const dropPattern = (pi: number) => {
     setPatterns((ps) => ps.filter((_, i) => i !== pi));
@@ -346,6 +354,13 @@ export default function FormatStep({
     e.preventDefault();
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const at = e.clientX < r.left + r.width / 2 ? ti : ti + 1;
+    if (drop?.pi !== pi || drop.at !== at) setDrop({ pi, at });
+  };
+  /** Over a gap bubble: the block lands exactly there. */
+  const overGap = (pi: number, at: number) => (e: DragEvent) => {
+    if (!drag) return;
+    e.preventDefault();
+    e.stopPropagation();
     if (drop?.pi !== pi || drop.at !== at) setDrop({ pi, at });
   };
   const overEnd = (pi: number) => (e: DragEvent) => {
@@ -391,9 +406,113 @@ export default function FormatStep({
     const ex = own?.kind === "value" ? own.value : own?.kind === "list" ? own.values[0] : (PART_EXAMPLE[t] ?? t);
     return (
       <button key={ti} type="button" className="seg" aria-pressed={pressed} onClick={onClick} style={paint(c)} {...dnd}>
-        <span className="sn">{free ? "Tekst" : digits ? `${t} · ${digits}` : t}</span>
+        <span className="sn">{free ? "Tekst" : digits ? `${partLabel(t)} · ${digits}` : partLabel(t)}</span>
         <span className="sx">{free ? freetextValue(t) || "–" : ex}</span>
       </button>
+    );
+  };
+
+  const closePicker = () => {
+    const pk = picker;
+    setPopText("");
+    setPicker(null);
+    // A variant opened for its first block and left empty goes again.
+    if (pk && (draft.patterns[pk.pi]?.sequence.length ?? 0) === 0 && draft.patterns.length > 1) {
+      setPatterns((ps) => ps.filter((_, i) => i !== pk.pi));
+    }
+  };
+  const closeRef = useRef(closePicker);
+  closeRef.current = closePicker;
+  useEffect(() => {
+    if (!picker) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (!t?.closest(".gap[data-open]")) closeRef.current();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeRef.current();
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [picker]);
+  const choose = (token: string, pi: number, at: number) => {
+    place({ token }, pi, at);
+    setPopText("");
+    setPicker(null);
+  };
+
+  /** A gap in a row (before a segment, or at the end): a small «+» bubble
+   *  that opens the blocks to put there, and a drop target for a dragged
+   *  block. */
+  const gap = (pi: number, at: number) => {
+    const open = picker?.pi === pi && picker.at === at;
+    const over = drag !== null && drop?.pi === pi && drop.at === at;
+    return (
+      <span className="gap" data-open={open || undefined} data-over={over || undefined} onDragOver={overGap(pi, at)} onDrop={onDrop}>
+        <button
+          type="button"
+          className="bub"
+          aria-label="Sett inn"
+          title="Sett inn"
+          aria-expanded={open}
+          onClick={() => (open ? closePicker() : setPicker({ pi, at }))}
+        >
+          +
+        </button>
+        {open ? (
+          <span className="pop" role="dialog" aria-label="Sett inn">
+            <span className="popbar">
+              <button type="button" className="mini" aria-label="Lukk" onClick={closePicker}>
+                ✕
+              </button>
+            </span>
+            <span className="palette">
+              {PART_TYPES.map((t, k) => (
+                <button
+                  key={t}
+                  type="button"
+                  className="mini"
+                  style={paint(PART_COLORS[t])}
+                  autoFocus={k === 0}
+                  onClick={() => choose(t, pi, at)}
+                >
+                  {partLabel(t)}
+                </button>
+              ))}
+            </span>
+            <span className="lbl">Deletegn</span>
+            <span className="palette">
+              {SEP_KEYS.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  className="mini mono"
+                  title={k}
+                  onClick={() => choose(k, pi, at)}
+                >
+                  {SEP_TO_CHAR[k] === " " ? "␣" : SEP_TO_CHAR[k]}
+                </button>
+              ))}
+            </span>
+            <form
+              className="palette"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (popText) choose(FREETEXT_PREFIX + popText, pi, at);
+              }}
+            >
+              <input className="field mono" value={popText} onChange={(e) => setPopText(e.target.value)} aria-label="Tekst" size={8} />
+              <button type="submit" className="mini" disabled={!popText}>
+                + Tekst
+              </button>
+            </form>
+          </span>
+        ) : null}
+      </span>
     );
   };
 
@@ -416,7 +535,12 @@ export default function FormatStep({
   return (
     <Canvas rows="auto minmax(0, 1fr) auto">
       <StepBar>
-        <button type="button" className="primary" disabled={!hasPattern} onClick={() => onUse(draft)}>
+        <button
+          type="button"
+          className="primary"
+          disabled={!hasPattern}
+          onClick={() => onUse({ ...draft, patterns: draft.patterns.filter((x) => x.sequence.length > 0) })}
+        >
           Bruk
         </button>
       </StepBar>
@@ -460,30 +584,44 @@ export default function FormatStep({
           <span className="lbl">{BUILT_STRING}</span>
           <span className="tag">{current ? current.label : "Egendefinert"}</span>
         </div>
-        <div className="pats scroll">
+        <div className="pats scroll" data-dragging={drag !== null || undefined}>
           {draft.patterns.map((p, pi) => (
             <Fragment key={pi}>
               {pi > 0 ? (
-                <div className="orrow" aria-hidden="true">
+                <div className="orrow">
                   <span className="lbl">eller</span>
+                  <button type="button" className="bub" aria-label="Ny variant" title="Ny variant" onClick={() => addPatternAt(pi)}>
+                    +
+                  </button>
                 </div>
               ) : null}
               <div className="pat" onDragOver={overEnd(pi)} onDrop={onDrop}>
-                {p.sequence.map((t, ti) => segment(t, pi, ti))}
-                {drag && drop?.pi === pi && drop.at === p.sequence.length ? <span className="dropmark" /> : null}
+                {p.sequence.map((t, ti) => (
+                  <Fragment key={ti}>
+                    {gap(pi, ti)}
+                    {segment(t, pi, ti)}
+                  </Fragment>
+                ))}
+                {gap(pi, p.sequence.length)}
                 {draft.patterns.length > 1 ? (
-                  <button type="button" className="seg add" aria-label="Fjern mønster" title="Fjern mønster" onClick={() => dropPattern(pi)}>
+                  <button type="button" className="rowdel" aria-label="Fjern variant" title="Fjern variant" onClick={() => dropPattern(pi)}>
                     ✕
-                  </button>
-                ) : null}
-                {pi === draft.patterns.length - 1 ? (
-                  <button type="button" className="seg add" aria-label="Nytt mønster" title="Nytt mønster" onClick={addPattern}>
-                    +
                   </button>
                 ) : null}
               </div>
             </Fragment>
           ))}
+          <div className="orrow end">
+            <button
+              type="button"
+              className="bub"
+              aria-label="Ny variant"
+              title="Ny variant"
+              onClick={() => addPatternAt(draft.patterns.length)}
+            >
+              +
+            </button>
+          </div>
         </div>
         <div className="segtools">
           <button type="button" className="mini" disabled={!sel || sel.ti === 0} onClick={() => move(-1)} aria-label="Flytt til venstre">
@@ -515,7 +653,8 @@ export default function FormatStep({
 
       <section className="tile card full blocks" aria-label={BUILDING_BLOCKS}>
         <span className="lbl">{BUILDING_BLOCKS}</span>
-        <div className="palette">{PART_TYPES.map((t) => piece(t, `+ ${t}`, paint(PART_COLORS[t])))}</div>
+        <div className="palette">{PART_TYPES.map((t) => piece(t, `+ ${partLabel(t)}`, paint(PART_COLORS[t])))}</div>
+        <span className="lbl">Deletegn</span>
         <div className="palette">
           {SEP_KEYS.map((k) => piece(k, SEP_TO_CHAR[k] === " " ? "␣" : SEP_TO_CHAR[k], undefined, "mini mono"))}
           <form

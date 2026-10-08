@@ -36,7 +36,7 @@ export const PART_STANDARD: Record<Aspect, Location> = {
 /** The MMI (status) code's standard source (NS 8360-1 / POFIN). */
 export const STATUS_STANDARD: Location = ["pset", "NONS_Process", "ProcessStatus"];
 
-export const ASPECT_NAME: Record<Aspect, string> = { lokasjon: "Lokasjon", system: "System", komponent: "Komponent" };
+export const ASPECT_NAME: Record<Aspect, string> = { lokasjon: "Lokasjonskode", system: "System", komponent: "Komponentkode" };
 export const ASPECT_SIGN: Record<Aspect, string> = { lokasjon: "+", system: "=", komponent: "-" };
 
 /** Statsbygg PA 0802 rev.3: +Lokasjon=Systemkode.Løpenummer-KomponentKomp.nr */

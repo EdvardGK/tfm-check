@@ -382,3 +382,34 @@
 #oppsett .built .seg.sep .sx { font-size: 20px; }
 #oppsett .blocks { gap: 10px; }
 #oppsett .blocks .palette .mini { height: 32px; padding: 0 12px; font-size: 13px; }
+
+/* ── Format: «+» bubbles in the gaps (insert a block / a variant) ── */
+#oppsett .built .pat { align-items: center; position: relative; padding-right: 30px; }
+#oppsett .gap { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 14px; align-self: stretch; }
+#oppsett .bub {
+  width: 20px; height: 20px; border: 0; border-radius: 50%; padding: 0; cursor: pointer; font-size: 14px; font-weight: 700; line-height: 20px;
+  background: var(--color-panel); color: var(--d-label-color); box-shadow: 0 0 0 1px var(--d-ring), var(--d-key-shadow);
+  opacity: 0; transition: opacity 120ms var(--d-ease), transform 120ms var(--d-ease); z-index: 2;
+}
+#oppsett .gap:hover .bub, #oppsett .gap:focus-within .bub, #oppsett .gap[data-open] .bub, #oppsett .gap[data-over] .bub,
+#oppsett .pats[data-dragging] .bub, #oppsett .orrow .bub:focus-visible, #oppsett .orrow:hover .bub { opacity: 1; }
+#oppsett .gap[data-over] .bub, #oppsett .bub:hover { background: var(--sel); color: var(--color-cream); transform: scale(1.15); }
+#oppsett .orrow .bub { opacity: .55; }
+#oppsett .orrow.end { justify-content: flex-start; padding-left: 2px; }
+#oppsett .orrow.end::before, #oppsett .orrow.end::after { display: none; }
+#oppsett .pop {
+  position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-12px); z-index: 20; width: 340px;
+  display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 12px;
+  background: var(--color-panel); box-shadow: 0 0 0 1px var(--d-ring), 0 12px 32px -8px rgba(var(--d-shade), .35);
+}
+#oppsett .pop .popbar { display: flex; justify-content: flex-end; }
+#oppsett .rowdel {
+  position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; border: 0; border-radius: 50%; padding: 0;
+  cursor: pointer; font-size: 11px; background: var(--color-panel); color: var(--d-label-color); box-shadow: 0 0 0 1px var(--d-ring);
+  opacity: 0; transition: opacity 120ms var(--d-ease);
+}
+#oppsett .pat:hover .rowdel, #oppsett .rowdel:focus-visible { opacity: 1; }
+#oppsett .rowdel:hover { background: var(--color-bad); color: var(--color-cream); }
+@media (hover: none) {
+  #oppsett .bub, #oppsett .rowdel { opacity: 1; }
+}

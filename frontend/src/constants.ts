@@ -12,6 +12,10 @@ export const PART_TYPES = [
 ] as const;
 export type PartType = (typeof PART_TYPES)[number];
 
+/** A part's name in the UI; the token (the ruleset key) stays as it is. */
+export const PART_LABEL: Record<string, string> = { Lokasjon: "Lokasjonskode", Komponent: "Komponentkode" };
+export const partLabel = (t: string): string => PART_LABEL[t] ?? t;
+
 // Separator key → rendered character
 export const SEP_TO_CHAR: Record<string, string> = {
   "+": "+", ".": ".", "-": "-", "_": "_", "/": "/",

@@ -25,7 +25,9 @@ from .constants import (
 from .rules import TFMRules
 
 # Template part name (lokasjon) -> the part's display name (Lokasjon).
-PART_NAME = {PLACEHOLDER_RE.search(t).group(1): p for p, t in PART_TO_TEMPLATE.items()}
+# A part's display name: the token, except where the UI says it longer.
+PART_LABEL = {"Lokasjon": "Lokasjonskode", "Komponent": "Komponentkode"}
+PART_NAME = {PLACEHOLDER_RE.search(t).group(1): PART_LABEL.get(p, p) for p, t in PART_TO_TEMPLATE.items()}
 
 SEP_CHARS = ".-_/ =+%"
 _SEP_CLASS = "[" + re.escape(SEP_CHARS) + "]"

@@ -65,7 +65,7 @@ def test_part_rule_value():
     r = rules(part_rules={"lokasjon": {"kind": "value", "value": "02"}})
     assert diagnose("+02=361.001", r).ok
     d = diagnose("+04=361.001", r)
-    assert not d.ok and "Lokasjon «04», skal være «02»" in d.reason
+    assert not d.ok and "Lokasjonskode «04», skal være «02»" in d.reason
 
 
 def test_part_rule_list():
