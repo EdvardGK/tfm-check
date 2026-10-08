@@ -295,3 +295,22 @@
 @media (prefers-reduced-motion: reduce) {
   #oppsett * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+/* ── Kilde «Fra deler» and Status: one row per aspect ── */
+#oppsett .slots { display: flex; flex-direction: column; }
+#oppsett .slot { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; min-height: 36px; }
+#oppsett .std .slot { grid-template-columns: 18px 84px minmax(0, 1fr) auto 18px; column-gap: 10px; }
+#oppsett .slotpick { display: grid; grid-template-columns: 18px 84px minmax(0, 1fr) auto; column-gap: 10px; align-items: center; min-height: 36px; padding: 0 6px; border: 0; background: transparent; text-align: left; cursor: pointer; min-width: 0; }
+#oppsett .slot .sg { font-family: var(--font-mono); font-size: 16px; font-weight: 700; text-align: center; }
+#oppsett .slot .sn { font-weight: 600; }
+#oppsett .slot .ss { font-family: var(--font-mono); font-size: 12.5px; }
+#oppsett .phases { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+#oppsett .phases > div { display: flex; flex-direction: column; gap: 4px; border-radius: 8px; padding: 6px 8px; }
+#oppsett .ph { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+#oppsett .ph[data-ph="ny"] { background: #FAF050; color: #16130f; }
+#oppsett .ph[data-ph="bevares"] { background: #D9A633; color: #16130f; }
+#oppsett .ph[data-ph="ombruk"] { background: #66E6B3; color: #16130f; }
+#oppsett .ph[data-ph="rives"] { background: #803366; color: #ffffff; }
+#oppsett .offrow { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: start; gap: 8px; padding: 6px 0; }
+#oppsett .offrow .why { font-size: 11.5px; color: var(--d-label-color); overflow-wrap: anywhere; }
+#oppsett .offrow .fix { font-family: var(--font-mono); font-size: 12px; color: var(--color-green); overflow-wrap: anywhere; }

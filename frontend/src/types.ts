@@ -20,7 +20,18 @@ export interface RulesDict {
   /** Scope: component codes and type names left out of every check. */
   scope_components?: string[];
   scope_types?: string[];
+  /** Kilde: the whole code in tfm_location, or composed from the aspects'
+   *  sources (+lokasjon =system -komponent). */
+  tfm_mode?: TfmMode;
+  tfm_parts?: Partial<Record<Aspect, Location>>;
+  /** Status: the source of the element's MMI code. */
+  status_location?: Location | null;
 }
+
+export type TfmMode = "whole" | "parts";
+export const ASPECTS = ["lokasjon", "system", "komponent"] as const;
+export type Aspect = (typeof ASPECTS)[number];
+export type Role = Aspect | "status";
 
 export interface Preset {
   id: string;
@@ -137,8 +148,32 @@ export interface Inventory {
   standard: { location: Location; n: number };
   sets: InventorySet[];
   attributes: InventoryProp[];
-  candidates: { location: Location; n: number; matched: number }[];
+  candidates: Candidate[];
+  roles: Record<Role, { standard: { location: Location; n: number }; candidates: Candidate[] }>;
   storeys: InventoryStorey[];
+}
+
+export interface Candidate {
+  location: Location;
+  n: number;
+  matched: number;
+}
+
+export type Phase = "ny" | "bevares" | "ombruk" | "rives" | "";
+
+/** One source's values (POST /api/values). */
+export interface SourceValues {
+  products: number;
+  valued: number;
+  distinct: number;
+  values: (ValueCount & { phase: Phase })[];
+  phases: Record<Phase, number>;
+}
+
+/** A value off the form: why, and the mechanical fix when there is one. */
+export interface OffValue extends ValueCount {
+  reason: string;
+  fix: string;
 }
 
 /** A source's value: whether it takes the form, whether it is shaped like
@@ -157,7 +192,7 @@ export interface Preview {
   countable: boolean;
   valued: number;
   matched: number;
-  off: ValueCount[];
+  off: OffValue[];
   off_distinct: number;
   distinct: number;
   values: PreviewValue[];

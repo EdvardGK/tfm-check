@@ -3,8 +3,8 @@ import type { Inventory, Preview, RulesDict, UploadResponse } from "../types";
 import { Canvas, Lamp, StepBar } from "./Shell";
 import { schemeAnswer } from "./EtasjerStep";
 import {
-  STEP_NAME, download, floorResult, fmt, formatResult, isStandardFormat, isStandardSource, locationText, setupFileName,
-  setupJson, sourceResult, type Base, type StepResult, type WalkStep,
+  STATUS_STANDARD, STEP_NAME, floorResult, fmt, formatResult, isStandardFormat, isStandardSource, locationText,
+  sameLocation, sourceResult, sourceText, statusResult, type StepResult, type WalkStep,
 } from "./setup";
 
 interface Row {
@@ -20,7 +20,7 @@ export function summaryRows(inv: Inventory, upload: UploadResponse, rules: Rules
   const scheme = schemeAnswer(rules.floor_style ?? "");
   return [
     { step: "ifc", text: upload.file_name, result: { verdict: "na", figure: `${fmt(inv.products)}` }, standard: false },
-    { step: "kilde", text: locationText(rules.tfm_location), result: sourceResult(inv, rules), standard: isStandardSource(rules) },
+    { step: "kilde", text: sourceText(rules), result: sourceResult(inv, rules, preview), standard: isStandardSource(rules) },
     {
       step: "format",
       text: rules.patterns.map((p) => sequenceToExample(p.sequence)).join("  |  "),
@@ -39,6 +39,12 @@ export function summaryRows(inv: Inventory, upload: UploadResponse, rules: Rules
       result: preview ? { verdict: "na", figure: `${fmt(preview.excluded)} / ${fmt(preview.products)}` } : null,
       standard: scope.length === 0,
     },
+    {
+      step: "status",
+      text: rules.status_location ? locationText(rules.status_location) : "–",
+      result: statusResult(inv, rules),
+      standard: sameLocation(rules.status_location ?? undefined, STATUS_STANDARD),
+    },
   ];
 }
 
@@ -50,9 +56,11 @@ export default function SummaryStep({
   inv,
   upload,
   rules,
-  base,
   preview,
   checking,
+  registering,
+  onSave,
+  onRegister,
   onRow,
   onReview,
   onAccept,
@@ -61,9 +69,11 @@ export default function SummaryStep({
   inv: Inventory;
   upload: UploadResponse;
   rules: RulesDict;
-  base: Base;
   preview: Preview | null;
   checking: boolean;
+  registering: boolean;
+  onSave: () => void;
+  onRegister: () => void;
   onRow: (s: WalkStep) => void;
   onReview: () => void;
   onAccept: () => void;
@@ -75,8 +85,11 @@ export default function SummaryStep({
   return (
     <Canvas rows="auto auto minmax(0, 1fr)">
       <StepBar>
-        <button type="button" className="key" onClick={() => download(setupFileName(rules, upload), setupJson(base, rules))}>
+        <button type="button" className="key" onClick={onSave}>
           Lagre oppsett
+        </button>
+        <button type="button" className="key" disabled={registering} onClick={onRegister}>
+          {registering ? "Lager register …" : "Register"}
         </button>
         <button type="button" className={failing ? "primary" : "key"} onClick={onReview}>
           Gjennomgå

@@ -72,6 +72,7 @@ export const DISCIPLINES: { key: string; label: string }[] = [
   { key: "RIB", label: "RIB — Bygg" },
   { key: "ARK", label: "ARK — Arkitekt" },
   { key: "RIBR", label: "RIBR — Brann" },
+  { key: "RIA", label: "RIA — Automasjon" },
   { key: "Annet", label: "Annet / ukjent" },
 ];
 
@@ -85,6 +86,7 @@ export const DIGIT_LOCKABLE: { key: string; label: string }[] = [
 
 // Map a part-type token to its internal digit-lock key (for part_digits).
 export const PART_TO_DIGITKEY: Record<string, string> = {
+  Lokasjon: "lokasjon",
   Etasje: "etasje", Subnr: "subnr", Løpenummer: "lopenummer",
   "Komp.nr": "kompnr", Rom: "rom",
 };

@@ -10,7 +10,7 @@
  *  returns to the summary. «Forrige» goes back along the path taken. */
 
 import { useRef, useState, type DragEvent } from "react";
-import { getInventory, uploadIfc } from "../api";
+import { downloadRegister, getInventory, uploadIfc } from "../api";
 import { sequenceToExample } from "../constants";
 import type { Inventory, Preset, RulesDict, UploadResponse } from "../types";
 import "./oppsett.css";
@@ -22,11 +22,13 @@ import KildeStep from "./KildeStep";
 import FormatStep from "./FormatStep";
 import EtasjerStep, { schemeAnswer } from "./EtasjerStep";
 import ScopeStep from "./ScopeStep";
+import StatusStep from "./StatusStep";
 import SummaryStep from "./SummaryStep";
 import { usePreview } from "./usePreview";
 import {
-  STEP_NAME, WALK, floorResult, fmt, formatResult, isStandardFormat, isStandardSource, locationText, parseSetup,
-  sourceResult, statsbyggRules, withStatsbyggFloors, type Base, type SetupFile, type Step, type WalkStep,
+  STATUS_STANDARD, STEP_NAME, WALK, download, floorResult, fmt, formatResult, isStandardFormat, isStandardSource,
+  locationText, parseSetup, rulesFor, sameLocation, setupFileName, setupJson, sourceResult, sourceText, statsbyggRules,
+  statusResult, storeSetup, withFag, withStatsbyggFloors, type Base, type SetupFile, type Step, type WalkStep,
 } from "./setup";
 
 /** The rail's steps, numbered. */
@@ -52,7 +54,7 @@ function committedAnswer(s: WalkStep | "end", rules: RulesDict | null, inv: Inve
     case "ifc":
       return { answer: inv ? `${fmt(inv.products)} elementer` : "", standard: false };
     case "kilde":
-      return { answer: locationText(rules.tfm_location), standard: isStandardSource(rules) };
+      return { answer: sourceText(rules), standard: isStandardSource(rules) };
     case "format":
       return isStandardFormat(rules)
         ? { answer: "", standard: true }
@@ -63,6 +65,11 @@ function committedAnswer(s: WalkStep | "end", rules: RulesDict | null, inv: Inve
       const out = [...(rules.scope_components ?? []), ...(rules.scope_types ?? [])];
       return out.length ? { answer: out.join(", "), standard: false } : { answer: "", standard: true };
     }
+    case "status":
+      return {
+        answer: rules.status_location ? locationText(rules.status_location) : "",
+        standard: sameLocation(rules.status_location ?? undefined, STATUS_STANDARD),
+      };
     default:
       return { answer: "", standard: false };
   }
@@ -70,12 +77,18 @@ function committedAnswer(s: WalkStep | "end", rules: RulesDict | null, inv: Inve
 
 export default function Oppsett({
   presets,
+  stored,
+  onStored,
   checking,
   error,
   onError,
   onAccept,
 }: {
   presets: Preset[];
+  /** The setup kept in this browser: its rules for the model's discipline
+   *  are pinned as «Regelsett» on the mapping steps. */
+  stored: SetupFile | null;
+  onStored: (file: SetupFile) => void;
   checking: boolean;
   error: string | null;
   onError: (msg: string | null) => void;
@@ -89,7 +102,10 @@ export default function Oppsett({
   const [visit, setVisit] = useState(0);
   const [base, setBase] = useState<Base | null>(null);
   const [rules, setRules] = useState<RulesDict | null>(null);
-  const [saved, setSaved] = useState<SetupFile | null>(null);
+  const [saved, setSaved] = useState<SetupFile | null>(stored);
+  // The rules came from an opened setup (applied on load), not only pinned.
+  const [opened, setOpened] = useState(false);
+  const [registering, setRegistering] = useState(false);
   const [confirmed, setConfirmed] = useState<ReadonlySet<WalkStep>>(new Set());
   const [upload, setUpload] = useState<UploadResponse | null>(null);
   const [inv, setInv] = useState<Inventory | null>(null);
@@ -103,6 +119,8 @@ export default function Oppsett({
   const [slot, setSlot] = useState<HTMLElement | null>(null);
 
   const loaded = upload !== null && inv !== null;
+  const fag = upload?.detected_discipline ?? null;
+  const savedRules = rulesFor(saved, fag);
   const preview = usePreview(loaded ? upload.upload_id : null, rules);
 
   const go = (s: Step) => {
@@ -125,11 +143,14 @@ export default function Oppsett({
   const begin = (b: Base, r: RulesDict, file: SetupFile | null) => {
     onError(null);
     setBase(b);
-    setSaved(file);
+    if (file) setSaved(file);
+    setOpened(file !== null);
     setConfirmed(new Set());
     setDetour(false);
     const statsbygg = b === "statsbygg" && !file;
-    setRules(loaded && inv && statsbygg ? withStatsbyggFloors(r, inv) : r);
+    const fromFile = file ? rulesFor(file, fag) : null;
+    const start = fromFile ?? r;
+    setRules(loaded && inv && statsbygg ? withStatsbyggFloors(start, inv) : start);
     go(loaded ? (statsbygg ? "end" : "kilde") : "ifc");
   };
 
@@ -137,7 +158,7 @@ export default function Oppsett({
     f.text()
       .then((text) => {
         const s = parseSetup(text);
-        begin(s.base, s.rules, s);
+        begin(s.base, rulesFor(s, fag) ?? statsbyggRules(fag), s);
       })
       .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
   };
@@ -159,8 +180,10 @@ export default function Oppsett({
       const inventory = await getInventory(up.upload_id);
       setUpload(up);
       setInv(inventory);
-      const statsbygg = base === "statsbygg" && !saved;
-      let r: RulesDict = saved ? rules : { ...rules, discipline_key: up.detected_discipline ?? rules.discipline_key };
+      const statsbygg = base === "statsbygg" && !opened;
+      // An opened setup applies its rules for the model's discipline.
+      const fromFile = opened ? rulesFor(saved, up.detected_discipline) : null;
+      let r: RulesDict = fromFile ?? { ...rules, discipline_key: up.detected_discipline ?? rules.discipline_key };
       if (statsbygg) r = withStatsbyggFloors(r, inventory);
       setRules(r);
       go(statsbygg ? "end" : "kilde");
@@ -207,7 +230,16 @@ export default function Oppsett({
   const dotOf = (s: WalkStep | "end"): Dot => {
     if (s === "ifc") return loaded ? "ok" : "open";
     if (s === "end" || !inv || !rules) return "open";
-    const res = s === "kilde" ? sourceResult(inv, rules) : s === "format" ? formatResult(preview) : s === "etasjer" ? floorResult(preview) : null;
+    const res =
+      s === "kilde"
+        ? sourceResult(inv, rules, preview)
+        : s === "format"
+          ? formatResult(preview)
+          : s === "etasjer"
+            ? floorResult(preview)
+            : s === "status"
+              ? statusResult(inv, rules)
+              : null;
     if (res?.verdict === "fail") return "bad";
     return confirmed.has(s) ? "ok" : "open";
   };
@@ -267,9 +299,9 @@ export default function Oppsett({
           uploadId={uid}
           inv={inv}
           rules={rules}
-          saved={saved?.rules.tfm_location ?? null}
-          fresh={!confirmed.has("kilde")}
-          onUse={(loc) => commit("kilde", { tfm_location: loc })}
+          saved={savedRules}
+          fresh={!confirmed.has("kilde") && !opened}
+          onUse={(patch) => commit("kilde", patch)}
         />
       );
     } else if (step === "format") {
@@ -278,7 +310,7 @@ export default function Oppsett({
           uploadId={uid}
           rules={rules}
           presets={presets}
-          pickBest={base === "custom" && !saved && !confirmed.has("format")}
+          pickBest={base === "custom" && !opened && !confirmed.has("format")}
           onUse={(patch) => commit("format", patch)}
         />
       );
@@ -288,21 +320,46 @@ export default function Oppsett({
           uploadId={uid}
           inv={inv}
           rules={rules}
-          autoScheme={base === "custom" && !saved && !confirmed.has("etasjer")}
+          autoScheme={base === "custom" && !opened && !confirmed.has("etasjer")}
           onUse={(patch) => commit("etasjer", patch)}
         />
       );
     } else if (step === "scope") {
       body = <ScopeStep uploadId={uid} rules={rules} onUse={(patch) => commit("scope", patch)} />;
+    } else if (step === "status") {
+      body = (
+        <StatusStep
+          uploadId={uid}
+          inv={inv}
+          rules={rules}
+          saved={savedRules}
+          fresh={!confirmed.has("status") && !opened}
+          onUse={(patch) => commit("status", patch)}
+        />
+      );
     } else if (step === "end") {
       body = (
         <SummaryStep
           inv={inv}
           upload={upload}
           rules={rules}
-          base={base ?? "custom"}
           preview={preview}
           checking={checking}
+          registering={registering}
+          onSave={() => {
+            const file = withFag(saved, base ?? "custom", fag, rules);
+            setSaved(file);
+            storeSetup(file);
+            onStored(file);
+            download(setupFileName(rules, upload), setupJson(file));
+          }}
+          onRegister={() => {
+            onError(null);
+            setRegistering(true);
+            downloadRegister(upload.upload_id, rules, upload.file_name.replace(/\.ifc(zip)?$/i, ""))
+              .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)))
+              .finally(() => setRegistering(false));
+          }}
           onRow={(s) => {
             setDetour(true);
             go(s);
@@ -322,7 +379,10 @@ export default function Oppsett({
     <div id="oppsett" {...dropProps}>
       <div className="flow">
         <div className="railcol">
-          <Rail file={loaded ? { name: upload.file_name, schema: upload.facts.schema } : null} items={items} />
+          <Rail
+            file={loaded ? { name: upload.file_name, schema: [fag, upload.facts.schema].filter(Boolean).join(" · ") } : null}
+            items={items}
+          />
           <div ref={setSlot} style={{ display: "contents" }} />
         </div>
         <RailSlot.Provider value={slot}>

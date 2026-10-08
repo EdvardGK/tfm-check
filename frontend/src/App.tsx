@@ -6,11 +6,13 @@ import { saveLastProject } from "./derive";
 import type { CheckResponse, Preset, RulesDict, UploadResponse } from "./types";
 import ResultsDashboard from "./components/ResultsDashboard";
 import Oppsett, { type Accepted } from "./oppsett/Oppsett";
+import { loadStoredSetup, type SetupFile } from "./oppsett/setup";
 
 /** Oppsett walk → Results. The walk stays mounted under Results, so
  *  «Juster» returns to it as it was; a new file starts a fresh walk. */
 export default function App() {
   const [presets, setPresets] = useState<Preset[]>([]);
+  const [stored, setStored] = useState<SetupFile | null>(() => loadStoredSetup());
   const [walkKey, setWalkKey] = useState(0);
   const [accepted, setAccepted] = useState<{ upload: UploadResponse; rules: RulesDict } | null>(null);
   const [check, setCheck] = useState<CheckResponse | null>(null);
@@ -52,6 +54,8 @@ export default function App() {
         <Oppsett
           key={walkKey}
           presets={presets}
+          stored={stored}
+          onStored={setStored}
           checking={checking}
           error={showResults ? null : error}
           onError={setError}

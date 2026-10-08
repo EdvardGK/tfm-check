@@ -1,4 +1,4 @@
-import type { CheckResponse, Inventory, Preset, Preview, RulesDict, UploadResponse } from "./types";
+import type { CheckResponse, Inventory, Location, Preset, Preview, RulesDict, SourceValues, UploadResponse } from "./types";
 
 async function jsonOrThrow<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -73,6 +73,44 @@ export async function getPreview(
       signal,
     }),
   );
+}
+
+export async function getValues(uploadId: string, location: Location, signal?: AbortSignal): Promise<SourceValues> {
+  return jsonOrThrow<SourceValues>(
+    await fetch("/api/values", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ upload_id: uploadId, location }),
+      signal,
+    }),
+  );
+}
+
+/** The TFM register (.xlsx), saved as `<model>_TFM-register.xlsx`. */
+export async function downloadRegister(uploadId: string, rules: RulesDict, fileStem: string): Promise<void> {
+  const res = await fetch("/api/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ upload_id: uploadId, rules }),
+  });
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try {
+      detail = (await res.json())?.detail ?? detail;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${fileStem}_TFM-register.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 export async function runCheck(uploadId: string, rules: RulesDict): Promise<CheckResponse> {

@@ -1,19 +1,26 @@
-import { useMemo, useRef, useState } from "react";
-import type { Inventory, InventoryProp, Location, RulesDict, ValueCount } from "../types";
-import { Canvas, Fig, Lamp, Meter, StepBar, Val, breakDots } from "./Shell";
+import { useRef, useState } from "react";
+import { ASPECTS, type Aspect, type Inventory, type Location, type RulesDict, type TfmMode } from "../types";
+import { Canvas, Fig, Lamp, Meter, RailOptions, RailSection, RailTile, StepBar, Val, breakDots } from "./Shell";
+import SourceTree, { propOf, type Pin } from "./SourceTree";
 import { useLiveAnswer } from "./live";
 import { usePreview } from "./usePreview";
-import { STANDARD_LOCATION, fmt, locationText, sameLocation, sourceCount, verdictOf } from "./setup";
+import {
+  ASPECT_NAME, ASPECT_SIGN, PART_STANDARD, STANDARD_LOCATION, fmt, locationText, sameLocation, sourceCount, sourceText,
+  verdictOf,
+} from "./setup";
 
-const ATTRS = "\u0000attr";
-const ALL: Location = ["all", null, null];
+type Parts = Partial<Record<Aspect, Location>>;
 
-/** Kilde: where the TFM code lives. Band 1: the Statsbygg standard (found
- *  or not, and when not: «Kartlegg» or «Behold standard») | the picked
- *  source's evidence. Band 2: the model's property sets as a tree, with the
- *  standard and the suggestion pinned on top | the picked source's values.
- *  Never a silent fallback: a missing standard stays red until «Bruk» takes
- *  a source, and «Behold standard» keeps it (the check then fails). */
+/** Kilde: where the TFM code lives, whole in one property or composed from
+ *  the PA 0802 aspects (+lokasjon =system -komponent), each in its own
+ *  property (the rail's «Hel kode» / «Fra deler»).
+ *
+ *  Band 1: the Statsbygg standard (found or not, and when not: «Kartlegg» or
+ *  «Behold standard») | what is picked, with its evidence. Band 2: the
+ *  model's property sets as a tree, the standard and the suggestions pinned
+ *  on top | the codes the pick reads. Never a silent fallback: a missing
+ *  standard stays red until «Bruk» takes a source, and «Behold standard»
+ *  keeps it (the check then fails). */
 export default function KildeStep({
   uploadId,
   inv,
@@ -25,191 +32,226 @@ export default function KildeStep({
   uploadId: string;
   inv: Inventory;
   rules: RulesDict;
-  /** The saved setup's source, pinned as «Regelsett». */
-  saved: Location | null;
+  /** The saved ruleset for this discipline, pinned as «Regelsett». */
+  saved: RulesDict | null;
   /** Not taken before: a missing standard pre-picks the suggestion. */
   fresh: boolean;
-  onUse: (loc: Location) => void;
+  onUse: (patch: Partial<RulesDict>) => void;
 }) {
   const std = STANDARD_LOCATION;
   const stdN = inv.standard.n;
-  const missing = stdN === 0;
-  const cand = inv.candidates.find((c) => !sameLocation(c.location, std))?.location ?? null;
+  const wholeMissing = stdN === 0;
+  const wholeCand = inv.candidates.find((c) => !sameLocation(c.location, std))?.location ?? null;
+  const partCand = (a: Aspect) => inv.roles[a].candidates[0]?.location ?? null;
+  const partFound = (a: Aspect) => inv.roles[a].standard.n > 0;
 
+  // ---- The pre-picked answer ----
+  const [mode, setMode] = useState<TfmMode>(() => {
+    if (fresh && wholeMissing && !wholeCand && ASPECTS.some((a) => partFound(a) || partCand(a))) return "parts";
+    return rules.tfm_mode ?? "whole";
+  });
   const cur = rules.tfm_location ?? std;
-  const initial = fresh && missing && cand && sameLocation(cur, std) ? cand : cur;
-  const [draft, setDraft] = useState<Location>(initial);
-  const [q, setQ] = useState("");
-  const [open, setOpen] = useState<ReadonlySet<string>>(() =>
-    new Set(initial[0] === "attr" ? [ATTRS] : initial[0] === "pset" && initial[1] ? [initial[1]] : []),
+  const [draft, setDraft] = useState<Location>(() =>
+    fresh && wholeMissing && wholeCand && sameLocation(cur, std) ? wholeCand : cur,
   );
+  const [parts, setParts] = useState<Parts>(() => {
+    const out: Parts = {};
+    for (const a of ASPECTS) {
+      const have = rules.tfm_parts?.[a];
+      const std = PART_STANDARD[a];
+      if (fresh && !partFound(a) && partCand(a) && (!have || sameLocation(have, std))) out[a] = partCand(a) ?? undefined;
+      else if (have) out[a] = have;
+      else if (fresh) out[a] = std;
+    }
+    return out;
+  });
+  const [active, setActive] = useState<Aspect>("lokasjon");
   const search = useRef<HTMLInputElement>(null);
 
-  const isStd = sameLocation(draft, std);
-  useLiveAnswer("kilde", locationText(draft), isStd);
+  const composed = mode === "parts";
+  const draftRules: RulesDict = composed
+    ? { ...rules, tfm_mode: "parts", tfm_parts: parts }
+    : { ...rules, tfm_mode: "whole", tfm_location: draft };
+  const isStd = composed ? ASPECTS.every((a) => sameLocation(parts[a], PART_STANDARD[a])) : sameLocation(draft, std);
+  useLiveAnswer("kilde", sourceText(draftRules), isStd);
 
-  const preview = usePreview(uploadId, { ...rules, tfm_location: draft });
-  const count = sourceCount(inv, draft);
-
-  const propOf = (loc: Location): InventoryProp | undefined => {
-    const [kind, set, prop] = loc;
-    if (kind === "pset") return inv.sets.find((s) => s.name === set)?.props.find((p) => p.name === prop);
-    if (kind === "attr") return inv.attributes.find((a) => a.name === prop);
-    return undefined;
-  };
-  const stdProp = propOf(std);
-
-  // The tree: sets most carried first, their properties likewise.
-  const sets = useMemo(
-    () =>
-      [...inv.sets]
-        .sort((a, b) => b.n - a.n || a.name.localeCompare(b.name))
-        .map((s) => ({ ...s, props: [...s.props].sort((a, b) => b.n - a.n || a.name.localeCompare(b.name)) })),
-    [inv.sets],
-  );
-  const ql = q.trim().toLowerCase();
-  const typed = useMemo<Location | null>(() => {
-    const t = q.trim();
-    const dot = t.lastIndexOf(".");
-    if (dot <= 0 || dot === t.length - 1) return null;
-    const loc: Location = ["pset", t.slice(0, dot).trim(), t.slice(dot + 1).trim()];
-    const known = inv.sets.some((s) => s.name === loc[1] && s.props.some((p) => p.name === loc[2]));
-    return known || sameLocation(loc, std) ? null : loc;
-  }, [q, inv.sets, std]);
-
-  const pinned: { loc: Location; tag?: string }[] = [{ loc: std, tag: "Standard" }];
-  if (cand) pinned.push({ loc: cand, tag: "Forslag" });
-  if (saved && !pinned.some((p) => sameLocation(p.loc, saved))) pinned.push({ loc: saved, tag: "Regelsett" });
-  if (typed) pinned.push({ loc: typed });
-  if (!pinned.some((p) => sameLocation(p.loc, draft)) && draft[0] === "pset" && !propOf(draft)) pinned.push({ loc: draft });
-
-  const toggle = (key: string) =>
-    setOpen((o) => {
-      const n = new Set(o);
-      if (n.has(key)) n.delete(key);
-      else n.add(key);
-      return n;
-    });
-
-  const kartlegg = () => {
-    if (cand && isStd) setDraft(cand);
-    else search.current?.focus();
-  };
-
+  const preview = usePreview(uploadId, draftRules);
   const valued = preview?.valued ?? 0;
   const shaped = preview?.shaped ?? 0;
-  const countable = draft[0] !== "all";
+  const countable = composed || draft[0] !== "all";
+  const avvik = Math.max(0, valued - shaped);
 
-  const propRow = (loc: Location, name: string, p: InventoryProp | undefined, sub?: string, tag?: string) => {
-    const n = p?.n ?? 0;
-    const samples: ValueCount[] = p?.samples ?? [];
-    return (
-      <button
-        key={`${tag ?? ""}${JSON.stringify(loc)}`}
-        type="button"
-        className={"trow prop pick rule" + (n === 0 && loc[0] !== "all" ? " empty" : "") + (sameLocation(loc, draft) ? " chosen" : "")}
-        aria-pressed={sameLocation(loc, draft)}
-        onClick={() => setDraft(loc)}
-      >
-        <span className="pn">
-          <span className="l1">
-            {tag ? <span className="tag">{tag}</span> : null}
-            <span className="pnm">{name}</span>
-          </span>
-          {sub ? <span className="ps">{sub}</span> : null}
-        </span>
-        <span className="pc">
-          <span className="num">{loc[0] === "all" ? "–" : fmt(n)}</span>
-          <Meter n={n} total={inv.products} />
-        </span>
-        {samples.length === 0 ? <span className="val none">–</span> : <Val v={samples[0].v} n={samples[0].n} />}
-        {samples[1] ? <Val v={samples[1].v} n={samples[1].n} /> : <span />}
-        {samples[2] ? <Val v={samples[2].v} n={samples[2].n} /> : <span />}
-      </button>
-    );
+  // ---- Picking ----
+  const pick = (loc: Location) => {
+    if (composed) setParts((p) => ({ ...p, [active]: loc }));
+    else setDraft(loc);
+  };
+  const missing = composed ? ASPECTS.some((a) => !partFound(a)) : wholeMissing;
+  const kartlegg = () => {
+    if (composed) {
+      setParts((p) => {
+        const n = { ...p };
+        for (const a of ASPECTS) if (!partFound(a) && partCand(a) && sameLocation(n[a], PART_STANDARD[a])) n[a] = partCand(a) ?? undefined;
+        return n;
+      });
+      search.current?.focus();
+    } else if (wholeCand && isStd) setDraft(wholeCand);
+    else search.current?.focus();
+  };
+  const keepStandard = () => {
+    if (composed) setParts({ ...PART_STANDARD });
+    else setDraft(std);
   };
 
-  const setRow = (key: string, name: string, n: number, expanded: boolean) => (
-    <button key={`set:${key}`} type="button" className="trow set pick rule" aria-expanded={expanded} onClick={() => toggle(key)}>
-      <span className="pn">
-        <span className="tw">{expanded ? "▾" : "▸"}</span>
-        {name}
-      </span>
-      <span className="num sc">{fmt(n)}</span>
-    </button>
+  const savedFor = (a: Aspect | null): Location | null =>
+    !saved ? null : a === null ? (saved.tfm_mode !== "parts" ? (saved.tfm_location ?? null) : null) : (saved.tfm_parts?.[a] ?? null);
+
+  const pins: Pin[] = [];
+  if (composed) {
+    pins.push({ loc: PART_STANDARD[active], tag: "Standard" });
+    for (const c of inv.roles[active].candidates) pins.push({ loc: c.location, tag: "Forslag" });
+    const s = savedFor(active);
+    if (s && !pins.some((p) => sameLocation(p.loc, s))) pins.push({ loc: s, tag: "Regelsett" });
+  } else {
+    pins.push({ loc: std, tag: "Standard" });
+    if (wholeCand) pins.push({ loc: wholeCand, tag: "Forslag" });
+    const s = savedFor(null);
+    if (s && !pins.some((p) => sameLocation(p.loc, s))) pins.push({ loc: s, tag: "Regelsett" });
+  }
+
+  const standardCard = composed ? (
+    <section className="tile card major std" aria-label="Standard">
+      <span className="lbl">Standard</span>
+      <div className="slots">
+        {ASPECTS.map((a) => {
+          const n = inv.roles[a].standard.n;
+          return (
+            <div key={a} className="slot rule">
+              <span className="sg">{ASPECT_SIGN[a]}</span>
+              <span className="sn">{ASPECT_NAME[a]}</span>
+              <span className="ss ell">{locationText(PART_STANDARD[a])}</span>
+              <span className="num">{of(n, inv.products)}</span>
+              <Lamp verdict={n > 0 ? "ok" : "fail"} />
+            </div>
+          );
+        })}
+      </div>
+      {missing ? (
+        <div className="choice">
+          <button type="button" className="key" aria-pressed={!isStd} onClick={kartlegg}>
+            Kartlegg
+          </button>
+          <button type="button" className="key" aria-pressed={isStd} onClick={keepStandard}>
+            Behold standard
+          </button>
+        </div>
+      ) : null}
+    </section>
+  ) : (
+    <section className="tile card major std" aria-label="Standard">
+      <span className="lbl">Standard</span>
+      <div className="row1">
+        <span className="src">{locationText(std)}</span>
+        {wholeMissing ? (
+          <span className="badge" data-verdict="fail">
+            ✕ Ikke i modellen
+          </span>
+        ) : (
+          <span className="badge" data-verdict="pass">
+            ✓ I modellen
+          </span>
+        )}
+      </div>
+      <Fig n={stdN} total={inv.products} verdict={wholeMissing ? "fail" : "ok"} />
+      <Meter n={stdN} total={inv.products} verdict={wholeMissing ? undefined : "ok"} />
+      {wholeMissing ? (
+        <div className="choice">
+          <button type="button" className="key" aria-pressed={!isStd} onClick={kartlegg}>
+            Kartlegg
+          </button>
+          <button type="button" className="key" aria-pressed={isStd} onClick={keepStandard}>
+            Behold standard
+          </button>
+        </div>
+      ) : (
+        <div className="vals3">
+          {(propOf(inv, std)?.samples ?? []).map((s) => (
+            <Val key={s.v} v={s.v} n={s.n} />
+          ))}
+        </div>
+      )}
+    </section>
   );
 
-  const tree: React.ReactNode[] = [];
-  for (const s of sets) {
-    const setHit = ql !== "" && s.name.toLowerCase().includes(ql);
-    const props = ql === "" || setHit ? s.props : s.props.filter((p) => p.name.toLowerCase().includes(ql));
-    if (ql !== "" && props.length === 0) continue;
-    const expanded = open.has(s.name) || (ql !== "" && !setHit);
-    tree.push(setRow(s.name, s.name, s.n, expanded));
-    if (expanded) for (const p of props) tree.push(propRow(["pset", s.name, p.name], p.name, p));
-  }
-  {
-    const attrs = ql === "" ? inv.attributes : inv.attributes.filter((a) => a.name.toLowerCase().includes(ql));
-    if (ql === "" || attrs.length > 0) {
-      const expanded = open.has(ATTRS) || ql !== "";
-      tree.push(setRow(ATTRS, "Attributter", inv.products, expanded));
-      if (expanded) {
-        for (const a of attrs) tree.push(propRow(["attr", null, a.name], a.name, a));
-        if (ql === "") tree.push(propRow(ALL, "Alle felt", undefined));
-      }
-    }
-  }
-
-  const avvik = Math.max(0, valued - shaped);
+  const count = composed ? (preview ? valued : null) : sourceCount(inv, draft);
 
   return (
     <Canvas rows="auto auto minmax(0, 1fr)">
       <StepBar>
-        <button type="button" className="primary" onClick={() => onUse(draft)}>
+        <button
+          type="button"
+          className="primary"
+          disabled={composed && !ASPECTS.some((a) => parts[a])}
+          onClick={() => onUse(composed ? { tfm_mode: "parts", tfm_parts: parts } : { tfm_mode: "whole", tfm_location: draft })}
+        >
           Bruk
         </button>
       </StepBar>
 
-      <section className="tile card major std" aria-label="Standard">
-        <span className="lbl">Standard</span>
-        <div className="row1">
-          <span className="src">{locationText(std)}</span>
-          {missing ? (
-            <span className="badge" data-verdict="fail">
-              ✕ Ikke i modellen
-            </span>
-          ) : (
-            <span className="badge" data-verdict="pass">
-              ✓ I modellen
-            </span>
-          )}
-        </div>
-        <Fig n={stdN} total={inv.products} verdict={missing ? "fail" : "ok"} />
-        <Meter n={stdN} total={inv.products} verdict={missing ? undefined : "ok"} />
-        {missing ? (
-          <div className="choice">
-            <button type="button" className="key" aria-pressed={!isStd} onClick={kartlegg}>
-              Kartlegg
-            </button>
-            <button type="button" className="key" aria-pressed={isStd} onClick={() => setDraft(std)}>
-              Behold standard
-            </button>
-          </div>
-        ) : (
-          <div className="vals3">
-            {(stdProp?.samples ?? []).map((s) => (
-              <Val key={s.v} v={s.v} n={s.n} />
-            ))}
-          </div>
-        )}
-      </section>
+      <RailOptions>
+        <RailSection label="Kode">
+          <RailTile title="Hel kode" example="+123456=360.001-JV401" pressed={!composed} onClick={() => setMode("whole")} />
+          <RailTile title="Fra deler" example="+ … = … - …" pressed={composed} onClick={() => setMode("parts")} />
+        </RailSection>
+      </RailOptions>
+
+      {standardCard}
 
       <section className="tile card minor ev" aria-label="Valgt">
         <span className="lbl">Valgt</span>
-        <span className="src">{breakDots(locationText(draft))}</span>
+        {composed ? (
+          <div className="slots">
+            {ASPECTS.map((a) => {
+              const loc = parts[a];
+              const n = loc ? (sourceCount(inv, loc) ?? 0) : null;
+              return (
+                <div key={a} className={"slot pick rule" + (a === active ? " chosen" : "")}>
+                  <button type="button" className="slotpick" aria-pressed={a === active} onClick={() => setActive(a)}>
+                    <span className="sg">{ASPECT_SIGN[a]}</span>
+                    <span className="sn">{ASPECT_NAME[a]}</span>
+                    <span className="ss ell" title={loc ? locationText(loc) : ""}>
+                      {loc ? (loc[2] ?? "") : "–"}
+                    </span>
+                    <span className="num">{n === null ? "" : fmt(n)}</span>
+                  </button>
+                  {loc ? (
+                    <button
+                      type="button"
+                      className="mini"
+                      aria-label="Fjern"
+                      onClick={() =>
+                        setParts((p) => {
+                          const x = { ...p };
+                          delete x[a];
+                          return x;
+                        })
+                      }
+                    >
+                      ✕
+                    </button>
+                  ) : (
+                    <span />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <span className="src">{breakDots(locationText(draft))}</span>
+        )}
         <div className="figs">
           <div>
-            <span className="lbl">Med verdi</span>
+            <span className="lbl">Med kode</span>
             <Fig n={count} total={countable ? inv.products : null} />
             <Meter n={count ?? 0} total={inv.products} />
           </div>
@@ -235,24 +277,15 @@ export default function KildeStep({
         </div>
       </section>
 
-      <section className="tile card major tree" aria-label="I modellen">
-        <div className="top">
-          <span className="lbl">I modellen</span>
-          <input ref={search} className="search" type="search" placeholder="Søk" aria-label="Søk" value={q} onChange={(e) => setQ(e.target.value)} />
-        </div>
-        <div className="scroll">
-          <div className="tcols colhead">
-            <span className="lbl">Egenskap</span>
-            <span className="lbl num">Elementer</span>
-            <span className="lbl vh">Verdier</span>
-          </div>
-          {pinned.map((p) => {
-            const [kind, set, prop] = p.loc;
-            return propRow(p.loc, kind === "pset" ? (prop ?? "") : locationText(p.loc), propOf(p.loc), kind === "pset" ? (set ?? "") : undefined, p.tag ?? "");
-          })}
-          {tree}
-        </div>
-      </section>
+      <SourceTree
+        key={composed ? `parts-${active}` : "whole"}
+        inv={inv}
+        draft={composed ? (parts[active] ?? null) : draft}
+        pins={pins}
+        onPick={pick}
+        allowAll={!composed}
+        searchRef={search}
+      />
 
       <section className="tile card minor vals" aria-label="Verdier">
         <div className="lh">
@@ -274,3 +307,5 @@ export default function KildeStep({
     </Canvas>
   );
 }
+
+const of = (n: number, total: number) => `${fmt(n)} / ${fmt(total)}`;

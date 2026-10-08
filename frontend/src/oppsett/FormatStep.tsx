@@ -8,7 +8,7 @@ import type { Preset, PreviewValue, RulesDict } from "../types";
 import { Canvas, Fig, Lamp, Meter, RailOptions, RailSection, RailTile, StepBar } from "./Shell";
 import { useLiveAnswer } from "./live";
 import { usePreview } from "./usePreview";
-import { STATSBYGG_SEQUENCE, fmt, verdictOf } from "./setup";
+import { STATSBYGG_PATTERNS, fmt, verdictOf } from "./setup";
 
 export type FormatDraft = Pick<
   RulesDict,
@@ -127,7 +127,7 @@ export default function FormatStep({
   const previewRules = useMemo(() => ({ ...rules, ...draft }), [rules, draft]);
   const preview = usePreview(uploadId, previewRules);
 
-  const standard = draft.patterns.length === 1 && JSON.stringify(draft.patterns[0].sequence) === JSON.stringify(STATSBYGG_SEQUENCE);
+  const standard = JSON.stringify(draft.patterns.map((p) => p.sequence)) === JSON.stringify(STATSBYGG_PATTERNS);
   useLiveAnswer("format", standard ? "" : draft.patterns.map((p) => sequenceToExample(p.sequence)).join(" | "), standard);
 
   const current = presets.find((p) => sameForm(draft, presetDraft(p, draft))) ?? null;
@@ -379,7 +379,7 @@ export default function FormatStep({
                     <option value="">{PART_RULE[t]}</option>
                     {[1, 2, 3, 4, 5, 6].map((n) => (
                       <option key={n} value={n}>
-                        {n} siffer
+                        {n} {t === "Lokasjon" ? "tegn" : "siffer"}
                       </option>
                     ))}
                   </select>
@@ -407,10 +407,14 @@ export default function FormatStep({
         </div>
         <div className="scroll">
           {(preview?.off ?? []).map((o) => (
-            <div key={o.v} className="lrow rule">
+            <div key={o.v} className="offrow rule">
               <Lamp verdict="fail" />
-              <span className="mono ell" title={o.v}>
-                {o.v}
+              <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                <span className="mono ell" title={o.v}>
+                  {o.v}
+                </span>
+                {o.reason ? <span className="why">{o.reason}</span> : null}
+                {o.fix ? <span className="fix">→ {o.fix}</span> : null}
               </span>
               <span className="num sub">{fmt(o.n)}</span>
             </div>
