@@ -20,13 +20,15 @@ A ruleset for TFM-sjekk (test.tfm-sjekk.skiplum.com / skiplum.com). It says, per
 - <loc> (a source): ["pset", "<PropertySetName>", "<PropertyName>"] or ["attr", null, "Name"|"Tag"]. Names are case-sensitive, exactly as in the IFC. A source the model lacks is not replaced: the model fails the check there.
 - "status_location": <loc> of the MMI / status code, or null. Read as phases: 0-6xx ny, 7xx bevares, 8xx ombruk, 9xx rives.
 - "patterns": [ {"sequence": [<token>, ...]}, ... ]. A code is valid when it matches one sequence completely (anchored at both ends).
-  - <token> is a segment name, a separator or "T:<literal text>".
+  - A sequence is an ordered list of blocks; nothing is implied between them, so blocks may sit next to each other (KKA001 = "Komponent", "Komp.nr" with a 3-letter rule).
+  - <token> is a block: a segment name (a named code part, its data type in "part_rules"), a fixed value (a separator key below, or "T:<literal text>"), "SL:<JSON array>" (one of the listed values, e.g. "SL:[\".\",\"_\"]" for an accepted «.» or «_»), or "SR:<regex>" (text taking the pattern).
   - Segments: "Lokasjon", "Rom", "Systemkode", "Etasje", "Subnr", "Løpenummer", "Komponent", "Komp.nr", "T-suffiks", "Område", "Linje", "Sløyfe", "Adresse 2", "Typekode", "Typenr", "Instansnr". A segment may appear more than once in a sequence.
   - Separators: "+", "++", "=", ".", "-", "_", "/", "%", "mellomrom" (a space).
 - "part_rules": {"<segment key>": <rule>} overrides a segment's standard form. Segment keys: lokasjon, rom, systemkode, etasje, subnr, lopenummer, komponent, kompnr, typeflag, omrade, linje, sloyfe, adresse, typekode, typenr, instansnr. <rule> is one of:
   - {"kind": "pattern", "pattern": "<regex>"} (Python regex for the segment alone; ^ and $ are dropped; no named groups; a regex that does not compile matches nothing),
   - {"kind": "value", "value": "<exact text>"},
-  - {"kind": "list", "values": ["<accepted>", ...]}.
+  - {"kind": "list", "values": ["<accepted>", ...]},
+  - {"kind": "standard", "standard": "NS3451" | "NS3457-8" | "PA0802" | "IEC81346"} (one of the codes of that list; also links the part for validity).
 - "part_digits": {"<segment key>": n} fixes a digit count (lokasjon: character count). "part_rules" wins over it.
 - Standard links (validity beyond form):
   - "bygningsdel_system": "NS3451" | "Ingen" (Systemkode against NS 3451:2022),

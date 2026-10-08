@@ -36,7 +36,9 @@ export interface RulesDict {
 export type PartRule =
   | { kind: "pattern"; pattern: string }
   | { kind: "value"; value: string }
-  | { kind: "list"; values: string[] };
+  | { kind: "list"; values: string[] }
+  /** One of the codes of a standard list (NS3451, NS3457-8, PA0802, IEC81346). */
+  | { kind: "standard"; standard: string };
 
 /** GET/POST /api/rollup: system and component codes rolled up. */
 export interface RollupRow {

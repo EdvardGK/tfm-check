@@ -415,3 +415,10 @@
 }
 #oppsett .blocks { overflow: auto; }
 #oppsett .prow { grid-template-columns: 120px minmax(0, 1fr); }
+
+/* ── Deler: data type per part and per block; the regex under a preset ── */
+#oppsett .prow .rx { grid-column: 2; font-size: 11.5px; color: var(--d-label-color); overflow-wrap: anywhere; }
+#oppsett .prow input.rx { width: 100%; }
+#oppsett .prow .sw.blk { background: var(--color-ink); color: var(--color-cream); font-size: 14px; min-width: 28px; text-align: center; }
+#oppsett .seg.sep.alt { background: var(--d-tint-strong); color: var(--color-ink); box-shadow: inset 0 0 0 1.5px var(--color-ink); }
+#oppsett .seg.sep.alt .sx { font-size: 13px; }

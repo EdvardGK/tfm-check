@@ -48,6 +48,43 @@ export function freetextValue(t: string): string {
   return isFreetext(t) ? t.slice(FREETEXT_PREFIX.length) : t;
 }
 
+// ---- Blocks (backend engine/blocks.py) ----
+// A form is an ordered list of blocks. A token is a code part (a name in
+// PART_TYPES), a fixed value (a separator key or "T:text"), a list
+// ("SL:" + JSON array) or a pattern ("SR:" + regex).
+export const LIST_PREFIX = "SL:";
+export const REGEX_PREFIX = "SR:";
+
+export type Block =
+  | { kind: "part"; part: string }
+  | { kind: "fixed"; text: string }
+  | { kind: "list"; values: string[] }
+  | { kind: "pattern"; rx: string };
+
+export function blockOf(t: string): Block | null {
+  if ((PART_TYPES as readonly string[]).includes(t)) return { kind: "part", part: t };
+  if (t in SEP_TO_CHAR) return { kind: "fixed", text: SEP_TO_CHAR[t] };
+  if (isFreetext(t)) return { kind: "fixed", text: freetextValue(t) };
+  if (t.startsWith(LIST_PREFIX)) {
+    try {
+      const v = JSON.parse(t.slice(LIST_PREFIX.length));
+      return { kind: "list", values: Array.isArray(v) ? v.map(String).filter((x) => x !== "") : [] };
+    } catch {
+      return { kind: "list", values: [] };
+    }
+  }
+  if (t.startsWith(REGEX_PREFIX)) return { kind: "pattern", rx: t.slice(REGEX_PREFIX.length) };
+  return null;
+}
+
+/** A fixed value as a token: its separator key when it is one, else text. */
+export function fixedToken(text: string): string {
+  const key = Object.keys(SEP_TO_CHAR).find((k) => SEP_TO_CHAR[k] === text);
+  return key ?? FREETEXT_PREFIX + text;
+}
+export const listToken = (values: string[]) => LIST_PREFIX + JSON.stringify(values);
+export const regexToken = (rx: string) => REGEX_PREFIX + rx;
+
 // Per-part chip palette — cohesive, on-brand, distinguishable.
 export interface Palette {
   bg: string;
@@ -120,6 +157,11 @@ export function sequenceToExample(seq: string[]): string {
       if (t in PART_EXAMPLE) return PART_EXAMPLE[t];
       if (t in SEP_TO_CHAR) return SEP_TO_CHAR[t];
       if (isFreetext(t)) return freetextValue(t);
+      if (t.startsWith(LIST_PREFIX)) {
+        const b = blockOf(t);
+        return b && b.kind === "list" ? (b.values[0] ?? "") : "";
+      }
+      if (t.startsWith(REGEX_PREFIX)) return "…";
       return "";
     })
     .join("");

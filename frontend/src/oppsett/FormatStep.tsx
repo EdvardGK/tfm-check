@@ -2,7 +2,8 @@ import { Fragment, useEffect, useRef, useState, type DragEvent, type ReactNode }
 import { getPreview } from "../api";
 import {
   DISCIPLINES, FREETEXT_COLOR, FREETEXT_PREFIX, PART_COLORS, PART_EXAMPLE, PART_TO_DIGITKEY, PART_TYPES, SEP_KEYS,
-  SEP_TO_CHAR, freetextValue, isFreetext, partLabel, sequenceToExample, type Palette,
+  SEP_TO_CHAR, blockOf, fixedToken, freetextValue, isFreetext, listToken, partLabel, regexToken, sequenceToExample,
+  type Palette,
 } from "../constants";
 import type { PartRule, Preset, RulesDict } from "../types";
 import { Canvas, RailOptions, RailSection, RailTile, StepBar } from "./Shell";
@@ -57,23 +58,77 @@ const PART_RULE: Record<string, string> = {
   Typekode: "1–3 bokstaver", Typenr: "3 siffer", Instansnr: "2 siffer", Kode: "hele koden",
 };
 
-/** The standards a part can be linked to (backend engine/standards.py). */
-const COMPONENT_LISTS: [string, string][] = [["NS3457-8", "NS 3457-8"], ["PA0802", "PA 0802"], ["IEC81346", "IEC 81346"]];
-/** Typekode links through part_links; the field is the part's key. */
-const LINKS: Record<string, { field: "bygningsdel_system" | "komponent_system" | "typekode"; options: [string, string][] }> = {
-  Typekode: { field: "typekode", options: [...COMPONENT_LISTS, ["Ingen", "–"]] },
-  Systemkode: { field: "bygningsdel_system", options: [["NS3451", "NS 3451"], ["Ingen", "–"]] },
-  Komponent: {
-    field: "komponent_system",
-    options: [["NS3457-8", "NS 3457-8"], ["PA0802", "PA 0802"], ["IEC81346", "IEC 81346"], ["Ingen", "–"]],
-  },
-};
-
 const paint = (c: Palette) => ({ background: c.bg, color: c.text, boxShadow: `inset 0 0 0 1px ${c.border}` });
 
-/** One part's rule: its standard form (or a length lock), a pattern, a
- *  fixed value or a list of accepted values; and, for Systemkode and
- *  Komponent, the standard it is checked against. */
+/** Each part's form when no rule is set (engine/constants.py
+ *  PLACEHOLDER_FALLBACK). */
+const DEFAULT_FORM: Record<string, string> = {
+  lokasjon: "[A-Za-z0-9]{6}", rom: "\\d{1,5}", systemkode: "\\d{3}", etasje: "[A-Za-z0-9æøåÆØÅ_\\- ]{1,12}",
+  subnr: "\\d{1,4}", lopenummer: "\\d{3}", komponent: "[A-Z]{2}", kompnr: "\\d{3}", typeflag: "T?",
+  omrade: "\\d{1,2}", linje: "\\d{1,2}", sloyfe: "\\d{2}", adresse: "\\d{3}", typekode: "[A-ZÆØÅ]{1,3}",
+  typenr: "\\d{3}", instansnr: "\\d{2}", kode: "\\S+",
+};
+
+/** Mønster in plain words: the regex shown under the pick. */
+export const PATTERN_PRESETS: [string, string][] = [
+  ["1 siffer", "\\d"], ["2 siffer", "\\d{2}"], ["3 siffer", "\\d{3}"], ["4 siffer", "\\d{4}"],
+  ["5 siffer", "\\d{5}"], ["6 siffer", "\\d{6}"], ["1–2 siffer", "\\d{1,2}"], ["1–4 siffer", "\\d{1,4}"],
+  ["1–5 siffer", "\\d{1,5}"], ["1 bokstav (A–Z)", "[A-Z]"], ["2 bokstaver (A–Z)", "[A-Z]{2}"],
+  ["3 bokstaver (A–Z)", "[A-Z]{3}"], ["1–3 bokstaver", "[A-ZÆØÅ]{1,3}"], ["2 tegn", "[A-Za-z0-9]{2}"],
+  ["3 tegn", "[A-Za-z0-9]{3}"], ["4 tegn", "[A-Za-z0-9]{4}"], ["6 tegn", "[A-Za-z0-9]{6}"],
+  ["1–12 tegn", "[A-Za-z0-9æøåÆØÅ_\\- ]{1,12}"], ["T eller ingenting", "T?"], ["Hele koden", "\\S+"],
+];
+/** For a block between code parts. */
+export const BLOCK_PRESETS: [string, string][] = [["Ett av . - _ / ␣", "[.\\-_/ ]"]];
+
+/** The standard lists a part can take as its data type. */
+const STANDARD_LISTS: [string, string][] = [
+  ["NS3451", "NS 3451"], ["NS3457-8", "NS 3457-8"], ["PA0802", "PA 0802"], ["IEC81346", "IEC 81346"],
+];
+const LISTS_FOR: Record<string, string[]> = {
+  systemkode: ["NS3451"],
+  komponent: ["NS3457-8", "PA0802", "IEC81346"],
+  typekode: ["NS3457-8", "PA0802", "IEC81346"],
+};
+
+type DataType = "value" | "list" | "pattern";
+
+/** The standard a part is linked to by the older fields, if any. */
+function legacyLink(d: FormatDraft, key: string): string | null {
+  if (key === "systemkode" && d.bygningsdel_system === "NS3451") return "NS3451";
+  if (key === "komponent" && d.komponent_system && d.komponent_system !== "Ingen") return d.komponent_system;
+  return d.part_links?.[key] ?? null;
+}
+
+/** The draft with a part's older link fields cleared or set. */
+function withLink(d: FormatDraft, key: string, std: string | null): FormatDraft {
+  if (key === "systemkode") return { ...d, bygningsdel_system: std ?? "Ingen" };
+  if (key === "komponent") return { ...d, komponent_system: std ?? "Ingen" };
+  const pl = { ...(d.part_links ?? {}) };
+  if (std) pl[key] = std;
+  else delete pl[key];
+  return { ...d, part_links: pl };
+}
+
+/** The data type a part shows, from what the draft holds (older files
+ *  included: a length lock is a Mønster, a linked part a standard Liste). */
+function partState(d: FormatDraft, part: string, key: string): { type: DataType; list: string; rx: string; text: string } {
+  const rule = d.part_rules?.[key];
+  if (rule?.kind === "value") return { type: "value", list: "", rx: "", text: rule.value };
+  if (rule?.kind === "list") return { type: "list", list: "", rx: "", text: rule.values.join(", ") };
+  if (rule?.kind === "standard") return { type: "list", list: rule.standard, rx: "", text: "" };
+  if (rule?.kind === "pattern") return { type: "pattern", list: "", rx: rule.pattern, text: "" };
+  const link = legacyLink(d, key);
+  if (link) return { type: "list", list: link, rx: "", text: "" };
+  const dk = PART_TO_DIGITKEY[part];
+  const n = dk ? d.part_digits?.[dk] : undefined;
+  if (n) return { type: "pattern", list: "", rx: key === "lokasjon" ? `[A-Za-z0-9]{${n}}` : `\\d{${n}}`, text: "" };
+  return { type: "pattern", list: "", rx: DEFAULT_FORM[key] ?? "\\S+", text: "" };
+}
+
+/** One part's data type in «Deler»: Fast verdi, Liste (own values or a
+ *  standard list) or Mønster (a preset in plain words, its regex shown, or
+ *  «Egendefinert»). */
 function PartRow({
   part,
   draft,
@@ -84,122 +139,243 @@ function PartRow({
   edit: (f: (d: FormatDraft) => FormatDraft) => void;
 }) {
   const key = PART_KEY[part];
-  const rule = draft.part_rules?.[key];
-  const dk = PART_TO_DIGITKEY[part];
-  const digits = dk ? draft.part_digits?.[dk] : undefined;
-  const mode = rule ? rule.kind : digits ? `n:${digits}` : "";
-  const [text, setText] = useState(() =>
-    rule?.kind === "pattern" ? rule.pattern : rule?.kind === "value" ? rule.value : rule?.kind === "list" ? rule.values.join(", ") : "",
-  );
+  const st = partState(draft, part, key);
+  const [type, setType] = useState<DataType>(st.type);
+  const [text, setText] = useState(st.text);
+  const [list, setList] = useState(st.list);
+  const preset = PATTERN_PRESETS.find(([, rx]) => rx === st.rx)?.[1] ?? (st.type === "pattern" ? "custom" : "");
+  const [pick, setPick] = useState(preset || "\\d{3}");
+  const [custom, setCustom] = useState(preset === "custom" ? st.rx : "");
+  const lists = LISTS_FOR[key] ?? [];
 
-  const setRule = (r: PartRule | null) =>
+  /** Write the part's rule; a length lock and an older link give way. */
+  const write = (rule: PartRule | null, link: string | null) =>
     edit((d) => {
       const pr = { ...(d.part_rules ?? {}) };
-      if (r) pr[key] = r;
+      if (rule) pr[key] = rule;
       else delete pr[key];
-      return { ...d, part_rules: pr };
+      const pd = { ...(d.part_digits ?? {}) };
+      const dk = PART_TO_DIGITKEY[part];
+      if (dk) delete pd[dk];
+      return withLink({ ...d, part_rules: pr, part_digits: pd }, key, link);
     });
-  const ruleOf = (kind: string, t: string): PartRule | null => {
-    if (kind === "pattern") return t.trim() ? { kind, pattern: t.trim() } : null;
-    if (kind === "value") return t !== "" ? { kind, value: t.trim() } : null;
-    if (kind === "list") {
+  const writeValue = (t: string) => write(t !== "" ? { kind: "value", value: t } : null, null);
+  const writeList = (l: string, t: string) => {
+    if (l) write({ kind: "standard", standard: l }, l);
+    else {
       const values = t.split(/[,;\n]/).map((v) => v.trim()).filter(Boolean);
-      return values.length ? { kind, values } : null;
-    }
-    return null;
-  };
-  // A kind picked with nothing typed yet is held here until the first entry.
-  const [pending, setPending] = useState<string | null>(null);
-  const shown = pending ?? mode;
-
-  const onMode = (m: string) => {
-    if (m.startsWith("n:") || m === "") {
-      setPending(null);
-      setRule(null);
-      edit((d) => {
-        const pd = { ...(d.part_digits ?? {}) };
-        if (dk) {
-          if (m === "") delete pd[dk];
-          else pd[dk] = Number(m.slice(2));
-        }
-        return { ...d, part_digits: pd };
-      });
-      return;
-    }
-    const r = ruleOf(m, text);
-    if (r) {
-      setPending(null);
-      setRule(r);
-    } else {
-      setPending(m);
-      setRule(null);
+      write(values.length ? { kind: "list", values } : null, null);
     }
   };
-  const onText = (t: string) => {
-    setText(t);
-    const kind = shown;
-    if (kind === "pattern" || kind === "value" || kind === "list") {
-      const r = ruleOf(kind, t);
-      setRule(r);
-      if (r) setPending(null);
-      else setPending(kind);
-    }
+  const writePattern = (rx: string) => {
+    if (!rx.trim()) return write(null, null);
+    // The part's own standard form is no rule at all.
+    write(rx === DEFAULT_FORM[key] ? null : { kind: "pattern", pattern: rx.trim() }, null);
   };
 
-  const link = LINKS[part];
-  const unit = part === "Lokasjon" ? "tegn" : "siffer";
+  const onType = (t: DataType) => {
+    setType(t);
+    if (t === "value") writeValue(text);
+    else if (t === "list") writeList(list, text);
+    else writePattern(pick === "custom" ? custom : pick);
+  };
+  const shownRx = type === "pattern" ? (pick === "custom" ? custom : pick) : "";
+
   return (
     <div className="prow rule">
       <span className="sw" style={paint(PART_COLORS[part] ?? FREETEXT_COLOR)}>
         {partLabel(part)}
       </span>
       <span className="pr">
-        <select className="field" aria-label={`${part} regel`} value={shown} onChange={(e) => onMode(e.target.value)}>
-          <option value="">{PART_RULE[part]}</option>
-          {dk
-            ? [1, 2, 3, 4, 5, 6].map((n) => (
-                <option key={n} value={`n:${n}`}>
-                  {n} {unit}
-                </option>
-              ))
-            : null}
-          <option value="pattern">Mønster</option>
-          <option value="value">Verdi</option>
+        <select className="field" aria-label={`${part} datatype`} value={type} onChange={(e) => onType(e.target.value as DataType)}>
+          <option value="value">Fast verdi</option>
           <option value="list">Liste</option>
+          <option value="pattern">Mønster</option>
         </select>
-        {shown === "pattern" || shown === "value" || shown === "list" ? (
+        {type === "value" ? (
           <input
             className="field mono"
-            aria-label={`${part} ${shown === "pattern" ? "mønster" : shown === "value" ? "verdi" : "liste"}`}
+            aria-label={`${part} verdi`}
             value={text}
-            onChange={(e) => onText(e.target.value)}
+            onChange={(e) => {
+              setText(e.target.value);
+              writeValue(e.target.value);
+            }}
           />
         ) : null}
-        {link ? (
+        {type === "list" ? (
+          <>
+            <select
+              className="field"
+              aria-label={`${part} liste`}
+              value={list}
+              onChange={(e) => {
+                setList(e.target.value);
+                writeList(e.target.value, text);
+              }}
+            >
+              <option value="">Egen liste</option>
+              {STANDARD_LISTS.filter(([k]) => lists.includes(k)).map(([k, label]) => (
+                <option key={k} value={k}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            {list === "" ? (
+              <input
+                className="field mono"
+                aria-label={`${part} verdier`}
+                value={text}
+                onChange={(e) => {
+                  setText(e.target.value);
+                  writeList("", e.target.value);
+                }}
+              />
+            ) : null}
+          </>
+        ) : null}
+        {type === "pattern" ? (
           <select
             className="field"
-            aria-label={`${part} standard`}
-            value={link.field === "typekode" ? (draft.part_links?.typekode ?? "Ingen") : draft[link.field]}
+            aria-label={`${part} mønster`}
+            value={pick}
             onChange={(e) => {
-              const v = e.target.value;
-              if (link.field === "typekode") {
-                edit((d) => {
-                  const pl = { ...(d.part_links ?? {}) };
-                  if (v === "Ingen") delete pl.typekode;
-                  else pl.typekode = v;
-                  return { ...d, part_links: pl };
-                });
-              } else edit((d) => ({ ...d, [link.field]: v }));
+              setPick(e.target.value);
+              writePattern(e.target.value === "custom" ? custom : e.target.value);
             }}
           >
-            {link.options.map(([v, label]) => (
-              <option key={v} value={v}>
+            {PATTERN_PRESETS.map(([label, rx]) => (
+              <option key={rx} value={rx}>
                 {label}
               </option>
             ))}
+            <option value="custom">Egendefinert</option>
           </select>
         ) : null}
       </span>
+      {type === "pattern" ? (
+        pick === "custom" ? (
+          <input
+            className="field mono rx"
+            aria-label={`${part} regex`}
+            value={custom}
+            onChange={(e) => {
+              setCustom(e.target.value);
+              writePattern(e.target.value);
+            }}
+          />
+        ) : (
+          <span className="rx mono">{shownRx}</span>
+        )
+      ) : null}
+    </div>
+  );
+}
+
+/** A block that is not a named code part (a separator, text, accepted
+ *  separators, a pattern), configured where it stands: Fast verdi, Liste
+ *  of accepted values, or Mønster. */
+function BlockRow({
+  token,
+  context,
+  onToken,
+}: {
+  token: string;
+  /** Where it stands: the blocks either side. */
+  context: string;
+  onToken: (t: string) => void;
+}) {
+  const b = blockOf(token);
+  const initial: DataType = b?.kind === "list" ? "list" : b?.kind === "pattern" ? "pattern" : "value";
+  const [type, setType] = useState<DataType>(initial);
+  const [text, setText] = useState(b?.kind === "fixed" ? b.text : "");
+  const [values, setValues] = useState<string[]>(b?.kind === "list" ? b.values : b?.kind === "fixed" ? [b.text] : []);
+  const [rx, setRx] = useState(b?.kind === "pattern" ? b.rx : BLOCK_PRESETS[0][1]);
+  const presetRx = BLOCK_PRESETS.some(([, r]) => r === rx);
+  const [own, setOwn] = useState(!presetRx);
+
+  const onType = (t: DataType) => {
+    setType(t);
+    if (t === "value") onToken(fixedToken(text || values[0] || "."));
+    else if (t === "list") onToken(listToken(values.length ? values : [text || "."]));
+    else onToken(regexToken(rx));
+  };
+  const toggle = (ch: string) => {
+    const next = values.includes(ch) ? values.filter((v) => v !== ch) : [...values, ch];
+    setValues(next);
+    if (next.length) onToken(listToken(next));
+  };
+  const show = (t: string) => (t === " " ? "␣" : t);
+
+  return (
+    <div className="prow rule">
+      <span className="sw blk mono" title={context}>
+        {b?.kind === "fixed" ? show(b.text) || "–" : b?.kind === "list" ? b.values.map(show).join(" ") : "/…/"}
+      </span>
+      <span className="pr">
+        <select className="field" aria-label="Datatype" value={type} onChange={(e) => onType(e.target.value as DataType)}>
+          <option value="value">Fast verdi</option>
+          <option value="list">Liste</option>
+          <option value="pattern">Mønster</option>
+        </select>
+        {type === "value" ? (
+          <input
+            className="field mono"
+            aria-label="Verdi"
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value);
+              if (e.target.value !== "") onToken(fixedToken(e.target.value));
+            }}
+          />
+        ) : null}
+        {type === "list" ? (
+          <span className="rchips">
+            {Object.values(SEP_TO_CHAR).map((ch) => (
+              <button key={ch} type="button" className="mini mono" aria-pressed={values.includes(ch)} onClick={() => toggle(ch)}>
+                {show(ch)}
+              </button>
+            ))}
+          </span>
+        ) : null}
+        {type === "pattern" ? (
+          <select
+            className="field"
+            aria-label="Mønster"
+            value={own ? "custom" : rx}
+            onChange={(e) => {
+              if (e.target.value === "custom") setOwn(true);
+              else {
+                setOwn(false);
+                setRx(e.target.value);
+                onToken(regexToken(e.target.value));
+              }
+            }}
+          >
+            {BLOCK_PRESETS.map(([label, r]) => (
+              <option key={r} value={r}>
+                {label}
+              </option>
+            ))}
+            <option value="custom">Egendefinert</option>
+          </select>
+        ) : null}
+      </span>
+      {type === "pattern" ? (
+        own ? (
+          <input
+            className="field mono rx"
+            aria-label="Regex"
+            value={rx}
+            onChange={(e) => {
+              setRx(e.target.value);
+              if (e.target.value) onToken(regexToken(e.target.value));
+            }}
+          />
+        ) : (
+          <span className="rx mono">{rx}</span>
+        )
+      ) : null}
     </div>
   );
 }
@@ -395,6 +571,15 @@ export default function FormatStep({
       return (
         <button key={ti} type="button" className="seg sep" aria-pressed={pressed} onClick={onClick} title={t} {...dnd}>
           <span className="sx">{SEP_TO_CHAR[t] === " " ? "␣" : SEP_TO_CHAR[t]}</span>
+        </button>
+      );
+    }
+    const blk = blockOf(t);
+    if (blk && (blk.kind === "list" || blk.kind === "pattern")) {
+      const label = blk.kind === "list" ? blk.values.map((v) => (v === " " ? "␣" : v)).join(" ") : `/${blk.rx}/`;
+      return (
+        <button key={ti} type="button" className="seg sep alt" aria-pressed={pressed} onClick={onClick} title={label} {...dnd}>
+          <span className="sx">{label}</span>
         </button>
       );
     }
@@ -648,6 +833,31 @@ export default function FormatStep({
           {parts.map((t) => (
             <PartRow key={`${t}-${formKey}`} part={t} draft={draft} edit={edit} />
           ))}
+          {draft.patterns.flatMap((p, pi) =>
+            p.sequence.map((t, ti) => {
+              const b = blockOf(t);
+              if (!b || b.kind === "part") return null;
+              const side = (k: number) => {
+                const n = p.sequence[k];
+                const nb = n !== undefined ? blockOf(n) : null;
+                return nb?.kind === "part" ? partLabel(nb.part) : "";
+              };
+              const context = [side(ti - 1), side(ti + 1)].filter(Boolean).join(" · ");
+              return (
+                <BlockRow
+                  key={`${pi}-${ti}-${formKey}`}
+                  token={t}
+                  context={context}
+                  onToken={(nt) =>
+                    setPatterns((ps) => {
+                      ps[pi][ti] = nt;
+                      return ps;
+                    })
+                  }
+                />
+              );
+            }),
+          )}
         </div>
       </section>
 
