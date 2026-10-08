@@ -1,15 +1,13 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { getPreview } from "../api";
 import {
   DISCIPLINES, FREETEXT_COLOR, FREETEXT_PREFIX, PART_COLORS, PART_EXAMPLE, PART_TO_DIGITKEY, PART_TYPES, SEP_KEYS,
   SEP_TO_CHAR, freetextValue, isFreetext, sequenceToExample, type Palette,
 } from "../constants";
-import type { PartRule, Preset, PreviewValue, RulesDict } from "../types";
-import { Canvas, Fig, Lamp, Meter, RailOptions, RailSection, RailTile, StepBar } from "./Shell";
-import { MiniLoader } from "./Loader";
+import type { PartRule, Preset, RulesDict } from "../types";
+import { Canvas, RailOptions, RailSection, RailTile, StepBar } from "./Shell";
 import { useLiveAnswer } from "./live";
-import { usePreview } from "./usePreview";
-import { STATSBYGG_PATTERNS, fmt, verdictOf } from "./setup";
+import { STATSBYGG_PATTERNS } from "./setup";
 
 export type FormatDraft = Pick<
   RulesDict,
@@ -72,26 +70,6 @@ const LINKS: Record<string, { field: "bygningsdel_system" | "komponent_system" |
 };
 
 const paint = (c: Palette) => ({ background: c.bg, color: c.text, boxShadow: `inset 0 0 0 1px ${c.border}` });
-
-/** A value with each part of the form coloured where it falls. */
-function Coloured({ v }: { v: PreviewValue }): ReactNode {
-  if (!v.ok || v.spans.length === 0) return v.v;
-  const spans = [...v.spans].sort((a, b) => a[1] - b[1]);
-  const out: ReactNode[] = [];
-  let at = 0;
-  spans.forEach(([name, a, b], i) => {
-    if (a > at) out.push(v.v.slice(at, a));
-    const part = TEMPLATE_PART[name.split("__")[0]];
-    out.push(
-      <i key={i} style={paint(PART_COLORS[part] ?? FREETEXT_COLOR)} title={part}>
-        {v.v.slice(a, b)}
-      </i>,
-    );
-    at = b;
-  });
-  if (at < v.v.length) out.push(v.v.slice(at));
-  return out;
-}
 
 /** One part's rule: its standard form (or a length lock), a pattern, a
  *  fixed value or a list of accepted values; and, for Systemkode and
@@ -226,17 +204,21 @@ function PartRow({
   );
 }
 
+/** The two areas' headers, edkjo's terms; the Norwegian words to come. */
+const BUILT_STRING = "built string";
+const BUILDING_BLOCKS = "building blocks";
+
 type Sel = { pi: number; ti: number } | null;
 type Drag = { pi: number; ti: number } | { token: string };
 type Drop = { pi: number; at: number } | null;
 
-/** Format: the TFM code form. Band 1: the form as segment chips (drag a
- *  segment, or a piece from below, to where it goes; or pick a segment and
- *  move it with ‹ ›, and click a piece to add it after the picked one) |
- *  what it takes of the model's values, and each part's rule. Band 2: the
- *  model's values, each part coloured where it falls | the values the form
- *  does not take, with why and the fix. Rail: the bundled forms and the
- *  discipline. Every preview is debounced and keyed on the form's JSON. */
+/** Format: building the TFM code form, without model data (the data
+ *  belongs with the results). Band 1: the built string, its forms as rows of
+ *  segments with «eller» between them (a code passes on any one) | each
+ *  part's rule. Band 2: the building blocks: parts, separators, text. A
+ *  block drags to where it goes or, clicked, lands after the picked
+ *  segment; a segment drags, or is picked and moved with ‹ › ✕. Rail: the
+ *  bundled forms and the discipline. */
 export default function FormatStep({
   uploadId,
   rules,
@@ -290,8 +272,6 @@ export default function FormatStep({
     };
   }, [presets, uploadId, rules]);
 
-  const previewRules = useMemo(() => ({ ...rules, ...draft }), [rules, draft]);
-  const preview = usePreview(uploadId, previewRules);
 
   const standard =
     JSON.stringify(draft.patterns.map((p) => p.sequence)) === JSON.stringify(STATSBYGG_PATTERNS) &&
@@ -383,26 +363,6 @@ export default function FormatStep({
   // The parts the form uses, once each, in order.
   const parts = [...new Set(draft.patterns.flatMap((p) => p.sequence))].filter((t) => t in PART_RULE);
 
-  const values = preview?.values;
-  const valueRows = useMemo(
-    () =>
-      (values ?? []).map((v) => (
-        <div key={v.v} className="lrow rule">
-          <Lamp verdict={v.ok ? "ok" : "fail"} />
-          <span className="cv ell" title={v.v}>
-            <Coloured v={v} />
-          </span>
-          <span className="num sub">{fmt(v.n)}</span>
-        </div>
-      )),
-    [values],
-  );
-
-  const countable = preview?.countable ?? false;
-  const matched = preview?.matched ?? 0;
-  const valued = preview?.valued ?? 0;
-  const verdict = verdictOf(matched, valued);
-
   const segment = (t: string, pi: number, ti: number) => {
     const pressed = sel?.pi === pi && sel.ti === ti;
     const onClick = () => setSel(pressed ? null : { pi, ti });
@@ -454,7 +414,7 @@ export default function FormatStep({
   );
 
   return (
-    <Canvas rows="auto auto minmax(0, 1fr)">
+    <Canvas rows="auto minmax(0, 1fr) auto">
       <StepBar>
         <button type="button" className="primary" disabled={!hasPattern} onClick={() => onUse(draft)}>
           Bruk
@@ -495,35 +455,33 @@ export default function FormatStep({
         </RailSection>
       </RailOptions>
 
-      <section className="tile card major" aria-label="Format">
-        <span className="lbl">{current ? current.label : "Egendefinert"}</span>
-        <div className="pats">
+      <section className="tile card major built" aria-label={BUILT_STRING}>
+        <div className="lh">
+          <span className="lbl">{BUILT_STRING}</span>
+          <span className="tag">{current ? current.label : "Egendefinert"}</span>
+        </div>
+        <div className="pats scroll">
           {draft.patterns.map((p, pi) => (
             <Fragment key={pi}>
-            {pi > 0 ? (
-              <div className="orrow" aria-hidden="true">
-                <span className="lbl">eller</span>
+              {pi > 0 ? (
+                <div className="orrow" aria-hidden="true">
+                  <span className="lbl">eller</span>
+                </div>
+              ) : null}
+              <div className="pat" onDragOver={overEnd(pi)} onDrop={onDrop}>
+                {p.sequence.map((t, ti) => segment(t, pi, ti))}
+                {drag && drop?.pi === pi && drop.at === p.sequence.length ? <span className="dropmark" /> : null}
+                {draft.patterns.length > 1 ? (
+                  <button type="button" className="seg add" aria-label="Fjern mønster" title="Fjern mønster" onClick={() => dropPattern(pi)}>
+                    ✕
+                  </button>
+                ) : null}
+                {pi === draft.patterns.length - 1 ? (
+                  <button type="button" className="seg add" aria-label="Nytt mønster" title="Nytt mønster" onClick={addPattern}>
+                    +
+                  </button>
+                ) : null}
               </div>
-            ) : null}
-            <div className="pat" onDragOver={overEnd(pi)} onDrop={onDrop}>
-              {p.sequence.map((t, ti) => segment(t, pi, ti))}
-              {drag && drop?.pi === pi && drop.at === p.sequence.length ? <span className="dropmark" /> : null}
-              {draft.patterns.length > 1 ? (
-                <button type="button" className="seg add" aria-label="Fjern mønster" title="Fjern mønster" onClick={() => dropPattern(pi)}>
-                  ✕
-                </button>
-              ) : null}
-              {pi === draft.patterns.length - 1 ? (
-                <button type="button" className="seg add" aria-label="Nytt mønster" title="Nytt mønster" onClick={addPattern}>
-                  +
-                </button>
-              ) : null}
-              <span className="phits num" title="Treff">
-                {preview?.pattern_hits && preview.pattern_hits.length === draft.patterns.length
-                  ? fmt(preview.pattern_hits[pi])
-                  : "–"}
-              </span>
-            </div>
             </Fragment>
           ))}
         </div>
@@ -544,6 +502,19 @@ export default function FormatStep({
             ✕
           </button>
         </div>
+      </section>
+
+      <section className="tile card minor" aria-label="Deler">
+        <span className="lbl">Deler</span>
+        <div className="parts scroll">
+          {parts.map((t) => (
+            <PartRow key={`${t}-${formKey}`} part={t} draft={draft} edit={edit} />
+          ))}
+        </div>
+      </section>
+
+      <section className="tile card full blocks" aria-label={BUILDING_BLOCKS}>
+        <span className="lbl">{BUILDING_BLOCKS}</span>
         <div className="palette">{PART_TYPES.map((t) => piece(t, `+ ${t}`, paint(PART_COLORS[t])))}</div>
         <div className="palette">
           {SEP_KEYS.map((k) => piece(k, SEP_TO_CHAR[k] === " " ? "␣" : SEP_TO_CHAR[k], undefined, "mini mono"))}
@@ -560,59 +531,6 @@ export default function FormatStep({
               + Tekst
             </button>
           </form>
-        </div>
-      </section>
-
-      <section className="tile card minor ev" aria-label="Treff">
-        <div className="figs">
-          <div>
-            <span className="lbl">Treff</span>
-            <Fig n={preview && countable ? matched : null} total={preview && countable ? valued : null} verdict={verdict} />
-            <Meter n={matched} total={valued} verdict={verdict} />
-          </div>
-          <div>
-            <span className="lbl">Avvik</span>
-            <Fig n={preview && countable ? valued - matched : null} total={null} />
-          </div>
-        </div>
-        <span className="lbl">Deler</span>
-        <div className="parts scroll">
-          {parts.map((t) => (
-            <PartRow key={`${t}-${formKey}`} part={t} draft={draft} edit={edit} />
-          ))}
-        </div>
-      </section>
-
-      <section className="tile card major vals" aria-label="Verdier">
-        <div className="lh">
-          <span className="lbl">Verdier</span>
-          <span className="lbl num">{preview && countable ? `${fmt(preview.distinct)} ulike` : ""}</span>
-        </div>
-        <div className="scroll">
-          {!preview && uploadId ? <MiniLoader /> : null}
-          {valueRows}
-        </div>
-      </section>
-
-      <section className="tile card minor vals" aria-label="Avvik">
-        <div className="lh">
-          <span className="lbl">Avvik</span>
-          <span className="lbl num">{preview && countable ? `${fmt(preview.off_distinct)} ulike` : ""}</span>
-        </div>
-        <div className="scroll">
-          {(preview?.off ?? []).map((o) => (
-            <div key={o.v} className="offrow rule">
-              <Lamp verdict="fail" />
-              <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-                <span className="mono ell" title={o.v}>
-                  {o.v}
-                </span>
-                {o.reason ? <span className="why">{o.reason}</span> : null}
-                {o.fix ? <span className="fix">→ {o.fix}</span> : null}
-              </span>
-              <span className="num sub">{fmt(o.n)}</span>
-            </div>
-          ))}
         </div>
       </section>
     </Canvas>

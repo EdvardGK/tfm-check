@@ -373,3 +373,12 @@
 #oppsett .orrow { display: flex; align-items: center; gap: 10px; }
 #oppsett .orrow::before, #oppsett .orrow::after { content: ""; flex: 1 1 auto; height: 1px; background: var(--d-hair); }
 #oppsett .pat .phits { margin-left: auto; align-self: center; font-family: var(--font-mono); font-size: 14px; font-weight: 600; min-width: 48px; }
+
+/* ── Format: built string (large) | Deler, building blocks below ── */
+#oppsett .built .pats { flex: 1 1 auto; gap: 12px; align-content: flex-start; padding: 4px 2px; }
+#oppsett .built .seg { min-height: 58px; padding: 6px 12px; }
+#oppsett .built .seg .sx { font-size: 18px; }
+#oppsett .built .seg.sep { min-width: 32px; }
+#oppsett .built .seg.sep .sx { font-size: 20px; }
+#oppsett .blocks { gap: 10px; }
+#oppsett .blocks .palette .mini { height: 32px; padding: 0 12px; font-size: 13px; }
