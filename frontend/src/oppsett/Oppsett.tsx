@@ -171,11 +171,10 @@ export default function Oppsett({
   };
 
   // ---- Åpne IFC ----
-  // The walk moves on as soon as a file is picked: what the file's name and
-  // header say (discipline, schema) is known at once, and the steps that
-  // need no model are open while it goes up and is read. The model's data
-  // fills the other steps when it arrives; the loader stays in the drop
-  // frame.
+  // A picked file holds the walk on the loader in the drop frame (gzip,
+  // upload, read, index, with the counter) until the model's inventory is
+  // in, then opens Kilde with its data. The file's name and header
+  // (discipline, schema) show in the rail meanwhile.
   const readIfc = async (file: File) => {
     if (!rules || reading) return;
     if (!isModelFile(file.name)) {
@@ -196,12 +195,14 @@ export default function Oppsett({
     // An opened setup applies its rules for the file's discipline.
     const fromFile = opened ? rulesFor(saved, f) : null;
     setRules((r) => (fromFile ?? (r ? { ...r, discipline_key: f ?? r.discipline_key } : r)));
-    if (step === "ifc") go("kilde");
+    // Held on the loader in the drop frame until the model's inventory is
+    // in; the walk then opens with its data.
     try {
       const up = await readModel(file, setReadProgress);
       const inventory = await getInventory(up.upload_id);
       setUpload(up);
       setInv(inventory);
+      go("kilde");
       // Floors: codes for the model's storeys in the chosen style, unless
       // codes are set already.
       setRules((r) => {
@@ -283,7 +284,7 @@ export default function Oppsett({
       standard: ans.standard,
       current,
       pending: !current && !done,
-      enabled: base !== null,
+      enabled: base !== null && !reading,
       onClick: () => {
         if (s === step) return;
         setDetour(false);
@@ -294,7 +295,7 @@ export default function Oppsett({
 
   // ---- The step ----
   const stepIndex = step === "start" ? null : INDEX.indexOf(step as WalkStep | "end") + 1;
-  const bar = { name: STEP_NAME[step], n: stepIndex, total: INDEX.length, error, onBack: back !== null ? goBack : null };
+  const bar = { name: STEP_NAME[step], n: stepIndex, total: INDEX.length, error, onBack: back !== null && !reading ? goBack : null };
 
   let body: React.ReactNode = null;
   if (step === "start") {

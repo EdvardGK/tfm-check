@@ -6,8 +6,8 @@ import { fmt } from "./setup";
 
 /** Åpne IFC: one drop target filling the canvas. A file held over the page
  *  lights it. While the model goes up and is read, the frame plays the
- *  loader with its counter; the rest of the walk is open meanwhile. Once
- *  read, the rail's first row carries the file. */
+ *  loader with its counter, and the walk waits; once the model is read,
+ *  the walk opens and the rail's first row carries the file. */
 export default function IfcStep({
   dragging,
   busy,
@@ -29,7 +29,7 @@ export default function IfcStep({
   return (
     <Canvas rows="auto minmax(0, 1fr)">
       <StepBar>
-        <button type="button" className="primary" disabled={!fileName} onClick={onUse}>
+        <button type="button" className="primary" disabled={!loaded || busy} onClick={onUse}>
           Bruk
         </button>
       </StepBar>
