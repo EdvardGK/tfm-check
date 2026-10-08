@@ -7,3 +7,7 @@ legacy
 backend/usage.db
 frontend/smoke-fail.png
 .git
+testdata
+streamlit
+worklog
+frontend/mocks
