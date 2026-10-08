@@ -5,7 +5,7 @@ import { Canvas, Fig, Meter, StepBar, Val } from "./Shell";
 import SourceTree, { propOf, type Pin } from "./SourceTree";
 import { ChoiceCard, modeOf, type SourceMode } from "./SourceChoice";
 import SourceName from "./SourceName";
-import { useLiveAnswer } from "./live";
+import { useDraft, useLiveAnswer } from "./live";
 import { STATUS_STANDARD, fmt, locationText, sameLocation, sourceCount } from "./setup";
 
 const PHASES: Exclude<Phase, "">[] = ["ny", "bevares", "ombruk", "rives"];
@@ -69,6 +69,7 @@ export default function StatusStep({
   const search = useRef<HTMLInputElement>(null);
   const isStd = sameLocation(draft, std);
   useLiveAnswer("status", locationText(draft), isStd);
+  useDraft({ status_location: draft });
 
   const [mode, setMode] = useState<SourceMode>(() => modeOf(draft, std));
   const [lastOther, setLastOther] = useState<Location | null>(null);

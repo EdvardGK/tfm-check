@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Inventory, RulesDict } from "../types";
 import { Bar10, Canvas, Fig, Lamp, Meter, RailOptions, RailSection, RailTile, StepBar } from "./Shell";
-import { useLiveAnswer, type LiveAnswer } from "./live";
+import { useDraft, useLiveAnswer, type LiveAnswer } from "./live";
 import { usePreview } from "./usePreview";
 import { allowedFloors, likelyStyle, proposeCodes, reflowCodes, type FloorStyle } from "./floors";
 import { fmt, verdictOf } from "./setup";
@@ -86,6 +86,7 @@ export default function EtasjerStep({
   const previewRules = useMemo(() => ({ ...rules, ...patch }), [rules, patch]);
   const preview = usePreview(uploadId, previewRules);
 
+  useDraft(patch);
   const sa = schemeAnswer(scheme);
   useLiveAnswer("etasjer", sa.answer, sa.standard);
 

@@ -8,7 +8,7 @@ import {
 } from "../constants";
 import type { PartRule, Preset, RulesDict } from "../types";
 import { Canvas, RailOptions, RailSection, RailTile, StepBar } from "./Shell";
-import { useLiveAnswer } from "./live";
+import { useDraft, useLiveAnswer } from "./live";
 import { STATSBYGG_PATTERNS } from "./setup";
 
 export type FormatDraft = Pick<
@@ -557,6 +557,7 @@ export default function FormatStep({
     Object.keys(draft.part_rules ?? {}).length === 0;
   useLiveAnswer("format", standard ? "" : draft.patterns.map((p) => sequenceToExample(p.sequence)).join(" | "), standard);
 
+  useDraft(draft);
   const current = presets.find((p) => sameForm(draft, presetDraft(p, draft))) ?? null;
   const hasPattern = draft.patterns.some((p) => p.sequence.length > 0);
 

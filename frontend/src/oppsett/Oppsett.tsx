@@ -19,7 +19,7 @@ import { sequenceToExample } from "../constants";
 import type { Inventory, Preset, RulesDict, UploadResponse } from "../types";
 import "./oppsett.css";
 import { Bar, Rail, RailSlot, type Dot, type RailItem } from "./Shell";
-import { Live, type LiveAnswer } from "./live";
+import { Draft, Live, type LiveAnswer } from "./live";
 import StartStep from "./StartStep";
 import IfcStep from "./IfcStep";
 import KildeStep from "./KildeStep";
@@ -132,6 +132,24 @@ export default function Oppsett({
   const [session, setSession] = useState<Record<string, RulesDict>>({});
   const [ids, setIds] = useState<IdsSpec[] | null>(null);
   const queue = useRef<Promise<void>>(Promise.resolve());
+  // The open step's edits not yet taken with «Bruk».
+  const stepDraft = useRef<Partial<RulesDict> | null>(null);
+  const [setDraftRef] = useState(() => (p: Partial<RulesDict> | null) => {
+    stepDraft.current = p;
+  });
+
+  /** «Lagre oppsett», from any step: every discipline of the session, the
+   *  open step's edits included, as they are (incomplete is fine). */
+  const saveSetup = () => {
+    if (!rules) return;
+    const current = { ...rules, ...(stepDraft.current ?? {}) };
+    let file = withFag(opened ? saved : null, base ?? "custom", fag, current);
+    for (const [k, r] of Object.entries(session)) if (k !== (fag ?? ANY_FAG)) file = withFag(file, base ?? "custom", k, r);
+    setSaved(file);
+    storeSetup(file);
+    onStored(file);
+    download(setupFileName(current, upload), setupJson(file));
+  };
 
   const loaded = upload !== null && inv !== null;
   const fag = upload?.detected_discipline ?? fileFag;
@@ -458,13 +476,7 @@ export default function Oppsett({
           preview={null}
           checking={false}
           registering={false}
-          onSave={() => {
-            const file = withFag(saved, base ?? "custom", fag, rules);
-            setSaved(file);
-            storeSetup(file);
-            onStored(file);
-            download(setupFileName(rules, null), setupJson(file));
-          }}
+          onSave={saveSetup}
           onRegister={() => undefined}
           onRow={(s) => {
             setDetour(true);
@@ -540,14 +552,7 @@ export default function Oppsett({
           preview={preview}
           checking={checking}
           registering={registering}
-          onSave={() => {
-            let file = withFag(opened ? saved : null, base ?? "custom", fag, rules);
-            for (const [k, r] of Object.entries(session)) if (k !== (fag ?? ANY_FAG)) file = withFag(file, base ?? "custom", k, r);
-            setSaved(file);
-            storeSetup(file);
-            onStored(file);
-            download(setupFileName(rules, upload), setupJson(file));
-          }}
+          onSave={saveSetup}
           onRegister={() => {
             onError(null);
             setRegistering(true);
@@ -598,14 +603,23 @@ export default function Oppsett({
             }
             items={items}
           />
+          {base !== null ? (
+            <div className="rsec tile railsave">
+              <button type="button" className="key" onClick={saveSetup}>
+                Lagre oppsett
+              </button>
+            </div>
+          ) : null}
           <div ref={setSlot} style={{ display: "contents" }} />
         </div>
         <RailSlot.Provider value={slot}>
           <Bar.Provider value={bar}>
             <Live.Provider value={setLive}>
+              <Draft.Provider value={setDraftRef}>
               <StepFrame key={`${step}-${visit}-${activeKey ?? ""}${MODEL_STEPS.has(step) ? `-${loaded}` : ""}`} step={step}>
                 {body}
               </StepFrame>
+              </Draft.Provider>
             </Live.Provider>
           </Bar.Provider>
         </RailSlot.Provider>

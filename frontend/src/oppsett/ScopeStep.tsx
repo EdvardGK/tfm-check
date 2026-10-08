@@ -3,7 +3,7 @@ import { getScopeValues, peek, peekLatest } from "../api";
 import type { Inventory, Location, RulesDict, ScopeRule, ScopeSource } from "../types";
 import { Canvas, Fig, Meter, StepBar } from "./Shell";
 import SourceName from "./SourceName";
-import { useLiveAnswer } from "./live";
+import { useDraft, useLiveAnswer } from "./live";
 import { usePreview } from "./usePreview";
 import { fmt, locationText } from "./setup";
 
@@ -220,6 +220,7 @@ export default function ScopeStep({
   );
   const preview = usePreview(uploadId, previewRules) ?? (uploadId ? peekLatest("preview", uploadId) : null);
 
+  useDraft({ scope_include: complete(include), scope_exclude: complete(exclude), scope_components: [], scope_types: [] });
   const n = include.length + exclude.length;
   useLiveAnswer("scope", n ? `${include.length} / ${exclude.length}` : "", n === 0);
 

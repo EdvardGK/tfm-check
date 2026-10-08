@@ -4,7 +4,7 @@ import { Canvas, Fig, Lamp, Meter, RailOptions, RailSection, RailTile, StepBar, 
 import { ChoiceCard, modeOf, type SourceMode } from "./SourceChoice";
 import SourceTree, { propOf, type Pin } from "./SourceTree";
 import SourceName from "./SourceName";
-import { useLiveAnswer } from "./live";
+import { useDraft, useLiveAnswer } from "./live";
 import { usePreview } from "./usePreview";
 import {
   ASPECT_NAME, ASPECT_SIGN, PART_STANDARD, STANDARD_LOCATION, fmt, sameLocation, sourceCount, sourceText, standardIn,
@@ -110,6 +110,7 @@ export default function KildeStep({
     : { ...rules, tfm_mode: "whole", tfm_location: draft };
   const isStd = composed ? ASPECTS.every((a) => sameLocation(parts[a], partStd(a))) : sameLocation(draft, wholeStd);
   useLiveAnswer("kilde", sourceText(draftRules), isStd);
+  useDraft(composed ? { tfm_mode: "parts", tfm_parts: parts } : { tfm_mode: "whole", tfm_location: draft });
 
   const preview = usePreview(uploadId, draftRules);
   const valued = preview?.valued ?? 0;
