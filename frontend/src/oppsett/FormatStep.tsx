@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { getPreview } from "../api";
 import {
   DISCIPLINES, FREETEXT_COLOR, FREETEXT_PREFIX, PART_COLORS, PART_EXAMPLE, PART_TO_DIGITKEY, PART_TYPES, SEP_KEYS,
@@ -384,6 +385,50 @@ function BlockRow({
 const BUILT_STRING = "built string";
 const BUILDING_BLOCKS = "building blocks";
 
+/** The «Sett inn» picker, outside every tile's overflow (in #oppsett's top
+ *  level, position fixed), at its bubble: below it, or above when there is
+ *  no room, shifted to stay inside the viewport. */
+function FloatingPop({ anchor, children }: { anchor: string; children: ReactNode }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  useLayoutEffect(() => {
+    const place = () => {
+      const a = document.querySelector(`#oppsett [data-gap="${anchor}"]`);
+      const p = ref.current;
+      if (!a || !p) return;
+      const r = a.getBoundingClientRect();
+      const w = p.offsetWidth;
+      const h = p.offsetHeight;
+      const m = 8;
+      const left = Math.min(Math.max(m, r.left + r.width / 2 - 16), window.innerWidth - w - m);
+      let top = r.bottom + 6;
+      if (top + h > window.innerHeight - m) top = Math.max(m, r.top - 6 - h);
+      setPos({ left, top });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [anchor]);
+  const root = document.getElementById("oppsett");
+  if (!root) return null;
+  return createPortal(
+    <span
+      ref={ref}
+      className="pop"
+      role="dialog"
+      aria-label="Sett inn"
+      style={{ position: "fixed", left: pos?.left ?? -9999, top: pos?.top ?? -9999, transform: "none" }}
+    >
+      {children}
+    </span>,
+    root,
+  );
+}
+
 type Sel = { pi: number; ti: number } | null;
 type Drag = { pi: number; ti: number } | { token: string };
 type Drop = { pi: number; at: number } | null;
@@ -612,7 +657,7 @@ export default function FormatStep({
     if (!picker) return;
     const onDown = (e: MouseEvent) => {
       const t = e.target as HTMLElement | null;
-      if (!t?.closest(".gap[data-open]")) closeRef.current();
+      if (!t?.closest(".gap[data-open]") && !t?.closest(".pop")) closeRef.current();
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") closeRef.current();
@@ -644,12 +689,13 @@ export default function FormatStep({
           aria-label="Sett inn"
           title="Sett inn"
           aria-expanded={open}
+          data-gap={`${pi}-${at}`}
           onClick={() => (open ? closePicker() : setPicker({ pi, at }))}
         >
           +
         </button>
         {open ? (
-          <span className="pop" role="dialog" aria-label="Sett inn">
+          <FloatingPop anchor={`${pi}-${at}`}>
             <span className="popbar">
               <button type="button" className="mini" aria-label="Lukk" onClick={closePicker}>
                 ✕
@@ -695,7 +741,7 @@ export default function FormatStep({
                 + Tekst
               </button>
             </form>
-          </span>
+          </FloatingPop>
         ) : null}
       </span>
     );
