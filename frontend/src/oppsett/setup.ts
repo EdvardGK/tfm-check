@@ -52,7 +52,7 @@ export function statsbyggRules(discipline: string | null): RulesDict {
     project_name: "",
     discipline_key: discipline ?? "Annet",
     bygningsdel_system: "NS3451",
-    komponent_system: "IEC81346",
+    komponent_system: "NS3457-8",
     patterns: STATSBYGG_PATTERNS.map((p) => ({ sequence: [...p] })),
     part_digits: {},
     tfm_location: [...STANDARD_LOCATION] as Location,

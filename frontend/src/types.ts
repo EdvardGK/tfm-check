@@ -26,6 +26,32 @@ export interface RulesDict {
   tfm_parts?: Partial<Record<Aspect, Location>>;
   /** Status: the source of the element's MMI code. */
   status_location?: Location | null;
+  /** A segment's own rule over its standard form, by template part name
+   *  (lokasjon, systemkode …). */
+  part_rules?: Record<string, PartRule>;
+}
+
+export type PartRule =
+  | { kind: "pattern"; pattern: string }
+  | { kind: "value"; value: string }
+  | { kind: "list"; values: string[] };
+
+/** GET/POST /api/rollup: system and component codes rolled up. */
+export interface RollupRow {
+  code: string;
+  n: number;
+  valid: boolean | null;
+  description: string;
+  reason: string;
+  systems: ValueCount[];
+  components?: ValueCount[];
+}
+
+export interface Rollup {
+  links: Record<string, string>;
+  objects: number;
+  systems: RollupRow[];
+  components: RollupRow[];
 }
 
 export type TfmMode = "whole" | "parts";

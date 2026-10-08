@@ -1,4 +1,4 @@
-import type { CheckResponse, Inventory, Location, Preset, Preview, RulesDict, SourceValues, UploadResponse } from "./types";
+import type { CheckResponse, Inventory, Location, Preset, Preview, Rollup, RulesDict, SourceValues, UploadResponse } from "./types";
 
 async function jsonOrThrow<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -144,4 +144,78 @@ export async function downloadReport(
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+// ---- Upload as a job: the file goes up (byte progress), then the server
+// reads and indexes it (polled progress). ----
+
+export interface JobStatus {
+  stage: "les" | "indekser" | "ferdig" | "feil";
+  /** Indexing, 0–1. */
+  fraction: number | null;
+  products: number | null;
+  file_size: number;
+  elapsed: number;
+  result: UploadResponse | null;
+  error: string | null;
+}
+
+export type ReadProgress =
+  | { stage: "opp"; pct: number }
+  | { stage: "les"; elapsed: number }
+  | { stage: "indekser"; pct: number; products: number | null };
+
+function postFile(file: File, onPct: (pct: number) => void): Promise<{ job_id: string }> {
+  return new Promise((resolve, reject) => {
+    const form = new FormData();
+    form.append("file", file);
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/jobs");
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onPct(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText));
+        } catch (err) {
+          reject(err);
+        }
+      } else {
+        let detail = `HTTP ${xhr.status}`;
+        try {
+          detail = JSON.parse(xhr.responseText).detail ?? detail;
+        } catch {
+          /* ignore */
+        }
+        reject(new Error(detail));
+      }
+    };
+    xhr.onerror = () => reject(new Error("Nettverksfeil under opplasting."));
+    xhr.send(form);
+  });
+}
+
+/** Upload, then follow the server's reading until the model is ready. */
+export async function readIfc(file: File, onProgress: (p: ReadProgress) => void): Promise<UploadResponse> {
+  const { job_id } = await postFile(file, (pct) => onProgress({ stage: "opp", pct }));
+  for (;;) {
+    await new Promise((r) => window.setTimeout(r, 300));
+    const j = await jsonOrThrow<JobStatus>(await fetch(`/api/jobs/${encodeURIComponent(job_id)}`));
+    if (j.stage === "feil") throw new Error(j.error ?? "Kunne ikke lese IFC-fil.");
+    if (j.stage === "ferdig" && j.result) return j.result;
+    if (j.stage === "indekser") onProgress({ stage: "indekser", pct: Math.round((j.fraction ?? 0) * 100), products: j.products });
+    else onProgress({ stage: "les", elapsed: j.elapsed });
+  }
+}
+
+export async function getRollup(uploadId: string, rules: RulesDict, signal?: AbortSignal): Promise<Rollup> {
+  return jsonOrThrow<Rollup>(
+    await fetch("/api/rollup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ upload_id: uploadId, rules }),
+      signal,
+    }),
+  );
 }

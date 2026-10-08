@@ -10,7 +10,8 @@
  *  returns to the summary. «Forrige» goes back along the path taken. */
 
 import { useRef, useState, type DragEvent } from "react";
-import { downloadRegister, getInventory, uploadIfc } from "../api";
+import { downloadRegister, getInventory, readIfc as readModel, type ReadProgress } from "../api";
+import Loader from "./Loader";
 import { sequenceToExample } from "../constants";
 import type { Inventory, Preset, RulesDict, UploadResponse } from "../types";
 import "./oppsett.css";
@@ -110,6 +111,7 @@ export default function Oppsett({
   const [upload, setUpload] = useState<UploadResponse | null>(null);
   const [inv, setInv] = useState<Inventory | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
+  const [readProgress, setReadProgress] = useState<ReadProgress | null>(null);
   const [reading, setReading] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -175,7 +177,11 @@ export default function Oppsett({
     setProgress(0);
     setReading(true);
     try {
-      const up = await uploadIfc(file, (p) => setProgress(p >= 100 ? null : p));
+      setReadProgress({ stage: "opp", pct: 0 });
+      const up = await readModel(file, (p) => {
+        setReadProgress(p);
+        setProgress(p.stage === "opp" && p.pct < 100 ? p.pct : null);
+      });
       setProgress(null);
       const inventory = await getInventory(up.upload_id);
       setUpload(up);
@@ -192,6 +198,7 @@ export default function Oppsett({
     } finally {
       setReading(false);
       setProgress(null);
+      setReadProgress(null);
     }
   };
 
@@ -377,6 +384,7 @@ export default function Oppsett({
 
   return (
     <div id="oppsett" {...dropProps}>
+      {reading ? <Loader progress={readProgress} /> : null}
       <div className="flow">
         <div className="railcol">
           <Rail

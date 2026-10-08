@@ -314,3 +314,32 @@
 #oppsett .offrow { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: start; gap: 8px; padding: 6px 0; }
 #oppsett .offrow .why { font-size: 11.5px; color: var(--d-label-color); overflow-wrap: anywhere; }
 #oppsett .offrow .fix { font-family: var(--font-mono); font-size: 12px; color: var(--color-green); overflow-wrap: anywhere; }
+
+/* ── Loading screen: the skiplum.com brand outline animation + counter ── */
+#oppsett .loader {
+  position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; align-content: center; gap: 18px;
+  background: var(--d-field, var(--color-ground)); background-attachment: fixed;
+}
+#oppsett .loader video { display: block; width: clamp(260px, 46vw, 620px); height: auto; pointer-events: none; }
+#oppsett .loader .count { display: flex; align-items: baseline; gap: 12px; }
+#oppsett .loader .count .num { font-family: var(--font-mono); font-size: 18px; font-weight: 600; text-align: left; }
+
+/* ── Format: drag and drop, a part's rule ── */
+#oppsett .seg[draggable="true"] { cursor: grab; }
+#oppsett .seg[data-dragging="true"] { opacity: .35; }
+#oppsett .seg[data-drop="before"] { box-shadow: -4px 0 0 0 var(--sel), inset 0 0 0 1px var(--d-hair); }
+#oppsett .seg[data-drop="after"] { box-shadow: 4px 0 0 0 var(--sel), inset 0 0 0 1px var(--d-hair); }
+#oppsett .dropmark { width: 4px; align-self: stretch; border-radius: 2px; background: var(--sel); }
+#oppsett .palette .mini[draggable="true"] { cursor: grab; }
+#oppsett .parts.scroll { overflow: auto; min-height: 0; }
+#oppsett .prow { grid-template-columns: 96px minmax(0, 1fr); align-items: start; padding: 4px 0; }
+#oppsett .prow .pr { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+#oppsett .prow .pr .field { min-width: 0; }
+#oppsett .prow .pr input.field { flex: 1 1 120px; }
+
+/* ── Oppsummering: system and component codes rolled up ── */
+#oppsett .rurow { display: grid; grid-template-columns: 18px 64px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 34px; padding: 3px 0; }
+#oppsett .rurow .rc { font-size: 13px; font-weight: 600; }
+#oppsett .rurow .rd { display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 12.5px; }
+#oppsett .rurow .ra { font-family: var(--font-mono); font-size: 11px; color: var(--d-label-color); }
+#oppsett .srow { min-height: 44px; }

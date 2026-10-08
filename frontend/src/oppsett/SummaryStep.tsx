@@ -2,6 +2,7 @@ import { sequenceToExample } from "../constants";
 import type { Inventory, Preview, RulesDict, UploadResponse } from "../types";
 import { Canvas, Lamp, StepBar } from "./Shell";
 import { schemeAnswer } from "./EtasjerStep";
+import RollupTiles, { useRollup } from "./Rollup";
 import {
   STATUS_STANDARD, STEP_NAME, floorResult, fmt, formatResult, isStandardFormat, isStandardSource, locationText,
   sameLocation, sourceResult, sourceText, statusResult, type StepResult, type WalkStep,
@@ -80,6 +81,7 @@ export default function SummaryStep({
   onProjectName: (name: string) => void;
 }) {
   const rows = summaryRows(inv, upload, rules, preview);
+  const roll = useRollup(upload.upload_id, rules);
   const failing = rows.some((r) => r.standard && r.result?.verdict === "fail");
 
   return (
@@ -114,6 +116,8 @@ export default function SummaryStep({
           <input value={rules.project_name ?? ""} onChange={(e) => onProjectName(e.target.value)} />
         </label>
       </section>
+
+      <RollupTiles roll={roll} />
     </Canvas>
   );
 }
