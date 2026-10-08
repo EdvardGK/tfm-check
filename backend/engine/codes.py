@@ -44,54 +44,56 @@ class Coded:
         return "; ".join(out)
 
 
+def read_code(code: str, rules: TFMRules, regexes, cache: dict) -> tuple:
+    """(diagnosis, parts, validity) of one code: the parts as read that fit
+    their form, Systemkode / Komponentkode also behind their signs off the
+    form, and linked parts against their standard. Cached per code."""
+    hit = cache.get(code)
+    if hit is not None:
+        return hit
+    d = diagnose(code, rules, regexes)
+    parts = {}
+    for name, text in (d.parts or {}).items():
+        if text and re.fullmatch(rules.part_form(name), text):
+            parts[name] = text
+    if "systemkode" not in parts:
+        m = _LOOSE_SYSTEM.search(code)
+        if m:
+            parts["systemkode"] = m.group(1)
+            if m.group(2) and "lopenummer" not in parts:
+                parts["lopenummer"] = m.group(2)
+    if "komponent" not in parts:
+        m = _LOOSE_COMPONENT.search(code)
+        if m:
+            parts["komponent"] = m.group(1)
+    validity = {}
+    for part, key in links(rules).items():
+        if part in parts:
+            v = check_code(parts[part], key)
+            if v is not None:
+                validity[part] = v
+    hit = cache[code] = (d, parts, validity)
+    return hit
+
+
 def coded_objects(index: ModelIndex, rules: TFMRules) -> tuple[list[Coded], int]:
-    """(objects with a code, in model order; objects left out by Scope)."""
+    """(objects with a code and in scope, in model order; objects left out by
+    Scope)."""
+    from .scope import out_of_scope
+
     codes = index.code_values(rules) or {}
     regexes = rules.full_regexes()
-    forms = {}
-    scope_comp = {c.upper() for c in rules.scope_components}
-    scope_types = set(rules.scope_types)
-    cache: dict[str, tuple] = {}
+    out_ids = out_of_scope(index, rules)
+    cache: dict = {}
     out, excluded = [], 0
     for pid in index.product_ids:
         code = codes.get(pid)
         if not code:
             continue
-        hit = cache.get(code)
-        if hit is None:
-            d = diagnose(code, rules, regexes)
-            parts = {}
-            for name, text in (d.parts or {}).items():
-                if not text:
-                    continue
-                form = forms.get(name) or forms.setdefault(name, rules.part_form(name))
-                if re.fullmatch(form, text):
-                    parts[name] = text
-            # Off the form, the system and component codes are still read
-            # behind their PA 0802 signs (=360.001, -SFZ.004T), so the rollup
-            # and the standard check see every code that appears.
-            if "systemkode" not in parts:
-                m = _LOOSE_SYSTEM.search(code)
-                if m:
-                    parts["systemkode"] = m.group(1)
-                    if m.group(2) and "lopenummer" not in parts:
-                        parts["lopenummer"] = m.group(2)
-            if "komponent" not in parts:
-                m = _LOOSE_COMPONENT.search(code)
-                if m:
-                    parts["komponent"] = m.group(1)
-            validity = {}
-            for part, key in links(rules).items():
-                if part in parts:
-                    v = check_code(parts[part], key)
-                    if v is not None:
-                        validity[part] = v
-            hit = cache[code] = (d, parts, validity)
-        d, parts, validity = hit
-        comp = (parts.get("komponent") or "").upper() or loose_component(code)
-        if (comp and comp in scope_comp) or (scope_types and index.type_of.get(pid) in scope_types):
+        if pid in out_ids:
             excluded += 1
             continue
+        d, parts, validity = read_code(code, rules, regexes, cache)
         out.append(Coded(pid, code, d, parts, validity))
     return out, excluded
 

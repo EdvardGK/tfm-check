@@ -48,7 +48,7 @@ def applicable_checks(results: dict):
 
 def run_checks(ifc, products, rules: TFMRules,
                bygningsdel_codes: dict, komponent_codes: dict,
-               codes: dict[int, str] | None = None) -> dict:
+               codes: dict[int, str] | None = None, out_ids: set[int] | None = None) -> dict:
     """``codes``: each product's composed code (Kilde «Fra deler»); the
     whole code's source is read off the element otherwise."""
     # IfcSystem names carry a name after the code: start-anchored there.
@@ -109,7 +109,11 @@ def run_checks(ifc, products, rules: TFMRules,
 
     for e in products:
         typ = e.is_a()
-        if scope_types and _type_name(e) in scope_types:
+        if out_ids is not None:
+            if e.id() in out_ids:
+                excluded_ids.add(e.id())
+                continue
+        elif scope_types and _type_name(e) in scope_types:
             excluded_ids.add(e.id())
             continue
 
@@ -125,7 +129,7 @@ def run_checks(ifc, products, rules: TFMRules,
             if chosen:
                 break
 
-        if scope_comp:
+        if scope_comp and out_ids is None:
             if chosen is not None:
                 ko_scope = (chosen[2].groupdict().get("komponent") or "").upper()
             else:

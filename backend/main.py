@@ -400,6 +400,27 @@ def code_rollup(req: ModelsRequest):
     return rolls[0] if len(rolls) == 1 else merge_rollups(rolls)
 
 
+class ScopeValuesRequest(BaseModel):
+    upload_id: str
+    rules: dict
+    source: dict
+
+
+@app.post("/api/scope_values")
+def scope_values(req: ScopeValuesRequest):
+    """A scope rule's source: the model's values with counts."""
+    from engine.scope import values_of
+
+    up = _resolve(req.upload_id)
+    return {"values": values_of(_index(up), TFMRules.from_dict(req.rules), req.source)}
+
+
+def _out(up, rules: TFMRules):
+    from engine.scope import out_of_scope
+
+    return out_of_scope(_index(up), rules)
+
+
 def _codes(up, rules: TFMRules):
     return _index(up).code_values(rules) if rules.composed else None
 
@@ -412,7 +433,7 @@ def check(req: CheckRequest):
     komp_codes = codes_for_komponent(rules.komponent_system)
 
     t0 = time.time()
-    results = run_checks(up.ifc, up.products, rules, bd_codes, komp_codes, _codes(up, rules))
+    results = run_checks(up.ifc, up.products, rules, bd_codes, komp_codes, _codes(up, rules), _out(up, rules))
     duration = time.time() - t0 + up.load_seconds
 
     usage.log_upload(
@@ -440,7 +461,7 @@ def report(req: ReportRequest):
     komp_codes = codes_for_komponent(rules.komponent_system)
 
     t0 = time.time()
-    results = run_checks(up.ifc, up.products, rules, bd_codes, komp_codes, _codes(up, rules))
+    results = run_checks(up.ifc, up.products, rules, bd_codes, komp_codes, _codes(up, rules), _out(up, rules))
     duration = time.time() - t0 + up.load_seconds
 
     stem = Path(up.file_name).stem

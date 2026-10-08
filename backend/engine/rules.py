@@ -82,6 +82,11 @@ def rule_form(r: dict | None) -> str | None:
     return safe_regex(r["pattern"])
 
 
+def _clean_scope(r):
+    from .scope import clean_scope_rule
+    return clean_scope_rule(r)
+
+
 def compose(values: dict[str, str]) -> str:
     """A code composed from aspect values, each behind its sign (a value
     already carrying its sign keeps it). Empty aspects are left out."""
@@ -133,6 +138,10 @@ class TFMRules:
     part_links: dict = field(default_factory=dict)
     # A project's own name for a part ({"sloyfe": "Sløyfe"}); display only.
     part_labels: dict = field(default_factory=dict)
+    # Scope as rules (engine/scope.py): in when any include rule matches (none:
+    # all) and no exclude rule does.
+    scope_include: list = field(default_factory=list)
+    scope_exclude: list = field(default_factory=list)
 
     def _pattern_for_group(self, name: str) -> str:
         name = base_part(name)
@@ -307,6 +316,8 @@ class TFMRules:
             part_links={str(k): str(v) for k, v in (data.get("part_links") or {}).items() if v},
             part_labels={str(k): str(v).strip() for k, v in (data.get("part_labels") or {}).items()
                          if str(v or "").strip()},
+            scope_include=[r for r in (_clean_scope(x) for x in (data.get("scope_include") or [])) if r],
+            scope_exclude=[r for r in (_clean_scope(x) for x in (data.get("scope_exclude") or [])) if r],
             part_rules={str(k): r for k, r in ((k, clean_rule(v)) for k, v in
                                                (data.get("part_rules") or {}).items()) if r},
         )._with_rule_links()

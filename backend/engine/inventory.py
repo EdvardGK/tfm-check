@@ -117,6 +117,7 @@ class ModelIndex:
         self.props: dict[tuple[str, str], dict[int, str]] = {}
         self.attrs: dict[str, dict[int, str]] = {a: {} for a in ATTRIBUTES}
         self.type_of: dict[int, str] = {}
+        self.class_of: dict[int, str] = {e.id(): e.is_a() for e in products}
 
         for e in products:
             name = _text(e.Name)
@@ -362,8 +363,8 @@ def values_payload(index: ModelIndex, location, k: int = VALUES_SHOWN) -> dict:
 def preview(index: ModelIndex, rules: TFMRules) -> dict:
     values = index.code_values(rules)
     regexes = rules.full_regexes()
-    scope_comp = {c.upper() for c in rules.scope_components}
-    scope_types = set(rules.scope_types)
+    from .scope import out_of_scope
+    out_ids = out_of_scope(index, rules)
     floors = set(rules.floor_codes)
     has_floor_part = rules.has_part("Etasje")
 
@@ -418,7 +419,7 @@ def preview(index: ModelIndex, rules: TFMRules) -> dict:
         comp = (g.get("komponent") or "").upper() if g else (loose_component(v) if v else "")
         if comp:
             components[comp] += 1
-        if (comp and comp in scope_comp) or (tname and tname in scope_types):
+        if pid in out_ids:
             excluded += 1
             if tname:
                 types_out[tname] += 1
