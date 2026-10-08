@@ -22,7 +22,7 @@ export const PART_LABEL: Record<string, string> = {
   Løpenummer: "Nummer",
   Subnr: "Undernummer",
   Komponent: "Komponentkode",
-  "Komp.nr": "Komponentforekomstnummer",
+  "Komp.nr": "Forekomstnr",
   Typekode: "Komponentkode (type)",
   Typenr: "Komponenttypenummer",
   Instansnr: "Instansnummer",

@@ -29,7 +29,7 @@ from .rules import TFMRules, base_part
 # A part's display name: the token, except where the UI says it longer.
 PART_LABEL = {
     "Lokasjon": "Plasserings-ID", "Løpenummer": "Nummer", "Subnr": "Undernummer", "Komponent": "Komponentkode",
-    "Komp.nr": "Komponentforekomstnummer", "Typekode": "Komponentkode (type)", "Typenr": "Komponenttypenummer",
+    "Komp.nr": "Forekomstnr", "Typekode": "Komponentkode (type)", "Typenr": "Komponenttypenummer",
     "Instansnr": "Instansnummer", "Kode": "TFM-ID", "Typeundernr": "(Komponenttype)undernummer",
 }
 PART_NAME = {PLACEHOLDER_RE.search(t).group(1): PART_LABEL.get(p, p) for p, t in PART_TO_TEMPLATE.items()}
