@@ -35,3 +35,9 @@ Branch `hi90-phase-a`, from `feat/oppsett-walk` (the approved Oppsett walk of 20
 - Rollup of system and component codes in Oppsummering and as register sheets Systemkoder / Komponentkoder.
 - HI90_RIV on staging: 360 (154 objects) is not an NS 3451:2022 code (36 Luftbehandling); SFZ (260) is not in NS 3457-8 (SF Fraluftsventiler); KRA, QLB, KNA, KK… are.
 - pytest 69 passed, tsc + vite build pass, parity passes.
+
+## Round 3: the walk opens while the model loads
+- Loader only inside the IFC drop frame; the rail's file row carries the counter.
+- A picked file moves the walk on at once (discipline from the name, schema from the header, read in the browser). Format, Etasjer scheme and Scope work before the model is read; Kilde, Status and Oppsummering fill in when the inventory arrives.
+- Browser gzips the IFC before upload; `/api/jobs` unpacks it.
+- Measured from edkjo's box to staging, HI90_RIV (43 MB, 10 MB gzipped): upload 9–10 s raw, 7 s gzipped (RTT ~260 ms, so throughput ramps with size; the gain grows for bigger models). Server: open ~0.9 s, index (= the pset inventory) ~1.2 s. The upload is the long part; there is no earlier inventory to split out on the server.
