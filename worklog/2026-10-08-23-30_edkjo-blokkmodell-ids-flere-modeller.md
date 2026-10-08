@@ -35,3 +35,11 @@ Branch `hi90-phase-a` (pushed), staging `https://test.tfm-sjekk.skiplum.com` (se
 - Skilletegn is a data type, not a block kind: any block can take it (presets . - _ / + = ++ % ␣ or typed); no Skilletegn group in building blocks or the picker, the separator presets insert a block of that type.
 - Numbers named for what they number, «Nummer» while unset: Systemnr (RefPriSysNo1), Undernr (RefPriSysNo2), Forekomstnr (RefCompOccNo), Typenr (RefCompTypeNo1), Typeundernr (RefCompTypeNo2), Sløyfenr, Linjenr, Områdenr, Adressenr, or an own name.
 - Instansnr dropped: instance = occurrence, so HI90's `.06` in `%SQZ.008.06` is a Forekomstnr; the older instance segment reads as one (two digits by default).
+
+## Later rounds
+- Each variant is its own card, «Regel N»; the rules are checked in order (first match recorded), «↓ ellers» between, ▲▼ to reorder. A code passes on any rule; the register's «Regel» column says which (or «ingen»), a failure's reason names the closest rule.
+- Scope «loading again»: a step waited for its own fresh preview; steps now open on the latest data for the model and update in place. A model idle 15 min was dropped silently; now said in the bar, TTL 2 h.
+- No loader on arriving at a step: rule-free data from the inventory (types, storeys), rule-dependent data (preview, Scope, Status values, rollup) prefetched whenever the rules change.
+- Scope as «Ta med» / «Utelat» rules over Alle, IFC-klasse, Type, Systemkode, Komponentkode, MMI or any property; er / starter med / regex; values from the model with counts; in-scope count live. Older scope fields read as Utelat rules.
+- «Lagre oppsett» in the rail at every step: the same file as «Last ned mal» (one format), every discipline, the open step's edits included.
+- Open: saving to the account (konto.skiplum.com) waits for edkjo's approval of the konto changes: the tfm-check origins in the platform's `wrangler.jsonc` ALLOWED_ORIGINS (staging + production) and a migration registering app `tfm-check` and its origins (`app`, `app_origin`) in production.
