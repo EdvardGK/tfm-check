@@ -41,3 +41,10 @@ Branch `hi90-phase-a`, from `feat/oppsett-walk` (the approved Oppsett walk of 20
 - A picked file moves the walk on at once (discipline from the name, schema from the header, read in the browser). Format, Etasjer scheme and Scope work before the model is read; Kilde, Status and Oppsummering fill in when the inventory arrives.
 - Browser gzips the IFC before upload; `/api/jobs` unpacks it.
 - Measured from edkjo's box to staging, HI90_RIV (43 MB, 10 MB gzipped): upload 9–10 s raw, 7 s gzipped (RTT ~260 ms, so throughput ramps with size; the gain grows for bigger models). Server: open ~0.9 s, index (= the pset inventory) ~1.2 s. The upload is the long part; there is no earlier inventory to split out on the server.
+
+## Round 4: ruleset first, several models, IDS, agent.md, two-choice Kilde
+- Kilde: «Hvor skal TFM-koden være lagret i denne modellen?» with «Bruk standard» / «Velg annen» (tree, with «Angi egen» inside it). Status the same, without a question line.
+- Several models per session, each with its discipline's rules; register and rollup over all (one workbook, Sammendrag per model). An opened ruleset that covers the first model's discipline opens Oppsummering directly.
+- IDS as ruleset (`/api/ids`, `engine/ids_import.py`); KNM.ids: 3 of 40 requirement facets map (KNM_TFM.TFM, KNM_TFM.KomponentID, KNM_Project.MMI), the rest are reported with reasons.
+- agent.md embedded as `agent_md` in every ruleset JSON (template and «Lagre oppsett»); a test keeps its worked example valid.
+- Staging cache raised: TFM_STORE_MAX 6, memory 4g.
