@@ -40,15 +40,17 @@ export default function EtasjerStep({
   autoScheme,
   onUse,
 }: {
-  uploadId: string;
-  inv: Inventory;
+  /** null while the model is still being read: the scheme can be picked,
+   *  the storeys come with the model. */
+  uploadId: string | null;
+  inv: Inventory | null;
   rules: RulesDict;
   /** Egendefinert, first visit: pick the scheme the model's own floor
    *  codes are written in, once they are counted. */
   autoScheme: boolean;
   onUse: (patch: FloorPatch) => void;
 }) {
-  const storeys = inv.storeys;
+  const storeys = useMemo(() => inv?.storeys ?? [], [inv]);
   const initialScheme: FloorStyle =
     rules.floor_style === "u" || rules.floor_style === "custom" ? rules.floor_style : "statsbygg";
   const [scheme, setScheme] = useState<FloorStyle>(initialScheme);

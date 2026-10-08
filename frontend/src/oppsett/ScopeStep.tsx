@@ -20,7 +20,7 @@ export default function ScopeStep({
   rules,
   onUse,
 }: {
-  uploadId: string;
+  uploadId: string | null;
   rules: RulesDict;
   onUse: (patch: ScopePatch) => void;
 }) {

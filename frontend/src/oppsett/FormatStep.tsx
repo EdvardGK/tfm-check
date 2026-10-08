@@ -227,7 +227,9 @@ export default function FormatStep({
   pickBest,
   onUse,
 }: {
-  uploadId: string;
+  /** null while the model is still being read: the form is built all the
+   *  same, its evidence comes when the model does. */
+  uploadId: string | null;
   rules: RulesDict;
   presets: Preset[];
   /** Egendefinert: pre-pick the bundled form taking most of the values. */
@@ -251,7 +253,7 @@ export default function FormatStep({
   // the form was touched first. One batch of requests, cancelled on leave.
   const picked = useRef(!pickBest);
   useEffect(() => {
-    if (picked.current || presets.length === 0) return;
+    if (picked.current || presets.length === 0 || !uploadId) return;
     picked.current = true;
     let live = true;
     const base = draftOf(rules);

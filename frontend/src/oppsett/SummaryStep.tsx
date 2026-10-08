@@ -15,13 +15,20 @@ interface Row {
   standard: boolean;
 }
 
-export function summaryRows(inv: Inventory, upload: UploadResponse, rules: RulesDict, preview: Preview | null): Row[] {
+/** The rows; with no model yet (`inv` null) the answers alone, the
+ *  results come with the model. */
+export function summaryRows(
+  inv: Inventory | null,
+  fileName: string,
+  rules: RulesDict,
+  preview: Preview | null,
+): Row[] {
   const coded = Object.values(rules.storey_codes ?? {}).filter((c) => c.trim() !== "").length;
   const scope = [...(rules.scope_components ?? []), ...(rules.scope_types ?? [])];
   const scheme = schemeAnswer(rules.floor_style ?? "");
   return [
-    { step: "ifc", text: upload.file_name, result: { verdict: "na", figure: `${fmt(inv.products)}` }, standard: false },
-    { step: "kilde", text: sourceText(rules), result: sourceResult(inv, rules, preview), standard: isStandardSource(rules) },
+    { step: "ifc", text: fileName, result: inv ? { verdict: "na", figure: `${fmt(inv.products)}` } : null, standard: false },
+    { step: "kilde", text: sourceText(rules), result: inv ? sourceResult(inv, rules, preview) : null, standard: isStandardSource(rules) },
     {
       step: "format",
       text: rules.patterns.map((p) => sequenceToExample(p.sequence)).join("  |  "),
@@ -30,7 +37,7 @@ export function summaryRows(inv: Inventory, upload: UploadResponse, rules: Rules
     },
     {
       step: "etasjer",
-      text: [scheme.answer, `${coded} / ${inv.storeys.length}`].filter(Boolean).join("  ·  "),
+      text: [scheme.answer, inv ? `${coded} / ${inv.storeys.length}` : ""].filter(Boolean).join("  ·  "),
       result: floorResult(preview),
       standard: scheme.standard,
     },
@@ -43,7 +50,7 @@ export function summaryRows(inv: Inventory, upload: UploadResponse, rules: Rules
     {
       step: "status",
       text: rules.status_location ? locationText(rules.status_location) : "–",
-      result: statusResult(inv, rules),
+      result: inv ? statusResult(inv, rules) : null,
       standard: sameLocation(rules.status_location ?? undefined, STATUS_STANDARD),
     },
   ];
@@ -56,6 +63,7 @@ export function summaryRows(inv: Inventory, upload: UploadResponse, rules: Rules
 export default function SummaryStep({
   inv,
   upload,
+  fileName,
   rules,
   preview,
   checking,
@@ -67,8 +75,9 @@ export default function SummaryStep({
   onAccept,
   onProjectName,
 }: {
-  inv: Inventory;
-  upload: UploadResponse;
+  inv: Inventory | null;
+  upload: UploadResponse | null;
+  fileName: string;
   rules: RulesDict;
   preview: Preview | null;
   checking: boolean;
@@ -80,8 +89,8 @@ export default function SummaryStep({
   onAccept: () => void;
   onProjectName: (name: string) => void;
 }) {
-  const rows = summaryRows(inv, upload, rules, preview);
-  const roll = useRollup(upload.upload_id, rules);
+  const rows = summaryRows(inv, fileName, rules, preview);
+  const roll = useRollup(upload?.upload_id ?? null, rules);
   const failing = rows.some((r) => r.standard && r.result?.verdict === "fail");
 
   return (
@@ -90,13 +99,13 @@ export default function SummaryStep({
         <button type="button" className="key" onClick={onSave}>
           Lagre oppsett
         </button>
-        <button type="button" className="key" disabled={registering} onClick={onRegister}>
+        <button type="button" className="key" disabled={registering || !upload} onClick={onRegister}>
           {registering ? "Lager register …" : "Register"}
         </button>
         <button type="button" className={failing ? "primary" : "key"} onClick={onReview}>
           Gjennomgå
         </button>
-        <button type="button" className={failing ? "key" : "primary"} disabled={checking} onClick={onAccept}>
+        <button type="button" className={failing ? "key" : "primary"} disabled={checking || !upload} onClick={onAccept}>
           {checking ? "Kjører …" : "Aksepter oppsett"}
         </button>
       </StepBar>

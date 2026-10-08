@@ -189,3 +189,30 @@ def test_codes_off_the_form_still_roll_up():
     comp = {c["code"]: c for c in roll["components"]}
     assert comp["KRA"]["valid"] is True and comp["KRA"]["description"] == "Rør for væske"
     assert comp["SFZ"]["valid"] is False
+
+
+def test_gzipped_upload_is_unpacked(model, monkeypatch):
+    import gzip
+    import io
+
+    import main
+
+    f, _, _ = model
+    with tempfile.NamedTemporaryFile(suffix=".ifc", delete=False) as tmp:
+        path = tmp.name
+    f.write(path)
+    raw = Path(path).read_bytes()
+    Path(path).unlink()
+    started = {}
+    monkeypatch.setattr(main.threading, "Thread",
+                        lambda target, args, daemon: type("T", (), {"start": lambda self: started.update(args=args)})())
+
+    class Up:
+        filename = "HI90_RIV.ifc.gz"
+        file = io.BytesIO(gzip.compress(raw))
+
+    out = main.start_job(Up())
+    job_id, tmp_path, name, size = started["args"]
+    assert name == "HI90_RIV.ifc" and size == len(raw) == out["file_size"]
+    assert Path(tmp_path).read_bytes() == raw
+    Path(tmp_path).unlink()

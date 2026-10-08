@@ -261,3 +261,33 @@ export function download(name: string, text: string): void {
   a.remove();
   URL.revokeObjectURL(url);
 }
+
+// ---- Read off the file before the server has it ----
+
+const FAG_IN_NAME = /^[^_]+_([A-Za-zÆØÅæøå]{2,6})(?:[_.\- ]|$)/;
+const FAG_KNOWN: [string, RegExp][] = [
+  ["RIBR", /(?<![A-Za-z])RIBR(?![A-Za-z])|RIBfy/i],
+  ["RIE", /(?<![A-Za-z])RIE(?![A-Za-z])/i],
+  ["RIV", /(?<![A-Za-z])RIV(?![A-Za-z])/i],
+  ["RIB", /(?<![A-Za-z])RIB(?![A-Za-z])/i],
+  ["ARK", /(?<![A-Za-z])I?ARK(?![A-Za-z])/i],
+];
+
+/** The discipline a model file is named for, as the server reads it
+ *  (engine/ifc_io.py detect_discipline_from_filename). */
+export function fagFromName(name: string): string | null {
+  const m = FAG_IN_NAME.exec(name);
+  if (m) return m[1].toUpperCase();
+  return FAG_KNOWN.find(([, rx]) => rx.test(name))?.[0] ?? null;
+}
+
+/** The schema from the file's header (FILE_SCHEMA), read in the browser. */
+export async function schemaFromHeader(file: File): Promise<string | null> {
+  if (/\.ifczip$/i.test(file.name)) return null;
+  try {
+    const head = await file.slice(0, 16384).text();
+    return /FILE_SCHEMA\s*\(\s*\(\s*'([^']+)'/i.exec(head)?.[1]?.toUpperCase() ?? null;
+  } catch {
+    return null;
+  }
+}

@@ -315,14 +315,11 @@
 #oppsett .offrow .why { font-size: 11.5px; color: var(--d-label-color); overflow-wrap: anywhere; }
 #oppsett .offrow .fix { font-family: var(--font-mono); font-size: 12px; color: var(--color-green); overflow-wrap: anywhere; }
 
-/* ── Loading screen: the skiplum.com brand outline animation + counter ── */
-#oppsett .loader {
-  position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; align-content: center; gap: 18px;
-  background: var(--d-field, var(--color-ground)); background-attachment: fixed;
-}
-#oppsett .loader video { display: block; width: clamp(260px, 46vw, 620px); height: auto; pointer-events: none; }
-#oppsett .loader .count { display: flex; align-items: baseline; gap: 12px; }
-#oppsett .loader .count .num { font-family: var(--font-mono); font-size: 18px; font-weight: 600; text-align: left; }
+/* ── Loader: inside the IFC drop frame only ── */
+#oppsett .drop .loader { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+#oppsett .drop .loader video { display: block; width: clamp(180px, 34%, 360px); height: auto; pointer-events: none; }
+#oppsett .drop .loader .count { display: flex; align-items: baseline; gap: 10px; }
+#oppsett .drop .loader .count .num { font-family: var(--font-mono); font-size: 15px; font-weight: 600; text-align: left; }
 
 /* ── Format: drag and drop, a part's rule ── */
 #oppsett .seg[draggable="true"] { cursor: grab; }

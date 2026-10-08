@@ -1,10 +1,13 @@
 import { useRef } from "react";
+import type { ReadProgress } from "../api";
 import { Canvas, StepBar } from "./Shell";
+import Loader from "./Loader";
 import { fmt } from "./setup";
 
 /** Åpne IFC: one drop target filling the canvas. A file held over the page
- *  lights it; while the model uploads and is read, the bar along its foot
- *  shows it. Once read, the rail's first row carries the file. */
+ *  lights it. While the model goes up and is read, the frame plays the
+ *  loader with its counter; the rest of the walk is open meanwhile. Once
+ *  read, the rail's first row carries the file. */
 export default function IfcStep({
   dragging,
   busy,
@@ -16,8 +19,7 @@ export default function IfcStep({
 }: {
   dragging: boolean;
   busy: boolean;
-  /** Upload progress; null once the file is up and being read. */
-  progress: number | null;
+  progress: ReadProgress | null;
   fileName: string | null;
   loaded: { products: number } | null;
   onFile: (file: File) => void;
@@ -27,7 +29,7 @@ export default function IfcStep({
   return (
     <Canvas rows="auto minmax(0, 1fr)">
       <StepBar>
-        <button type="button" className="primary" disabled={!loaded || busy} onClick={onUse}>
+        <button type="button" className="primary" disabled={!fileName} onClick={onUse}>
           Bruk
         </button>
       </StepBar>
@@ -41,24 +43,19 @@ export default function IfcStep({
           disabled={busy}
           onClick={() => input.current?.click()}
         >
-          <svg width="64" height="64" viewBox="0 0 72 72" aria-hidden="true">
-            <path d="M8 46v16h56V46" fill="none" stroke="currentColor" strokeWidth="3" />
-            <path d="M36 50V12" fill="none" stroke="currentColor" strokeWidth="3" />
-            <path d="M22 26 36 12l14 14" fill="none" stroke="currentColor" strokeWidth="3" />
-          </svg>
-          <span className="nm">{fileName ?? "Åpne IFC"}</span>
-          <span className="fx">
-            {busy && progress !== null
-              ? `${progress} %`
-              : loaded && !busy
-                ? `${fmt(loaded.products)} elementer`
-                : ".ifc · .ifczip · IFC2X3 · IFC4"}
-          </span>
           {busy ? (
-            <span className="prog" aria-hidden="true">
-              {progress !== null ? <span style={{ width: `${progress}%` }} /> : <span className="sweep" />}
-            </span>
-          ) : null}
+            <Loader progress={progress} />
+          ) : (
+            <svg width="64" height="64" viewBox="0 0 72 72" aria-hidden="true">
+              <path d="M8 46v16h56V46" fill="none" stroke="currentColor" strokeWidth="3" />
+              <path d="M36 50V12" fill="none" stroke="currentColor" strokeWidth="3" />
+              <path d="M22 26 36 12l14 14" fill="none" stroke="currentColor" strokeWidth="3" />
+            </svg>
+          )}
+          <span className="nm">{fileName ?? "Åpne IFC"}</span>
+          {busy ? null : (
+            <span className="fx">{loaded ? `${fmt(loaded.products)} elementer` : ".ifc · .ifczip · IFC2X3 · IFC4"}</span>
+          )}
         </button>
         <input
           ref={input}

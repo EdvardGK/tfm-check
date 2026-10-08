@@ -6,6 +6,7 @@ present) at /. Runs as a Docker service on the Skiplum apps box and is iframe-em
 
 from __future__ import annotations
 
+import gzip
 import os
 import shutil
 import tempfile
@@ -237,13 +238,28 @@ def _read_job(job_id: str, tmp_path: str, file_name: str, size: int) -> None:
 
 
 @app.post("/api/jobs")
-async def start_job(file: UploadFile = File(...)):
-    """Take the file, then read and index it in the background."""
-    suffix = Path(file.filename).suffix.lower()
+def start_job(file: UploadFile = File(...)):
+    """Take the file, then read and index it in the background. A file sent
+    gzipped (`<name>.ifc.gz`, the browser compresses before upload) is
+    unpacked here; the model keeps its own name."""
+    name = file.filename or ""
+    gz = name.lower().endswith(".gz")
+    if gz:
+        name = name[:-3]
+    suffix = Path(name).suffix.lower()
     if suffix not in (".ifc", ".ifczip"):
         raise HTTPException(400, "Filen må være en .ifc- eller .ifczip-fil.")
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        shutil.copyfileobj(file.file, tmp)
+        if gz:
+            try:
+                with gzip.GzipFile(fileobj=file.file) as src:
+                    shutil.copyfileobj(src, tmp, 1 << 20)
+            except (OSError, EOFError) as e:
+                tmp.close()
+                os.unlink(tmp.name)
+                raise HTTPException(400, f"Kunne ikke pakke ut filen: {e}")
+        else:
+            shutil.copyfileobj(file.file, tmp, 1 << 20)
         tmp_path = tmp.name
     size = os.path.getsize(tmp_path)
     job_id = uuid.uuid4().hex[:16]
@@ -254,7 +270,7 @@ async def start_job(file: UploadFile = File(...)):
             _jobs.pop(k, None)
         _jobs[job_id] = {"t": now, "stage": "les", "fraction": None, "products": None,
                          "file_size": size, "result": None, "error": None}
-    threading.Thread(target=_read_job, args=(job_id, tmp_path, file.filename, size), daemon=True).start()
+    threading.Thread(target=_read_job, args=(job_id, tmp_path, name, size), daemon=True).start()
     return {"job_id": job_id, "file_size": size}
 
 

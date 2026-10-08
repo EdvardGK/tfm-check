@@ -5,10 +5,11 @@ import { Lamp } from "./Shell";
 import { fmt } from "./setup";
 
 /** The rules' system and component codes rolled up, following the rules. */
-export function useRollup(uploadId: string, rules: RulesDict): Rollup | null {
+export function useRollup(uploadId: string | null, rules: RulesDict): Rollup | null {
   const [roll, setRoll] = useState<Rollup | null>(null);
   const key = JSON.stringify(rules);
   useEffect(() => {
+    if (!uploadId) return;
     const ctl = new AbortController();
     const timer = window.setTimeout(() => {
       getRollup(uploadId, JSON.parse(key) as RulesDict, ctl.signal)

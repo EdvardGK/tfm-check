@@ -11,7 +11,9 @@
 
 import { useRef, useState, type DragEvent } from "react";
 import { downloadRegister, getInventory, readIfc as readModel, type ReadProgress } from "../api";
-import Loader from "./Loader";
+import Pending from "./Pending";
+import { progressText } from "./Loader";
+import { allowedFloors, proposeCodes } from "./floors";
 import { sequenceToExample } from "../constants";
 import type { Inventory, Preset, RulesDict, UploadResponse } from "../types";
 import "./oppsett.css";
@@ -27,7 +29,7 @@ import StatusStep from "./StatusStep";
 import SummaryStep from "./SummaryStep";
 import { usePreview } from "./usePreview";
 import {
-  STATUS_STANDARD, STEP_NAME, WALK, download, floorResult, fmt, formatResult, isStandardFormat, isStandardSource,
+  STANDARD_LOCATION, STATUS_STANDARD, STEP_NAME, WALK, download, fagFromName, schemaFromHeader, floorResult, fmt, formatResult, isStandardFormat, isStandardSource,
   locationText, parseSetup, rulesFor, sameLocation, setupFileName, setupJson, sourceResult, sourceText, statsbyggRules,
   statusResult, storeSetup, withFag, withStatsbyggFloors, type Base, type SetupFile, type Step, type WalkStep,
 } from "./setup";
@@ -110,10 +112,12 @@ export default function Oppsett({
   const [confirmed, setConfirmed] = useState<ReadonlySet<WalkStep>>(new Set());
   const [upload, setUpload] = useState<UploadResponse | null>(null);
   const [inv, setInv] = useState<Inventory | null>(null);
-  const [progress, setProgress] = useState<number | null>(null);
   const [readProgress, setReadProgress] = useState<ReadProgress | null>(null);
   const [reading, setReading] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
+  // Read off the file in the browser at once: its discipline and schema.
+  const [fileFag, setFileFag] = useState<string | null>(null);
+  const [fileSchema, setFileSchema] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
   const [detour, setDetour] = useState(false);
@@ -121,7 +125,7 @@ export default function Oppsett({
   const [slot, setSlot] = useState<HTMLElement | null>(null);
 
   const loaded = upload !== null && inv !== null;
-  const fag = upload?.detected_discipline ?? null;
+  const fag = upload?.detected_discipline ?? fileFag;
   const savedRules = rulesFor(saved, fag);
   const preview = usePreview(loaded ? upload.upload_id : null, rules);
 
@@ -166,38 +170,52 @@ export default function Oppsett({
   };
 
   // ---- Åpne IFC ----
+  // The walk moves on as soon as a file is picked: what the file's name and
+  // header say (discipline, schema) is known at once, and the steps that
+  // need no model are open while it goes up and is read. The model's data
+  // fills the other steps when it arrives; the loader stays in the drop
+  // frame.
   const readIfc = async (file: File) => {
-    if (!rules) return;
+    if (!rules || reading) return;
     if (!isModelFile(file.name)) {
       onError("Filen må være en .ifc- eller .ifczip-fil.");
       return;
     }
     onError(null);
+    const f = fagFromName(file.name);
     setFileName(file.name);
-    setProgress(0);
+    setFileFag(f);
+    setFileSchema(null);
+    void schemaFromHeader(file).then(setFileSchema);
+    setUpload(null);
+    setInv(null);
     setReading(true);
+    setReadProgress({ stage: "pakk", pct: 0 });
+    const statsbygg = base === "statsbygg" && !opened;
+    // An opened setup applies its rules for the file's discipline.
+    const fromFile = opened ? rulesFor(saved, f) : null;
+    setRules((r) => (fromFile ?? (r ? { ...r, discipline_key: f ?? r.discipline_key } : r)));
+    go(statsbygg ? "end" : "kilde");
     try {
-      setReadProgress({ stage: "opp", pct: 0 });
-      const up = await readModel(file, (p) => {
-        setReadProgress(p);
-        setProgress(p.stage === "opp" && p.pct < 100 ? p.pct : null);
-      });
-      setProgress(null);
+      const up = await readModel(file, setReadProgress);
       const inventory = await getInventory(up.upload_id);
       setUpload(up);
       setInv(inventory);
-      const statsbygg = base === "statsbygg" && !opened;
-      // An opened setup applies its rules for the model's discipline.
-      const fromFile = opened ? rulesFor(saved, up.detected_discipline) : null;
-      let r: RulesDict = fromFile ?? { ...rules, discipline_key: up.detected_discipline ?? rules.discipline_key };
-      if (statsbygg) r = withStatsbyggFloors(r, inventory);
-      setRules(r);
-      go(statsbygg ? "end" : "kilde");
+      // Floors: codes for the model's storeys in the chosen style, unless
+      // codes are set already.
+      setRules((r) => {
+        if (!r) return r;
+        if (statsbygg && !r.floor_style) return withStatsbyggFloors(r, inventory);
+        const style = r.floor_style === "u" ? "u" : r.floor_style === "statsbygg" ? "statsbygg" : null;
+        if (!style || Object.keys(r.storey_codes ?? {}).length > 0) return r;
+        const codes = proposeCodes(inventory.storeys, style);
+        return { ...r, storey_codes: codes, floor_codes: allowedFloors(codes) };
+      });
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
+      setFileName(null);
     } finally {
       setReading(false);
-      setProgress(null);
       setReadProgress(null);
     }
   };
@@ -264,7 +282,7 @@ export default function Oppsett({
       standard: ans.standard,
       current,
       pending: !current && !done,
-      enabled: base !== null && !reading && (s === "ifc" || loaded),
+      enabled: base !== null && (s === "ifc" || loaded || fileName !== null),
       onClick: () => {
         if (s === step) return;
         setDetour(false);
@@ -275,7 +293,7 @@ export default function Oppsett({
 
   // ---- The step ----
   const stepIndex = step === "start" ? null : INDEX.indexOf(step as WalkStep | "end") + 1;
-  const bar = { name: STEP_NAME[step], n: stepIndex, total: INDEX.length, error, onBack: back !== null && !reading ? goBack : null };
+  const bar = { name: STEP_NAME[step], n: stepIndex, total: INDEX.length, error, onBack: back !== null ? goBack : null };
 
   let body: React.ReactNode = null;
   if (step === "start") {
@@ -291,13 +309,65 @@ export default function Oppsett({
       <IfcStep
         dragging={dragging}
         busy={reading}
-        progress={progress}
+        progress={readProgress}
         fileName={loaded ? upload.file_name : fileName}
         loaded={loaded ? { products: inv.products } : null}
         onFile={(f) => void readIfc(f)}
         onUse={() => go(detour ? "end" : "kilde")}
       />
     );
+  } else if (rules && fileName !== null && !loaded) {
+    // The model is on its way: the steps that need none work, the others
+    // wait for its data.
+    if (step === "format") {
+      body = (
+        <FormatStep
+          uploadId={null}
+          rules={rules}
+          presets={presets}
+          pickBest={false}
+          onUse={(patch) => commit("format", patch)}
+        />
+      );
+    } else if (step === "etasjer") {
+      body = <EtasjerStep uploadId={null} inv={null} rules={rules} autoScheme={false} onUse={(patch) => commit("etasjer", { floor_style: patch.floor_style })} />;
+    } else if (step === "scope") {
+      body = <ScopeStep uploadId={null} rules={rules} onUse={(patch) => commit("scope", patch)} />;
+    } else if (step === "kilde") {
+      body = <Pending standard={STANDARD_LOCATION} picked={sourceText(rules)} />;
+    } else if (step === "status") {
+      body = <Pending standard={STATUS_STANDARD} picked={rules.status_location ? locationText(rules.status_location) : ""} />;
+    } else if (step === "end") {
+      body = (
+        <SummaryStep
+          inv={null}
+          upload={null}
+          fileName={fileName}
+          rules={rules}
+          preview={null}
+          checking={false}
+          registering={false}
+          onSave={() => {
+            const file = withFag(saved, base ?? "custom", fag, rules);
+            setSaved(file);
+            storeSetup(file);
+            onStored(file);
+            download(setupFileName(rules, null), setupJson(file));
+          }}
+          onRegister={() => undefined}
+          onRow={(s) => {
+            setDetour(true);
+            go(s);
+          }}
+          onReview={() => {
+            setDetour(false);
+            go("kilde");
+          }}
+          onAccept={() => undefined}
+          onProjectName={(name) => setRules((r) => (r ? { ...r, project_name: name } : r))}
+        />
+      );
+    }
   } else if (rules && inv && upload) {
     const uid = upload.upload_id;
     if (step === "kilde") {
@@ -349,6 +419,7 @@ export default function Oppsett({
         <SummaryStep
           inv={inv}
           upload={upload}
+          fileName={upload.file_name}
           rules={rules}
           preview={preview}
           checking={checking}
@@ -384,11 +455,19 @@ export default function Oppsett({
 
   return (
     <div id="oppsett" {...dropProps}>
-      {reading ? <Loader progress={readProgress} /> : null}
       <div className="flow">
         <div className="railcol">
           <Rail
-            file={loaded ? { name: upload.file_name, schema: [fag, upload.facts.schema].filter(Boolean).join(" · ") } : null}
+            file={
+              fileName !== null
+                ? {
+                    name: loaded ? upload.file_name : fileName,
+                    schema: [fag, loaded ? upload.facts.schema : fileSchema, reading ? progressText(readProgress).figure : null]
+                      .filter(Boolean)
+                      .join(" · "),
+                  }
+                : null
+            }
             items={items}
           />
           <div ref={setSlot} style={{ display: "contents" }} />
@@ -396,7 +475,7 @@ export default function Oppsett({
         <RailSlot.Provider value={slot}>
           <Bar.Provider value={bar}>
             <Live.Provider value={setLive}>
-              <StepFrame key={`${step}-${visit}`} step={step}>
+              <StepFrame key={`${step}-${visit}${MODEL_STEPS.has(step) ? `-${loaded}` : ""}`} step={step}>
                 {body}
               </StepFrame>
             </Live.Provider>
@@ -406,6 +485,9 @@ export default function Oppsett({
     </div>
   );
 }
+
+/** Steps built from the model's data: they open again when it arrives. */
+const MODEL_STEPS: ReadonlySet<Step> = new Set<Step>(["kilde", "etasjer", "scope", "status", "end"]);
 
 /** Keys the step's state to the visit, so a step opens fresh each time. */
 function StepFrame({ children, step }: { children: React.ReactNode; step: Step }) {

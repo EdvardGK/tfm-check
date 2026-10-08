@@ -161,14 +161,32 @@ export interface JobStatus {
 }
 
 export type ReadProgress =
+  | { stage: "pakk"; pct: number }
   | { stage: "opp"; pct: number }
   | { stage: "les"; elapsed: number }
   | { stage: "indekser"; pct: number; products: number | null };
 
-function postFile(file: File, onPct: (pct: number) => void): Promise<{ job_id: string }> {
+/** The file gzipped in the browser (IFC text packs about 4:1, and the upload
+ *  is the slow part), with the share read so far; null where the browser
+ *  has no CompressionStream. */
+async function gzipped(file: File, onPct: (pct: number) => void): Promise<Blob | null> {
+  if (typeof CompressionStream === "undefined" || /\.ifczip$/i.test(file.name)) return null;
+  let read = 0;
+  const count = new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, ctl) {
+      read += chunk.byteLength;
+      onPct(Math.round((read / Math.max(1, file.size)) * 100));
+      ctl.enqueue(chunk);
+    },
+  });
+  const packed = file.stream().pipeThrough(count).pipeThrough(new CompressionStream("gzip") as unknown as TransformStream<Uint8Array, Uint8Array>);
+  return new Response(packed).blob();
+}
+
+function postFile(file: Blob, name: string, onPct: (pct: number) => void): Promise<{ job_id: string }> {
   return new Promise((resolve, reject) => {
     const form = new FormData();
-    form.append("file", file);
+    form.append("file", file, name);
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/jobs");
     xhr.upload.onprogress = (e) => {
@@ -198,7 +216,11 @@ function postFile(file: File, onPct: (pct: number) => void): Promise<{ job_id: s
 
 /** Upload, then follow the server's reading until the model is ready. */
 export async function readIfc(file: File, onProgress: (p: ReadProgress) => void): Promise<UploadResponse> {
-  const { job_id } = await postFile(file, (pct) => onProgress({ stage: "opp", pct }));
+  onProgress({ stage: "pakk", pct: 0 });
+  const packed = await gzipped(file, (pct) => onProgress({ stage: "pakk", pct }));
+  const { job_id } = await postFile(packed ?? file, packed ? `${file.name}.gz` : file.name, (pct) =>
+    onProgress({ stage: "opp", pct }),
+  );
   for (;;) {
     await new Promise((r) => window.setTimeout(r, 300));
     const j = await jsonOrThrow<JobStatus>(await fetch(`/api/jobs/${encodeURIComponent(job_id)}`));
