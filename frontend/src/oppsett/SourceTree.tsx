@@ -7,6 +7,7 @@
 import { useMemo, useState, type Ref } from "react";
 import type { Inventory, InventoryProp, Location, ValueCount } from "../types";
 import { Meter, Val } from "./Shell";
+import { CustomEntry } from "./SourceChoice";
 import { fmt, locationText, sameLocation } from "./setup";
 
 const ATTRS = "\u0000attr";
@@ -42,6 +43,8 @@ export default function SourceTree({
   searchRef?: Ref<HTMLInputElement>;
 }) {
   const [q, setQ] = useState("");
+  // «Angi egen»: open when the source is a property the model lacks.
+  const [own, setOwn] = useState(() => draft?.[0] === "pset" && !propOf(inv, draft));
   const [open, setOpen] = useState<ReadonlySet<string>>(() =>
     new Set(draft?.[0] === "attr" ? [ATTRS] : draft?.[0] === "pset" && draft[1] ? [draft[1]] : []),
   );
@@ -140,7 +143,13 @@ export default function SourceTree({
     <section className="tile card major tree" aria-label="I modellen">
       <div className="top">
         <span className="lbl">I modellen</span>
-        <input ref={searchRef} className="search" type="search" placeholder="Søk" aria-label="Søk" value={q} onChange={(e) => setQ(e.target.value)} />
+        <div className="srow2">
+          <input ref={searchRef} className="search" type="search" placeholder="Søk" aria-label="Søk" value={q} onChange={(e) => setQ(e.target.value)} />
+          <button type="button" className="key" aria-pressed={own} onClick={() => setOwn((o) => !o)}>
+            Angi egen
+          </button>
+        </div>
+        {own ? <CustomEntry value={draft?.[0] === "pset" && !propOf(inv, draft) ? draft : null} onChange={onPick} /> : null}
       </div>
       <div className="scroll">
         <div className="tcols colhead">

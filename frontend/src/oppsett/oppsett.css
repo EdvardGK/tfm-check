@@ -343,3 +343,19 @@
 
 #oppsett .miniload { display: grid; place-items: center; flex: 1 1 auto; min-height: 72px; }
 #oppsett .miniload video { width: 96px; height: auto; pointer-events: none; }
+
+/* ── Kilde / Status: the question and its two answers ── */
+#oppsett .qcard { gap: 12px; }
+#oppsett .qcard h2 { font-size: 20px; font-weight: 700; letter-spacing: -.01em; }
+#oppsett .opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+#oppsett .opt {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px 14px; border: 0; border-radius: 12px; cursor: pointer; text-align: left;
+  background: var(--color-panel); color: var(--color-ink); box-shadow: 0 0 0 1px var(--d-ring), var(--d-key-shadow);
+}
+#oppsett .opt .t { font-weight: 700; font-size: 15px; }
+#oppsett .opt .x { font-family: var(--font-mono); font-size: 12.5px; color: var(--d-label-color); overflow-wrap: anywhere; }
+#oppsett .opt[aria-checked="true"] { background: var(--sel-soft); box-shadow: inset 0 0 0 2px var(--sel); }
+#oppsett .srow2 { display: flex; gap: 8px; align-items: center; }
+#oppsett .srow2 .key { height: 34px; }
+#oppsett .centry { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+#oppsett .cfield { display: flex; flex-direction: column; gap: 4px; min-width: 0; }

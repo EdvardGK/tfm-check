@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { ASPECTS, type Aspect, type Inventory, type Location, type RulesDict, type TfmMode } from "../types";
 import { Canvas, Fig, Lamp, Meter, RailOptions, RailSection, RailTile, StepBar, Val, breakDots } from "./Shell";
 import { MiniLoader } from "./Loader";
+import { ChoiceCard, modeOf, type SourceMode } from "./SourceChoice";
 import SourceTree, { propOf, type Pin } from "./SourceTree";
 import { useLiveAnswer } from "./live";
 import { usePreview } from "./usePreview";
@@ -12,16 +13,18 @@ import {
 
 type Parts = Partial<Record<Aspect, Location>>;
 
+const QUESTION = "Hvor skal TFM-koden være lagret i denne modellen?";
+
 /** Kilde: where the TFM code lives, whole in one property or composed from
  *  the PA 0802 aspects (+lokasjon =system -komponent), each in its own
  *  property (the rail's «Hel kode» / «Fra deler»).
  *
- *  Band 1: the Statsbygg standard (found or not, and when not: «Kartlegg» or
- *  «Behold standard») | what is picked, with its evidence. Band 2: the
- *  model's property sets as a tree, the standard and the suggestions pinned
- *  on top | the codes the pick reads. Never a silent fallback: a missing
- *  standard stays red until «Bruk» takes a source, and «Behold standard»
- *  keeps it (the check then fails). */
+ *  Band 1: the question and its three answers: the standard (with whether
+ *  the model has it), a property picked from the model, or one entered by
+ *  hand. Band 2: the answer's own work (the standard's values, the model
+ *  tree, the entry) | what is picked, its evidence and its values. Never a
+ *  silent fallback: the standard or a hand-entered property the model lacks
+ *  stays as chosen, and the check fails there. */
 export default function KildeStep({
   uploadId,
   inv,
@@ -39,21 +42,19 @@ export default function KildeStep({
   fresh: boolean;
   onUse: (patch: Partial<RulesDict>) => void;
 }) {
-  const std = STANDARD_LOCATION;
-  const stdN = inv.standard.n;
-  const wholeMissing = stdN === 0;
-  const wholeCand = inv.candidates.find((c) => !sameLocation(c.location, std))?.location ?? null;
+  const wholeStd = STANDARD_LOCATION;
+  const wholeCand = inv.candidates.find((c) => !sameLocation(c.location, wholeStd))?.location ?? null;
   const partCand = (a: Aspect) => inv.roles[a].candidates[0]?.location ?? null;
   const partFound = (a: Aspect) => inv.roles[a].standard.n > 0;
 
   // ---- The pre-picked answer ----
-  const [mode, setMode] = useState<TfmMode>(() => {
-    if (fresh && wholeMissing && !wholeCand && ASPECTS.some((a) => partFound(a) || partCand(a))) return "parts";
+  const [codeMode, setCodeMode] = useState<TfmMode>(() => {
+    if (fresh && inv.standard.n === 0 && !wholeCand && ASPECTS.some((a) => partFound(a) || partCand(a))) return "parts";
     return rules.tfm_mode ?? "whole";
   });
-  const cur = rules.tfm_location ?? std;
+  const cur = rules.tfm_location ?? wholeStd;
   const [draft, setDraft] = useState<Location>(() =>
-    fresh && wholeMissing && wholeCand && sameLocation(cur, std) ? wholeCand : cur,
+    fresh && inv.standard.n === 0 && wholeCand && sameLocation(cur, wholeStd) ? wholeCand : cur,
   );
   const [parts, setParts] = useState<Parts>(() => {
     const out: Parts = {};
@@ -67,124 +68,89 @@ export default function KildeStep({
     return out;
   });
   const [active, setActive] = useState<Aspect>("lokasjon");
-  const search = useRef<HTMLInputElement>(null);
+  const composed = codeMode === "parts";
 
-  const composed = mode === "parts";
+  // The source being answered: the whole code's, or the active aspect's.
+  const std = composed ? PART_STANDARD[active] : wholeStd;
+  const stdN = composed ? inv.roles[active].standard.n : inv.standard.n;
+  const current: Location | null = composed ? (parts[active] ?? null) : draft;
+  const setCurrent = (loc: Location) => {
+    if (composed) setParts((p) => ({ ...p, [active]: loc }));
+    else setDraft(loc);
+  };
+
+  // The answer chosen, per source; opens on what the source already is.
+  const [modes, setModes] = useState<Record<string, SourceMode>>({});
+  const modeKey = composed ? active : "whole";
+  const mode = modes[modeKey] ?? modeOf(current, std);
+  // What «Velg annen» last pointed at, per source.
+  const [lastOther, setLastOther] = useState<Record<string, Location>>({});
+  const other = current && modeOf(current, std) === "other" ? current : (lastOther[modeKey] ?? null);
+
+  const chooseMode = (m: SourceMode) => {
+    setModes((x) => ({ ...x, [modeKey]: m }));
+    if (m === "standard") setCurrent(std);
+    else {
+      const back = other ?? (composed ? partCand(active) : wholeCand);
+      if (back) setCurrent(back);
+    }
+  };
+  const pick = (loc: Location) => {
+    setLastOther((x) => ({ ...x, [modeKey]: loc }));
+    setCurrent(loc);
+  };
+
+  const search = useRef<HTMLInputElement>(null);
   const draftRules: RulesDict = composed
     ? { ...rules, tfm_mode: "parts", tfm_parts: parts }
     : { ...rules, tfm_mode: "whole", tfm_location: draft };
-  const isStd = composed ? ASPECTS.every((a) => sameLocation(parts[a], PART_STANDARD[a])) : sameLocation(draft, std);
+  const isStd = composed ? ASPECTS.every((a) => sameLocation(parts[a], PART_STANDARD[a])) : sameLocation(draft, wholeStd);
   useLiveAnswer("kilde", sourceText(draftRules), isStd);
 
   const preview = usePreview(uploadId, draftRules);
   const valued = preview?.valued ?? 0;
   const shaped = preview?.shaped ?? 0;
   const countable = composed || draft[0] !== "all";
-  const avvik = Math.max(0, valued - shaped);
-
-  // ---- Picking ----
-  const pick = (loc: Location) => {
-    if (composed) setParts((p) => ({ ...p, [active]: loc }));
-    else setDraft(loc);
-  };
-  const missing = composed ? ASPECTS.some((a) => !partFound(a)) : wholeMissing;
-  const kartlegg = () => {
-    if (composed) {
-      setParts((p) => {
-        const n = { ...p };
-        for (const a of ASPECTS) if (!partFound(a) && partCand(a) && sameLocation(n[a], PART_STANDARD[a])) n[a] = partCand(a) ?? undefined;
-        return n;
-      });
-      search.current?.focus();
-    } else if (wholeCand && isStd) setDraft(wholeCand);
-    else search.current?.focus();
-  };
-  const keepStandard = () => {
-    if (composed) setParts({ ...PART_STANDARD });
-    else setDraft(std);
-  };
+  const count = composed ? (preview ? valued : null) : sourceCount(inv, draft);
 
   const savedFor = (a: Aspect | null): Location | null =>
     !saved ? null : a === null ? (saved.tfm_mode !== "parts" ? (saved.tfm_location ?? null) : null) : (saved.tfm_parts?.[a] ?? null);
-
   const pins: Pin[] = [];
-  if (composed) {
-    pins.push({ loc: PART_STANDARD[active], tag: "Standard" });
-    for (const c of inv.roles[active].candidates) pins.push({ loc: c.location, tag: "Forslag" });
-    const s = savedFor(active);
-    if (s && !pins.some((p) => sameLocation(p.loc, s))) pins.push({ loc: s, tag: "Regelsett" });
-  } else {
-    pins.push({ loc: std, tag: "Standard" });
-    if (wholeCand) pins.push({ loc: wholeCand, tag: "Forslag" });
-    const s = savedFor(null);
-    if (s && !pins.some((p) => sameLocation(p.loc, s))) pins.push({ loc: s, tag: "Regelsett" });
-  }
+  const cands = composed ? inv.roles[active].candidates.map((c) => c.location) : wholeCand ? [wholeCand] : [];
+  for (const c of cands) pins.push({ loc: c, tag: "Forslag" });
+  const s = savedFor(composed ? active : null);
+  if (s && !sameLocation(s, std) && !pins.some((p) => sameLocation(p.loc, s))) pins.push({ loc: s, tag: "Regelsett" });
 
-  const standardCard = composed ? (
-    <section className="tile card major std" aria-label="Standard">
-      <span className="lbl">Standard</span>
-      <div className="slots">
-        {ASPECTS.map((a) => {
-          const n = inv.roles[a].standard.n;
-          return (
-            <div key={a} className="slot rule">
-              <span className="sg">{ASPECT_SIGN[a]}</span>
-              <span className="sn">{ASPECT_NAME[a]}</span>
-              <span className="ss ell">{locationText(PART_STANDARD[a])}</span>
-              <span className="num">{of(n, inv.products)}</span>
-              <Lamp verdict={n > 0 ? "ok" : "fail"} />
-            </div>
-          );
-        })}
-      </div>
-      {missing ? (
-        <div className="choice">
-          <button type="button" className="key" aria-pressed={!isStd} onClick={kartlegg}>
-            Kartlegg
-          </button>
-          <button type="button" className="key" aria-pressed={isStd} onClick={keepStandard}>
-            Behold standard
-          </button>
+  let work: React.ReactNode;
+  if (mode === "other") {
+    work = (
+      <SourceTree
+        key={`${modeKey}`}
+        inv={inv}
+        draft={current}
+        pins={pins}
+        onPick={pick}
+        allowAll={!composed}
+        searchRef={search}
+      />
+    );
+  } else {
+    work = (
+      <section className="tile card major std" aria-label="Standard">
+        <span className="lbl">Standard</span>
+        <div className="row1">
+          <span className="src">{locationText(std)}</span>
         </div>
-      ) : null}
-    </section>
-  ) : (
-    <section className="tile card major std" aria-label="Standard">
-      <span className="lbl">Standard</span>
-      <div className="row1">
-        <span className="src">{locationText(std)}</span>
-        {wholeMissing ? (
-          <span className="badge" data-verdict="fail">
-            ✕ Ikke i modellen
-          </span>
-        ) : (
-          <span className="badge" data-verdict="pass">
-            ✓ I modellen
-          </span>
-        )}
-      </div>
-      <Fig n={stdN} total={inv.products} verdict={wholeMissing ? "fail" : "ok"} />
-      <Meter n={stdN} total={inv.products} verdict={wholeMissing ? undefined : "ok"} />
-      {wholeMissing ? (
-        <div className="choice">
-          <button type="button" className="key" aria-pressed={!isStd} onClick={kartlegg}>
-            Kartlegg
-          </button>
-          <button type="button" className="key" aria-pressed={isStd} onClick={keepStandard}>
-            Behold standard
-          </button>
-        </div>
-      ) : (
+        <Fig n={stdN} total={inv.products} verdict={stdN > 0 ? "ok" : "fail"} />
+        <Meter n={stdN} total={inv.products} verdict={stdN > 0 ? "ok" : undefined} />
         <div className="vals3">
-          {(propOf(inv, std)?.samples ?? []).map((s) => (
-            <Val key={s.v} v={s.v} n={s.n} />
+          {(propOf(inv, std)?.samples ?? []).map((v) => (
+            <Val key={v.v} v={v.v} n={v.n} />
           ))}
         </div>
-      )}
-    </section>
-  );
-
-  const count = composed ? (preview ? valued : null) : sourceCount(inv, draft);
+      </section>
+    );
+  }
 
   return (
     <Canvas rows="auto auto minmax(0, 1fr)">
@@ -201,14 +167,23 @@ export default function KildeStep({
 
       <RailOptions>
         <RailSection label="Kode">
-          <RailTile title="Hel kode" example="+123456=360.001-JV401" pressed={!composed} onClick={() => setMode("whole")} />
-          <RailTile title="Fra deler" example="+ … = … - …" pressed={composed} onClick={() => setMode("parts")} />
+          <RailTile title="Hel kode" example="+123456=360.001-JV401" pressed={!composed} onClick={() => setCodeMode("whole")} />
+          <RailTile title="Fra deler" example="+ … = … - …" pressed={composed} onClick={() => setCodeMode("parts")} />
         </RailSection>
       </RailOptions>
 
-      {standardCard}
+      <ChoiceCard
+        question={QUESTION}
+        std={std}
+        stdFound={stdN > 0}
+        other={other}
+        mode={mode}
+        onMode={chooseMode}
+      />
 
-      <section className="tile card minor ev" aria-label="Valgt">
+      {work}
+
+      <section className="tile card minor ev vals" aria-label="Valgt">
         <span className="lbl">Valgt</span>
         {composed ? (
           <div className="slots">
@@ -253,7 +228,7 @@ export default function KildeStep({
         <div className="figs">
           <div>
             <span className="lbl">Med kode</span>
-            <Fig n={count} total={countable ? inv.products : null} />
+            <Fig n={count} total={countable ? inv.products : null} verdict={count === 0 ? "fail" : undefined} />
             <Meter n={count ?? 0} total={inv.products} />
           </div>
           <div>
@@ -262,33 +237,6 @@ export default function KildeStep({
             <Meter n={shaped} total={valued} verdict={verdictOf(shaped, valued)} />
           </div>
         </div>
-        <div className="av">
-          <div className="lh">
-            <span className="lbl">Avvik</span>
-            <span className="lbl num">{preview && countable ? fmt(avvik) : "–"}</span>
-          </div>
-          <div className="chips">
-            {(preview?.unshaped ?? []).slice(0, 16).map((u) => (
-              <span key={u.v} className="chip warn" title={`${u.v} · ${fmt(u.n)}`}>
-                {u.v}
-                <span className="c">{fmt(u.n)}</span>
-              </span>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <SourceTree
-        key={composed ? `parts-${active}` : "whole"}
-        inv={inv}
-        draft={composed ? (parts[active] ?? null) : draft}
-        pins={pins}
-        onPick={pick}
-        allowAll={!composed}
-        searchRef={search}
-      />
-
-      <section className="tile card minor vals" aria-label="Verdier">
         <div className="lh">
           <span className="lbl">Verdier</span>
           <span className="lbl num">{preview && countable ? `${fmt(preview.distinct)} ulike` : ""}</span>
@@ -309,5 +257,3 @@ export default function KildeStep({
     </Canvas>
   );
 }
-
-const of = (n: number, total: number) => `${fmt(n)} / ${fmt(total)}`;

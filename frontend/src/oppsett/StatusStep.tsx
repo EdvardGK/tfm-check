@@ -4,6 +4,7 @@ import type { Inventory, Location, Phase, RulesDict, SourceValues } from "../typ
 import { Canvas, Fig, Meter, StepBar, Val, breakDots } from "./Shell";
 import { MiniLoader } from "./Loader";
 import SourceTree, { propOf, type Pin } from "./SourceTree";
+import { ChoiceCard, modeOf, type SourceMode } from "./SourceChoice";
 import { useLiveAnswer } from "./live";
 import { STATUS_STANDARD, fmt, locationText, sameLocation, sourceCount } from "./setup";
 
@@ -61,12 +62,28 @@ export default function StatusStep({
   const isStd = sameLocation(draft, std);
   useLiveAnswer("status", locationText(draft), isStd);
 
+  const [mode, setMode] = useState<SourceMode>(() => modeOf(draft, std));
+  const [lastOther, setLastOther] = useState<Location | null>(null);
+  const other = !isStd ? draft : lastOther;
+  const chooseMode = (m: SourceMode) => {
+    setMode(m);
+    if (m === "standard") setDraft(std);
+    else {
+      const back = other ?? cands[0] ?? null;
+      if (back) setDraft(back);
+    }
+  };
+  const pick = (loc: Location) => {
+    setLastOther(loc);
+    setDraft(loc);
+  };
+
   const vals = useValues(uploadId, draft);
   const count = sourceCount(inv, draft);
 
-  const pins: Pin[] = [{ loc: std, tag: "Standard" }, ...cands.map((loc) => ({ loc, tag: "Forslag" }))];
+  const pins: Pin[] = cands.map((loc) => ({ loc, tag: "Forslag" }));
   const s = saved?.status_location;
-  if (s && !pins.some((p) => sameLocation(p.loc, s))) pins.push({ loc: s, tag: "Regelsett" });
+  if (s && !sameLocation(s, std) && !pins.some((p) => sameLocation(p.loc, s))) pins.push({ loc: s, tag: "Regelsett" });
 
   return (
     <Canvas rows="auto auto minmax(0, 1fr)">
@@ -76,51 +93,32 @@ export default function StatusStep({
         </button>
       </StepBar>
 
-      <section className="tile card major std" aria-label="Standard">
-        <span className="lbl">Standard</span>
-        <div className="row1">
-          <span className="src">{locationText(std)}</span>
-          {missing ? (
-            <span className="badge" data-verdict="fail">
-              ✕ Ikke i modellen
-            </span>
-          ) : (
-            <span className="badge" data-verdict="pass">
-              ✓ I modellen
-            </span>
-          )}
-        </div>
-        <Fig n={stdN} total={inv.products} verdict={missing ? "fail" : "ok"} />
-        <Meter n={stdN} total={inv.products} verdict={missing ? undefined : "ok"} />
-        {missing ? (
-          <div className="choice">
-            <button
-              type="button"
-              className="key"
-              aria-pressed={!isStd}
-              onClick={() => (cands[0] && isStd ? setDraft(cands[0]) : search.current?.focus())}
-            >
-              Kartlegg
-            </button>
-            <button type="button" className="key" aria-pressed={isStd} onClick={() => setDraft(std)}>
-              Behold standard
-            </button>
+      <ChoiceCard std={std} stdFound={!missing} other={other} mode={mode} onMode={chooseMode} />
+
+      {mode === "other" ? (
+        <SourceTree inv={inv} draft={draft} pins={pins} onPick={pick} searchRef={search} />
+      ) : (
+        <section className="tile card major std" aria-label="Standard">
+          <span className="lbl">Standard</span>
+          <div className="row1">
+            <span className="src">{locationText(std)}</span>
           </div>
-        ) : (
+          <Fig n={stdN} total={inv.products} verdict={missing ? "fail" : "ok"} />
+          <Meter n={stdN} total={inv.products} verdict={missing ? undefined : "ok"} />
           <div className="vals3">
             {(propOf(inv, std)?.samples ?? []).map((v) => (
               <Val key={v.v} v={v.v} n={v.n} />
             ))}
           </div>
-        )}
-      </section>
+        </section>
+      )}
 
-      <section className="tile card minor ev" aria-label="Valgt">
+      <section className="tile card minor ev vals" aria-label="Valgt">
         <span className="lbl">Valgt</span>
         <span className="src">{breakDots(locationText(draft))}</span>
         <div>
           <span className="lbl">Med verdi</span>
-          <Fig n={count} total={inv.products} />
+          <Fig n={count} total={inv.products} verdict={count === 0 ? "fail" : undefined} />
           <Meter n={count ?? 0} total={inv.products} />
         </div>
         <div className="phases">
@@ -137,11 +135,6 @@ export default function StatusStep({
             </div>
           ))}
         </div>
-      </section>
-
-      <SourceTree inv={inv} draft={draft} pins={pins} onPick={setDraft} searchRef={search} />
-
-      <section className="tile card minor vals" aria-label="Verdier">
         <div className="lh">
           <span className="lbl">Verdier</span>
           <span className="lbl num">{vals ? `${fmt(vals.distinct)} ulike` : ""}</span>
