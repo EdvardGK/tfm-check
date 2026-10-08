@@ -36,7 +36,12 @@ export const PART_STANDARD: Record<Aspect, Location> = {
 /** The MMI (status) code's standard source (NS 8360-1 / POFIN). */
 export const STATUS_STANDARD: Location = ["pset", "NONS_Process", "ProcessStatus"];
 
-export const ASPECT_NAME: Record<Aspect, string> = { lokasjon: "Lokasjonskode", system: "System", komponent: "Komponentkode" };
+/** NS 8360-1 G1:2025 / PA 0802: the parts of a TFM-ID. */
+export const ASPECT_NAME: Record<Aspect, string> = {
+  lokasjon: "Plasserings-ID",
+  system: "Systemforekomst-ID",
+  komponent: "Komponentforekomst-ID",
+};
 export const ASPECT_SIGN: Record<Aspect, string> = { lokasjon: "+", system: "=", komponent: "-" };
 
 /** Statsbygg PA 0802 rev.3: +Lokasjon=Systemkode.Løpenummer-KomponentKomp.nr */
@@ -90,10 +95,50 @@ export const isStandardFormat = (rules: RulesDict) =>
 /** Where the code is read from, as it prints: the source, or the aspects'
  *  sources behind their signs. */
 export function sourceText(rules: RulesDict): string {
-  if (!isComposed(rules)) return locationText(rules.tfm_location);
+  if (!isComposed(rules)) return plainSource(rules.tfm_location);
   return ASPECTS.filter((a) => rules.tfm_parts?.[a])
-    .map((a) => `${ASPECT_SIGN[a]} ${rules.tfm_parts?.[a]?.[2] ?? ""}`)
+    .map((a) => `${ASPECT_SIGN[a]} ${plainSource(rules.tfm_parts?.[a])}`)
     .join("  ");
+}
+
+/** The standard sources by their property: the plain term (NS 8360-1 G1:2025
+ *  tables 2-3), and whose set it is. */
+const STANDARD_TERM: Record<string, string> = {
+  RefString: "TFM-ID",
+  RefPriSysLoc: "Plasserings-ID",
+  RefPriSysOcc: "Systemforekomst-ID",
+  RefCompOcc: "Komponentforekomst-ID",
+  ProcessStatus: "MMI",
+};
+const STANDARD_SET: Record<string, string> = {
+  NOSSB_Reference: "Statsbygg",
+  NONS_Reference: "NS 8360",
+  NONS_Process: "NS 8360",
+};
+
+/** A standard source's plain term and set, or null for a model's own. */
+export function standardTerm(loc: Location | null | undefined): { term: string; set: string } | null {
+  if (!loc || loc[0] !== "pset") return null;
+  const term = STANDARD_TERM[loc[2] ?? ""];
+  const set = STANDARD_SET[loc[1] ?? ""];
+  return term && set ? { term, set } : null;
+}
+
+/** A source in plain words first: a standard's term, else the property's own
+ *  name; the technical pset.property goes with it as a second line. */
+export function plainSource(loc: Location | null | undefined): string {
+  if (!loc) return "–";
+  const std = standardTerm(loc);
+  if (std) return `${std.term} (${std.set})`;
+  if (loc[0] === "pset") return loc[2] ?? "";
+  if (loc[0] === "attr") return loc[2] === "Name" ? "Navn" : (loc[2] ?? "");
+  return "Alle felt";
+}
+
+/** The standard source a role takes in this model: the first of Statsbygg's
+ *  (NOSSB) and NS 8360's (NONS) the model carries, else Statsbygg's. */
+export function standardIn(standards: { location: Location; n: number }[] | undefined, fallback: Location): Location {
+  return standards?.find((s) => s.n > 0)?.location ?? fallback;
 }
 
 /** A source as it prints: `Pset.Prop`, the attribute, or «Alle felt». */

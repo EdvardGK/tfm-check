@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { getValues } from "../api";
 import type { Inventory, Location, Phase, RulesDict, SourceValues } from "../types";
-import { Canvas, Fig, Meter, StepBar, Val, breakDots } from "./Shell";
+import { Canvas, Fig, Meter, StepBar, Val } from "./Shell";
 import { MiniLoader } from "./Loader";
 import SourceTree, { propOf, type Pin } from "./SourceTree";
 import { ChoiceCard, modeOf, type SourceMode } from "./SourceChoice";
+import SourceName from "./SourceName";
 import { useLiveAnswer } from "./live";
 import { STATUS_STANDARD, fmt, locationText, sameLocation, sourceCount } from "./setup";
 
@@ -101,7 +102,9 @@ export default function StatusStep({
         <section className="tile card major std" aria-label="Standard">
           <span className="lbl">Standard</span>
           <div className="row1">
-            <span className="src">{locationText(std)}</span>
+            <span className="src">
+              <SourceName loc={std} />
+            </span>
           </div>
           <Fig n={stdN} total={inv.products} verdict={missing ? "fail" : "ok"} />
           <Meter n={stdN} total={inv.products} verdict={missing ? undefined : "ok"} />
@@ -115,7 +118,9 @@ export default function StatusStep({
 
       <section className="tile card minor ev vals" aria-label="Valgt">
         <span className="lbl">Valgt</span>
-        <span className="src">{breakDots(locationText(draft))}</span>
+        <span className="src">
+          <SourceName loc={draft} />
+        </span>
         <div>
           <span className="lbl">Med verdi</span>
           <Fig n={count} total={inv.products} verdict={count === 0 ? "fail" : undefined} />

@@ -65,7 +65,7 @@ def test_part_rule_value():
     r = rules(part_rules={"lokasjon": {"kind": "value", "value": "02"}})
     assert diagnose("+02=361.001", r).ok
     d = diagnose("+04=361.001", r)
-    assert not d.ok and "Lokasjonskode «04», skal være «02»" in d.reason
+    assert not d.ok and "Plasserings-ID «04», skal være «02»" in d.reason
 
 
 def test_part_rule_list():
@@ -237,3 +237,18 @@ def test_register_over_two_models(model):
     wb = load_workbook(io.BytesIO(build_register_xlsx(columns, rows, summaries, roll)))
     head = [c.value for c in wb["Sammendrag"][1]]
     assert head == ["Felt", "HI90_RIV.ifc", "HI90_RIV_MMI800.ifc"]
+
+
+def test_own_part_label_in_reasons():
+    r = rules(part_labels={"lopenummer": "Kurs"})
+    assert "Kurs «3», skal være 3 siffer" in diagnose("+02=360.3", r).reason
+
+
+def test_inventory_offers_ns8360_sources(model):
+    from engine.inventory import inventory_payload
+
+    _, _, index = model
+    inv = inventory_payload(index, [])
+    assert [s["location"][1:] for s in inv["roles"]["system"]["standards"]] == [
+        ["NOSSB_Reference", "RefPriSysOcc"], ["NONS_Reference", "RefPriSysOcc"]]
+    assert [s["location"][1:] for s in inv["standards"]] == [["NOSSB_Reference", "RefString"], ["NONS_Reference", "RefString"]]

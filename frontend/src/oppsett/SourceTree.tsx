@@ -8,7 +8,7 @@ import { useMemo, useState, type Ref } from "react";
 import type { Inventory, InventoryProp, Location, ValueCount } from "../types";
 import { Meter, Val } from "./Shell";
 import { CustomEntry } from "./SourceChoice";
-import { fmt, locationText, sameLocation } from "./setup";
+import { fmt, locationText, sameLocation, standardTerm } from "./setup";
 
 const ATTRS = "\u0000attr";
 const ALL: Location = ["all", null, null];
@@ -159,7 +159,10 @@ export default function SourceTree({
         </div>
         {pinned.map((p) => {
           const [kind, set, prop] = p.loc;
-          return propRow(p.loc, kind === "pset" ? (prop ?? "") : locationText(p.loc), propOf(inv, p.loc), kind === "pset" ? (set ?? "") : undefined, p.tag ?? "");
+          const std = standardTerm(p.loc);
+          const name = std ? `${std.term} (${std.set})` : kind === "pset" ? (prop ?? "") : locationText(p.loc);
+          const sub = std ? locationText(p.loc) : kind === "pset" ? (set ?? "") : undefined;
+          return propRow(p.loc, name, propOf(inv, p.loc), sub, p.tag ?? "");
         })}
         {tree}
       </div>

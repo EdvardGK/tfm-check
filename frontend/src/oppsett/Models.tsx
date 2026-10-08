@@ -73,7 +73,8 @@ export function ModelsSection({
 }
 
 const ROLE: Record<string, string> = {
-  whole: "Hel kode", lokasjon: "Lokasjonskode", system: "System", komponent: "Komponentkode", status: "Status",
+  whole: "TFM-ID", lokasjon: "Plasserings-ID", system: "Systemforekomst-ID", komponent: "Komponentforekomst-ID",
+  status: "Status",
 };
 
 /** «IDS»: what each specification of an imported IDS became, or why not. */

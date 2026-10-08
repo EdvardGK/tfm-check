@@ -183,5 +183,7 @@ def test_register(model):
     wb = load_workbook(io.BytesIO(data))
     assert wb.sheetnames == ["Sammendrag", "Register", "Systemkoder", "Komponentkoder"]
     ws = wb["Register"]
-    assert [c.value for c in ws[1]][:4] == columns[:4]
+    head = [str(c.value).split("\n")[0] for c in ws[1]]
+    assert head[:4] == columns[:4]
+    assert str(ws[1][0].value) == "Kode som funnet\nRefString"
     assert ws.max_row == 5

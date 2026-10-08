@@ -3,8 +3,8 @@ import { createPortal } from "react-dom";
 import { getPreview } from "../api";
 import {
   DISCIPLINES, FREETEXT_COLOR, FREETEXT_PREFIX, PART_COLORS, PART_EXAMPLE, PART_TO_DIGITKEY, PART_TYPES, SEP_KEYS,
-  SEP_TO_CHAR, blockOf, fixedToken, freetextValue, isFreetext, listToken, partLabel, regexToken, sequenceToExample,
-  type Palette,
+  SEP_TO_CHAR, KIND_LABEL, PART_KIND, PART_TECH, blockOf, fixedToken, freetextValue, isFreetext, listToken, partLabel,
+  regexToken, sequenceToExample, type Palette,
 } from "../constants";
 import type { PartRule, Preset, RulesDict } from "../types";
 import { Canvas, RailOptions, RailSection, RailTile, StepBar } from "./Shell";
@@ -13,7 +13,14 @@ import { STATSBYGG_PATTERNS } from "./setup";
 
 export type FormatDraft = Pick<
   RulesDict,
-  "patterns" | "part_digits" | "part_rules" | "part_links" | "bygningsdel_system" | "komponent_system" | "discipline_key"
+  | "patterns"
+  | "part_digits"
+  | "part_rules"
+  | "part_links"
+  | "part_labels"
+  | "bygningsdel_system"
+  | "komponent_system"
+  | "discipline_key"
 >;
 
 const draftOf = (r: RulesDict): FormatDraft => ({
@@ -21,6 +28,7 @@ const draftOf = (r: RulesDict): FormatDraft => ({
   part_digits: { ...(r.part_digits ?? {}) },
   part_rules: { ...(r.part_rules ?? {}) },
   part_links: { ...(r.part_links ?? {}) },
+  part_labels: { ...(r.part_labels ?? {}) },
   bygningsdel_system: r.bygningsdel_system,
   komponent_system: r.komponent_system,
   discipline_key: r.discipline_key,
@@ -148,6 +156,20 @@ function PartRow({
   const [pick, setPick] = useState(preset || "\\d{3}");
   const [custom, setCustom] = useState(preset === "custom" ? st.rx : "");
   const lists = LISTS_FOR[key] ?? [];
+  const kind = PART_KIND[part] ?? "klassifikasjon";
+  // The data types a kind offers; a type the draft already holds (an older
+  // file) stays listed so it shows as it reads.
+  const types: DataType[] =
+    kind === "klassifikasjon" ? ["list", "value"] : kind === "lopenummer" ? ["pattern"] : ["value"];
+  if (!types.includes(st.type)) types.push(st.type);
+  const presets = kind === "lopenummer" ? PATTERN_PRESETS.filter(([, rx]) => rx.startsWith("\\d")) : PATTERN_PRESETS;
+  const setLabel = (v: string) =>
+    edit((d) => {
+      const pl = { ...(d.part_labels ?? {}) };
+      if (v.trim() && v.trim() !== partLabel(part)) pl[key] = v;
+      else delete pl[key];
+      return { ...d, part_labels: pl };
+    });
 
   /** Write the part's rule; a length lock and an older link give way. */
   const write = (rule: PartRule | null, link: string | null) =>
@@ -184,15 +206,26 @@ function PartRow({
 
   return (
     <div className="prow rule">
-      <span className="sw" style={paint(PART_COLORS[part] ?? FREETEXT_COLOR)}>
-        {partLabel(part)}
+      <span className="swl">
+        <input
+          className="sw lblin"
+          style={paint(PART_COLORS[part] ?? FREETEXT_COLOR)}
+          aria-label={`${partLabel(part)} navn`}
+          value={draft.part_labels?.[key] ?? partLabel(part)}
+          onChange={(e) => setLabel(e.target.value)}
+        />
+        {PART_TECH[part] ? <span className="tech">{PART_TECH[part]}</span> : null}
       </span>
       <span className="pr">
-        <select className="field" aria-label={`${part} datatype`} value={type} onChange={(e) => onType(e.target.value as DataType)}>
-          <option value="value">Fast verdi</option>
-          <option value="list">Liste</option>
-          <option value="pattern">Mønster</option>
-        </select>
+        {types.length > 1 ? (
+          <select className="field" aria-label={`${part} datatype`} value={type} onChange={(e) => onType(e.target.value as DataType)}>
+            {types.map((t) => (
+              <option key={t} value={t}>
+                {t === "value" ? "Fast verdi" : t === "list" ? "Liste" : "Mønster"}
+              </option>
+            ))}
+          </select>
+        ) : null}
         {type === "value" ? (
           <input
             className="field mono"
@@ -245,12 +278,12 @@ function PartRow({
               writePattern(e.target.value === "custom" ? custom : e.target.value);
             }}
           >
-            {PATTERN_PRESETS.map(([label, rx]) => (
+            {presets.map(([label, rx]) => (
               <option key={rx} value={rx}>
                 {label}
               </option>
             ))}
-            <option value="custom">Egendefinert</option>
+            {kind !== "lopenummer" || pick === "custom" ? <option value="custom">Egendefinert</option> : null}
           </select>
         ) : null}
       </span>
@@ -317,7 +350,7 @@ function BlockRow({
         <select className="field" aria-label="Datatype" value={type} onChange={(e) => onType(e.target.value as DataType)}>
           <option value="value">Fast verdi</option>
           <option value="list">Liste</option>
-          <option value="pattern">Mønster</option>
+          {initial === "pattern" ? <option value="pattern">Mønster</option> : null}
         </select>
         {type === "value" ? (
           <input
@@ -382,7 +415,7 @@ function BlockRow({
 }
 
 /** The two areas' headers, edkjo's terms; the Norwegian words to come. */
-const BUILT_STRING = "built string";
+const BUILT_STRING = "Merkestreng";
 const BUILDING_BLOCKS = "building blocks";
 
 /** The «Sett inn» picker, outside every tile's overflow (in #oppsett's top
@@ -437,7 +470,8 @@ type Drop = { pi: number; at: number } | null;
  *  belongs with the results). Band 1, full width: the built string, its
  *  forms as rows of segments with «eller» between them (a code passes on
  *  any one). Band 2: «Deler», each part's rule and standard link | the
- *  building blocks: parts, «Deletegn», text. A block drags to where it goes,
+ *  building blocks by kind: Klassifikasjon, Løpenummer, Skilletegn (and
+ *  text). A block drags to where it goes,
  *  or a gap's «+» bubble picks one there; a segment drags, or is picked and
  *  moved with ‹ › ✕. Rail: the bundled forms and the discipline. */
 export default function FormatStep({
@@ -636,8 +670,11 @@ export default function FormatStep({
     const ex = own?.kind === "value" ? own.value : own?.kind === "list" ? own.values[0] : (PART_EXAMPLE[t] ?? t);
     return (
       <button key={ti} type="button" className="seg" aria-pressed={pressed} onClick={onClick} style={paint(c)} {...dnd}>
-        <span className="sn">{free ? "Tekst" : digits ? `${partLabel(t)} · ${digits}` : partLabel(t)}</span>
+        <span className="sn">
+          {free ? "Tekst" : digits ? `${partLabel(t, draft.part_labels)} · ${digits}` : partLabel(t, draft.part_labels)}
+        </span>
         <span className="sx">{free ? freetextValue(t) || "–" : ex}</span>
+        {!free && PART_TECH[t] ? <span className="tech">{PART_TECH[t]}</span> : null}
       </button>
     );
   };
@@ -701,21 +738,26 @@ export default function FormatStep({
                 ✕
               </button>
             </span>
-            <span className="palette">
-              {PART_TYPES.map((t, k) => (
-                <button
-                  key={t}
-                  type="button"
-                  className="mini"
-                  style={paint(PART_COLORS[t])}
-                  autoFocus={k === 0}
-                  onClick={() => choose(t, pi, at)}
-                >
-                  {partLabel(t)}
-                </button>
-              ))}
-            </span>
-            <span className="lbl">Deletegn</span>
+            {(["klassifikasjon", "lopenummer"] as const).map((kd, gi) => (
+              <Fragment key={kd}>
+                <span className="lbl">{KIND_LABEL[kd]}</span>
+                <span className="palette">
+                  {PART_TYPES.filter((t) => PART_KIND[t] === kd).map((t, k) => (
+                    <button
+                      key={t}
+                      type="button"
+                      className="mini"
+                      style={paint(PART_COLORS[t])}
+                      autoFocus={gi === 0 && k === 0}
+                      onClick={() => choose(t, pi, at)}
+                    >
+                      {partLabel(t, draft.part_labels)}
+                    </button>
+                  ))}
+                </span>
+              </Fragment>
+            ))}
+            <span className="lbl">{KIND_LABEL.skilletegn}</span>
             <span className="palette">
               {SEP_KEYS.map((k) => (
                 <button
@@ -728,6 +770,9 @@ export default function FormatStep({
                   {SEP_TO_CHAR[k] === " " ? "␣" : SEP_TO_CHAR[k]}
                 </button>
               ))}
+              <button type="button" className="mini mono" onClick={() => choose("T-suffiks", pi, at)}>
+                T
+              </button>
             </span>
             <form
               className="palette"
@@ -886,7 +931,7 @@ export default function FormatStep({
               const side = (k: number) => {
                 const n = p.sequence[k];
                 const nb = n !== undefined ? blockOf(n) : null;
-                return nb?.kind === "part" ? partLabel(nb.part) : "";
+                return nb?.kind === "part" ? partLabel(nb.part, draft.part_labels) : "";
               };
               const context = [side(ti - 1), side(ti + 1)].filter(Boolean).join(" · ");
               return (
@@ -909,10 +954,20 @@ export default function FormatStep({
 
       <section className="tile card minor blocks" aria-label={BUILDING_BLOCKS}>
         <span className="lbl">{BUILDING_BLOCKS}</span>
-        <div className="palette">{PART_TYPES.map((t) => piece(t, `+ ${partLabel(t)}`, paint(PART_COLORS[t])))}</div>
-        <span className="lbl">Deletegn</span>
+        {(["klassifikasjon", "lopenummer"] as const).map((k) => (
+          <Fragment key={k}>
+            <span className="lbl">{KIND_LABEL[k]}</span>
+            <div className="palette">
+              {PART_TYPES.filter((t) => PART_KIND[t] === k).map((t) =>
+                piece(t, `+ ${partLabel(t, draft.part_labels)}`, paint(PART_COLORS[t])),
+              )}
+            </div>
+          </Fragment>
+        ))}
+        <span className="lbl">{KIND_LABEL.skilletegn}</span>
         <div className="palette">
           {SEP_KEYS.map((k) => piece(k, SEP_TO_CHAR[k] === " " ? "␣" : SEP_TO_CHAR[k], undefined, "mini mono"))}
+          {piece("T-suffiks", "T", undefined, "mini mono")}
           <form
             className="palette"
             onSubmit={(e) => {

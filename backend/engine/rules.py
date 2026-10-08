@@ -129,6 +129,8 @@ class TFMRules:
     # A part linked to a standard beyond Systemkode / Komponent (which use
     # bygningsdel_system / komponent_system): {"typekode": "NS3457-8"}.
     part_links: dict = field(default_factory=dict)
+    # A project's own name for a part ({"sloyfe": "Sløyfe"}); display only.
+    part_labels: dict = field(default_factory=dict)
 
     def _pattern_for_group(self, name: str) -> str:
         name = base_part(name)
@@ -235,6 +237,8 @@ class TFMRules:
                        if k in ASPECTS and _loc(v) is not None},
             status_location=_loc(data.get("status_location")),
             part_links={str(k): str(v) for k, v in (data.get("part_links") or {}).items() if v},
+            part_labels={str(k): str(v).strip() for k, v in (data.get("part_labels") or {}).items()
+                         if str(v or "").strip()},
             part_rules={str(k): r for k, r in ((k, clean_rule(v)) for k, v in
                                                (data.get("part_rules") or {}).items()) if r},
         )._with_rule_links()

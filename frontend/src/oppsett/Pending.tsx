@@ -1,6 +1,6 @@
 import type { Location } from "../types";
 import { Canvas, StepBar } from "./Shell";
-import { locationText } from "./setup";
+import SourceName from "./SourceName";
 
 /** A mapping step whose model data has not arrived yet: the same bands as
  *  the step (the standard | the pick; the model | the values), its known
@@ -17,7 +17,9 @@ export default function Pending({ standard, picked }: { standard: Location; pick
       <section className="tile card major std" aria-label="Standard" aria-busy="true">
         <span className="lbl">Standard</span>
         <div className="row1">
-          <span className="src">{locationText(standard)}</span>
+          <span className="src">
+            <SourceName loc={standard} />
+          </span>
         </div>
         <span className="fig num">–</span>
       </section>

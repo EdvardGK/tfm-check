@@ -34,6 +34,13 @@ PART_STANDARD = {
 }
 # Status (MMI): the process status code (NS 8360-1 / POFIN).
 STATUS_STANDARD = ("NONS_Process", "ProcessStatus")
+# NS 8360-1 G1:2025 tables 2-3: the same sources in NONS_Reference.
+NONS_SOURCE = ("NONS_Reference", "RefString")
+NONS_PART = {
+    "lokasjon": ("NONS_Reference", "RefPriSysLoc"),
+    "system": ("NONS_Reference", "RefPriSysOcc"),
+    "komponent": ("NONS_Reference", "RefCompOcc"),
+}
 
 # What a value of each role looks like, and what its source tends to be
 # named. A role without a distinctive value form (lokasjon, status) needs the
@@ -268,7 +275,7 @@ def inventory_payload(index: ModelIndex, preset_rules: list[TFMRules]) -> dict:
     # listed apart.
     regexes = [rx for r in preset_rules for rx in r.regexes()]
     scored = []
-    sources = [(("pset", s, p), v) for (s, p), v in index.props.items() if (s, p) != STANDARD_SOURCE]
+    sources = [(("pset", s, p), v) for (s, p), v in index.props.items() if (s, p) not in (STANDARD_SOURCE, NONS_SOURCE)]
     sources += [(("attr", None, a), v) for a, v in index.attrs.items()]
     for loc, values in sources:
         if not values:
@@ -280,16 +287,24 @@ def inventory_payload(index: ModelIndex, preset_rules: list[TFMRules]) -> dict:
     scored.sort(key=lambda x: -x[0])
     candidates = [{"location": list(loc), "n": n, "matched": m} for m, loc, n in scored[:3]]
 
+    def counted(src):
+        return {"location": ["pset", *src], "n": len(index.props.get(src, {}))}
+
     roles = {}
     for role, std in [*PART_STANDARD.items(), ("status", STATUS_STANDARD)]:
+        stds = [std] + ([NONS_PART[role]] if role in NONS_PART else [])
         roles[role] = {
-            "standard": {"location": ["pset", *std], "n": len(index.props.get(std, {}))},
-            "candidates": role_candidates(index, role, exclude=std),
+            "standard": counted(std),
+            # Every standard source for the role (Statsbygg, NS 8360-1).
+            "standards": [counted(x) for x in stds],
+            "candidates": [c for c in role_candidates(index, role, exclude=std)
+                           if tuple(c["location"][1:]) not in stds],
         }
 
     return {
         "products": len(index.product_ids),
         "standard": {"location": ["pset", *STANDARD_SOURCE], "n": len(std_values)},
+        "standards": [counted(STANDARD_SOURCE), counted(NONS_SOURCE)],
         "roles": roles,
         "sets": sets,
         "attributes": [_prop_entry(a, index.attrs[a]) for a in ATTRIBUTES],

@@ -12,9 +12,57 @@ export const PART_TYPES = [
 ] as const;
 export type PartType = (typeof PART_TYPES)[number];
 
-/** A part's name in the UI; the token (the ruleset key) stays as it is. */
-export const PART_LABEL: Record<string, string> = { Lokasjon: "Lokasjonskode", Komponent: "Komponentkode" };
-export const partLabel = (t: string): string => PART_LABEL[t] ?? t;
+/** A part's name in the UI, from NS 8360-1 G1:2025 tables 3-4 where it has
+ *  one; the token (the ruleset key) stays as it is. A project may rename a
+ *  part (rules.part_labels). */
+export const PART_LABEL: Record<string, string> = {
+  Lokasjon: "Plasserings-ID",
+  Løpenummer: "Nummer",
+  Subnr: "Undernummer",
+  Komponent: "Komponentkode",
+  "Komp.nr": "Komponentforekomstnummer",
+  Typekode: "Komponentkode (type)",
+  Typenr: "Komponenttypenummer",
+  Instansnr: "Instansnummer",
+  Kode: "TFM-ID",
+};
+export const partLabel = (t: string, own?: Record<string, string>): string => {
+  const key = PART_TEMPLATE_KEY[t];
+  return (key && own?.[key]) || PART_LABEL[t] || t;
+};
+
+/** The kind a part is, which decides its data types: a classification code
+ *  (validated against a code list), a running number (a counter of so many
+ *  digits) or a separator (a fixed value or accepted ones). */
+export type PartKind = "klassifikasjon" | "lopenummer" | "skilletegn";
+export const PART_KIND: Record<string, PartKind> = {
+  Lokasjon: "klassifikasjon", Systemkode: "klassifikasjon", Komponent: "klassifikasjon", Typekode: "klassifikasjon",
+  Etasje: "klassifikasjon", Rom: "klassifikasjon", Kode: "klassifikasjon",
+  Løpenummer: "lopenummer", Subnr: "lopenummer", "Komp.nr": "lopenummer", Typenr: "lopenummer",
+  Instansnr: "lopenummer", Område: "lopenummer", Linje: "lopenummer", Sløyfe: "lopenummer", "Adresse 2": "lopenummer",
+  "T-suffiks": "skilletegn",
+};
+/** The technical key of a part (NS 8360-1 G1:2025, NONS_Reference), shown
+ *  under its name; none for a project's own part. */
+export const PART_TECH: Record<string, string> = {
+  Lokasjon: "RefPriSysLoc", Systemkode: "RefPriSysClass", Løpenummer: "RefPriSysNo1", Subnr: "RefPriSysNo2",
+  Komponent: "RefCompClass", "Komp.nr": "RefCompOccNo", Typekode: "RefCompClass", Typenr: "RefCompTypeNo1",
+  Etasje: "RefCompLocVer", Rom: "RefCompLocRoom", Kode: "RefString",
+};
+
+export const KIND_LABEL: Record<PartKind, string> = {
+  klassifikasjon: "Klassifikasjon",
+  lopenummer: "Løpenummer",
+  skilletegn: "Skilletegn",
+};
+
+/** Part token → its template key (backend PART_TO_TEMPLATE). */
+export const PART_TEMPLATE_KEY: Record<string, string> = {
+  Lokasjon: "lokasjon", Rom: "rom", Systemkode: "systemkode", Etasje: "etasje", Subnr: "subnr",
+  Løpenummer: "lopenummer", Komponent: "komponent", "Komp.nr": "kompnr", "T-suffiks": "typeflag",
+  Område: "omrade", Linje: "linje", Sløyfe: "sloyfe", "Adresse 2": "adresse", Typekode: "typekode",
+  Typenr: "typenr", Instansnr: "instansnr", Kode: "kode",
+};
 
 // Separator key → rendered character
 export const SEP_TO_CHAR: Record<string, string> = {

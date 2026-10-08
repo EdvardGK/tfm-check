@@ -17,6 +17,7 @@ A ruleset for TFM-sjekk (test.tfm-sjekk.skiplum.com / skiplum.com). It says, per
 - "tfm_mode": "whole" | "parts".
   - "whole": the full code is in one source, "tfm_location".
   - "parts": the code is composed from up to three sources, "tfm_parts": {"lokasjon": <loc>, "system": <loc>, "komponent": <loc>}. Composition: "+" lokasjon, "=" system, "-" komponent; a value that already starts with its sign keeps it; an empty part is left out.
+- Standard sources: Statsbygg NOSSB_Reference.RefString / .RefPriSysLoc / .RefPriSysOcc / .RefCompOcc, or NS 8360-1 NONS_Reference.(same names); status NONS_Process.ProcessStatus.
 - <loc> (a source): ["pset", "<PropertySetName>", "<PropertyName>"] or ["attr", null, "Name"|"Tag"]. Names are case-sensitive, exactly as in the IFC. A source the model lacks is not replaced: the model fails the check there.
 - "status_location": <loc> of the MMI / status code, or null. Read as phases: 0-6xx ny, 7xx bevares, 8xx ombruk, 9xx rives.
 - "patterns": [ {"sequence": [<token>, ...]}, ... ]. A code is valid when it matches one sequence completely (anchored at both ends).
@@ -24,6 +25,12 @@ A ruleset for TFM-sjekk (test.tfm-sjekk.skiplum.com / skiplum.com). It says, per
   - <token> is a block: a segment name (a named code part, its data type in "part_rules"), a fixed value (a separator key below, or "T:<literal text>"), "SL:<JSON array>" (one of the listed values, e.g. "SL:[\".\",\"_\"]" for an accepted «.» or «_»), or "SR:<regex>" (text taking the pattern).
   - Segments: "Lokasjon", "Rom", "Systemkode", "Etasje", "Subnr", "Løpenummer", "Komponent", "Komp.nr", "T-suffiks", "Område", "Linje", "Sløyfe", "Adresse 2", "Typekode", "Typenr", "Instansnr". A segment may appear more than once in a sequence.
   - Separators: "+", "++", "=", ".", "-", "_", "/", "%", "mellomrom" (a space).
+- Block kinds (the UI groups by them; behaviour follows the kind):
+  - Klassifikasjon: a code valid only as one of a set of values, checked against a code list (a standard list or the project's own). Segments: Lokasjon (Plasserings-ID, RefPriSysLoc), Systemkode (RefPriSysClass), Komponent (Komponentkode, RefCompClass), Typekode (Komponentkode of a type), Etasje (RefCompLocVer), Rom (RefCompLocRoom), Kode (the whole TFM-ID, RefString). Data types: list (standard or own), value.
+  - Løpenummer: a counter of so many digits. Segments: Løpenummer (Nummer, RefPriSysNo1), Subnr (Undernummer, RefPriSysNo2), Komp.nr (Komponentforekomstnummer, RefCompOccNo), Typenr (Komponenttypenummer, RefCompTypeNo1), Instansnr, Område, Linje, Sløyfe, Adresse 2. Data type: pattern of digits.
+  - Skilletegn: a fixed value or a list of accepted ones (separator keys, "T:<text>", "SL:[...]"); T-suffiks is a fixed "T".
+  Names follow NS 8360-1 G1:2025 (pset NONS_Reference); PA 0802 (NOSSB_Reference) uses the same terms for Plasserings-ID, Systemforekomst-ID, Komponentforekomst-ID.
+- "part_labels": {"<segment key>": "<name>"} a project's own name for a segment (display only), e.g. {"sloyfe": "Sløyfe"}.
 - "part_rules": {"<segment key>": <rule>} overrides a segment's standard form. Segment keys: lokasjon, rom, systemkode, etasje, subnr, lopenummer, komponent, kompnr, typeflag, omrade, linje, sloyfe, adresse, typekode, typenr, instansnr. <rule> is one of:
   - {"kind": "pattern", "pattern": "<regex>"} (Python regex for the segment alone; ^ and $ are dropped; no named groups; a regex that does not compile matches nothing),
   - {"kind": "value", "value": "<exact text>"},

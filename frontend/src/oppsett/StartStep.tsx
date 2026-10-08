@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { Canvas, StepBar } from "./Shell";
-import { ANY_FAG, STATSBYGG_EXAMPLE, STANDARD_LOCATION, download, locationText, setupJson, statsbyggRules } from "./setup";
+import { ANY_FAG, STATSBYGG_EXAMPLE, STANDARD_LOCATION, download, plainSource, setupJson, statsbyggRules } from "./setup";
 
 /** The first screen: the Statsbygg standard or a custom setup, and a saved
  *  setup («Åpne regelsett») in the bar. */
@@ -43,7 +43,7 @@ export default function StartStep({
         <h2>Statsbygg</h2>
         <span className="kv">
           <span className="lbl">Kilde</span>
-          <span className="v">{locationText(STANDARD_LOCATION)}</span>
+          <span className="v">{plainSource(STANDARD_LOCATION)}</span>
           <span className="lbl">Format</span>
           <span className="v">{STATSBYGG_EXAMPLE}</span>
           <span className="lbl">Etasjer</span>

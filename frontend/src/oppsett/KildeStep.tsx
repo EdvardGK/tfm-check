@@ -1,13 +1,14 @@
 import { useRef, useState } from "react";
 import { ASPECTS, type Aspect, type Inventory, type Location, type RulesDict, type TfmMode } from "../types";
-import { Canvas, Fig, Lamp, Meter, RailOptions, RailSection, RailTile, StepBar, Val, breakDots } from "./Shell";
+import { Canvas, Fig, Lamp, Meter, RailOptions, RailSection, RailTile, StepBar, Val } from "./Shell";
 import { MiniLoader } from "./Loader";
 import { ChoiceCard, modeOf, type SourceMode } from "./SourceChoice";
 import SourceTree, { propOf, type Pin } from "./SourceTree";
+import SourceName from "./SourceName";
 import { useLiveAnswer } from "./live";
 import { usePreview } from "./usePreview";
 import {
-  ASPECT_NAME, ASPECT_SIGN, PART_STANDARD, STANDARD_LOCATION, fmt, locationText, sameLocation, sourceCount, sourceText,
+  ASPECT_NAME, ASPECT_SIGN, PART_STANDARD, STANDARD_LOCATION, fmt, sameLocation, sourceCount, sourceText, standardIn,
   verdictOf,
 } from "./setup";
 
@@ -17,7 +18,7 @@ const QUESTION = "Hvor skal TFM-koden være lagret i denne modellen?";
 
 /** Kilde: where the TFM code lives, whole in one property or composed from
  *  the PA 0802 aspects (+lokasjon =system -komponent), each in its own
- *  property (the rail's «Hel kode» / «Fra deler»).
+ *  property (the rail's «TFM-ID» / «Fra deler»).
  *
  *  Band 1: the question and its three answers: the standard (with whether
  *  the model has it), a property picked from the model, or one entered by
@@ -42,7 +43,9 @@ export default function KildeStep({
   fresh: boolean;
   onUse: (patch: Partial<RulesDict>) => void;
 }) {
-  const wholeStd = STANDARD_LOCATION;
+  // Statsbygg's (NOSSB) or NS 8360's (NONS) source, whichever the model has.
+  const wholeStd = standardIn(inv.standards, STANDARD_LOCATION);
+  const partStd = (a: Aspect) => standardIn(inv.roles[a].standards, PART_STANDARD[a]);
   const wholeCand = inv.candidates.find((c) => !sameLocation(c.location, wholeStd))?.location ?? null;
   const partCand = (a: Aspect) => inv.roles[a].candidates[0]?.location ?? null;
   const partFound = (a: Aspect) => inv.roles[a].standard.n > 0;
@@ -71,8 +74,10 @@ export default function KildeStep({
   const composed = codeMode === "parts";
 
   // The source being answered: the whole code's, or the active aspect's.
-  const std = composed ? PART_STANDARD[active] : wholeStd;
-  const stdN = composed ? inv.roles[active].standard.n : inv.standard.n;
+  const std = composed ? partStd(active) : wholeStd;
+  const stdN = composed
+    ? (inv.roles[active].standards?.find((x) => sameLocation(x.location, std))?.n ?? inv.roles[active].standard.n)
+    : (inv.standards?.find((x) => sameLocation(x.location, std))?.n ?? inv.standard.n);
   const current: Location | null = composed ? (parts[active] ?? null) : draft;
   const setCurrent = (loc: Location) => {
     if (composed) setParts((p) => ({ ...p, [active]: loc }));
@@ -104,7 +109,7 @@ export default function KildeStep({
   const draftRules: RulesDict = composed
     ? { ...rules, tfm_mode: "parts", tfm_parts: parts }
     : { ...rules, tfm_mode: "whole", tfm_location: draft };
-  const isStd = composed ? ASPECTS.every((a) => sameLocation(parts[a], PART_STANDARD[a])) : sameLocation(draft, wholeStd);
+  const isStd = composed ? ASPECTS.every((a) => sameLocation(parts[a], partStd(a))) : sameLocation(draft, wholeStd);
   useLiveAnswer("kilde", sourceText(draftRules), isStd);
 
   const preview = usePreview(uploadId, draftRules);
@@ -139,7 +144,9 @@ export default function KildeStep({
       <section className="tile card major std" aria-label="Standard">
         <span className="lbl">Standard</span>
         <div className="row1">
-          <span className="src">{locationText(std)}</span>
+          <span className="src">
+            <SourceName loc={std} />
+          </span>
         </div>
         <Fig n={stdN} total={inv.products} verdict={stdN > 0 ? "ok" : "fail"} />
         <Meter n={stdN} total={inv.products} verdict={stdN > 0 ? "ok" : undefined} />
@@ -167,7 +174,7 @@ export default function KildeStep({
 
       <RailOptions>
         <RailSection label="Kode">
-          <RailTile title="Hel kode" example="+123456=360.001-JV401" pressed={!composed} onClick={() => setCodeMode("whole")} />
+          <RailTile title="TFM-ID" example="+123456=360.001-JV401" pressed={!composed} onClick={() => setCodeMode("whole")} />
           <RailTile title="Fra deler" example="+ … = … - …" pressed={composed} onClick={() => setCodeMode("parts")} />
         </RailSection>
       </RailOptions>
@@ -195,8 +202,8 @@ export default function KildeStep({
                   <button type="button" className="slotpick" aria-pressed={a === active} onClick={() => setActive(a)}>
                     <span className="sg">{ASPECT_SIGN[a]}</span>
                     <span className="sn">{ASPECT_NAME[a]}</span>
-                    <span className="ss ell" title={loc ? locationText(loc) : ""}>
-                      {loc ? (loc[2] ?? "") : "–"}
+                    <span className="ss">
+                      <SourceName loc={loc} />
                     </span>
                     <span className="num">{n === null ? "" : fmt(n)}</span>
                   </button>
@@ -223,7 +230,9 @@ export default function KildeStep({
             })}
           </div>
         ) : (
-          <span className="src">{breakDots(locationText(draft))}</span>
+          <span className="src">
+            <SourceName loc={draft} />
+          </span>
         )}
         <div className="figs">
           <div>

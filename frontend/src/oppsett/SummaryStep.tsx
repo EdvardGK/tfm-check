@@ -6,7 +6,7 @@ import RollupTiles, { useRollup } from "./Rollup";
 import { IdsSection, ModelsSection, type ModelEntry } from "./Models";
 import type { IdsSpec, ModelRules } from "../api";
 import {
-  STATUS_STANDARD, STEP_NAME, floorResult, fmt, formatResult, isStandardFormat, isStandardSource, locationText,
+  STATUS_STANDARD, STEP_NAME, floorResult, fmt, formatResult, isStandardFormat, isStandardSource, plainSource,
   sameLocation, sourceResult, sourceText, statusResult, type StepResult, type WalkStep,
 } from "./setup";
 
@@ -51,7 +51,7 @@ export function summaryRows(
     },
     {
       step: "status",
-      text: rules.status_location ? locationText(rules.status_location) : "–",
+      text: rules.status_location ? plainSource(rules.status_location) : "–",
       result: inv ? statusResult(inv, rules) : null,
       standard: sameLocation(rules.status_location ?? undefined, STATUS_STANDARD),
     },

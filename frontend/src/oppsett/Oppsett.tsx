@@ -31,7 +31,7 @@ import SummaryStep from "./SummaryStep";
 import { usePreview } from "./usePreview";
 import {
   ANY_FAG, STANDARD_LOCATION, STATUS_STANDARD, STEP_NAME, WALK, download, fagFromName, schemaFromHeader, floorResult, fmt, formatResult, isStandardFormat, isStandardSource,
-  locationText, parseSetup, rulesFor, sameLocation, setupFileName, setupJson, sourceResult, sourceText, statsbyggRules,
+  locationText, plainSource, parseSetup, rulesFor, sameLocation, setupFileName, setupJson, sourceResult, sourceText, statsbyggRules,
   statusResult, storeSetup, withFag, withStatsbyggFloors, type Base, type SetupFile, type Step, type WalkStep,
 } from "./setup";
 
@@ -71,7 +71,7 @@ function committedAnswer(s: WalkStep | "end", rules: RulesDict | null, inv: Inve
     }
     case "status":
       return {
-        answer: rules.status_location ? locationText(rules.status_location) : "",
+        answer: rules.status_location ? plainSource(rules.status_location) : "",
         standard: sameLocation(rules.status_location ?? undefined, STATUS_STANDARD),
       };
     default:

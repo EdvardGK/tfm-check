@@ -166,12 +166,25 @@ def register_rows(ifc, products, index: ModelIndex, rules: TFMRules,
     return columns, rows, summary, roll
 
 
+# The technical key under a column's plain name (NS 8360-1 G1:2025).
+COLUMN_TECH = {
+    KODE: "RefString", "Systemkode": "RefPriSysClass", "Komponentkode": "RefCompClass", "MMI": "ProcessStatus",
+}
+
+
 def _head(ws, ncols: int) -> None:
+    keyed = False
     for c in range(1, ncols + 1):
         cell = ws.cell(row=1, column=c)
+        tech = COLUMN_TECH.get(str(cell.value))
+        if tech:
+            cell.value = f"{cell.value}\n{tech}"
+            keyed = True
         cell.font = Font(bold=True)
         cell.fill = PatternFill("solid", fgColor=HEAD_FILL)
-        cell.alignment = Alignment(vertical="center")
+        cell.alignment = Alignment(vertical="center", wrap_text=True)
+    if keyed:
+        ws.row_dimensions[1].height = 30
     ws.freeze_panes = "A2"
 
 

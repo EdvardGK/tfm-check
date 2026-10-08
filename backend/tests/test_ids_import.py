@@ -70,7 +70,7 @@ def test_whole_code_pattern_becomes_the_form():
     rules = TFMRules.from_dict(import_ids(xml.encode())["rules"])
     assert diagnose("=360.001-JV401", rules).ok
     d = diagnose("=360.001-JV41", rules)
-    assert not d.ok and "Kode" in d.reason
+    assert not d.ok and "TFM-ID" in d.reason
 
 
 def test_not_an_ids():

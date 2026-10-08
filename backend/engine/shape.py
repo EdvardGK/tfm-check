@@ -27,7 +27,11 @@ from .rules import TFMRules
 
 # Template part name (lokasjon) -> the part's display name (Lokasjon).
 # A part's display name: the token, except where the UI says it longer.
-PART_LABEL = {"Lokasjon": "Lokasjonskode", "Komponent": "Komponentkode"}
+PART_LABEL = {
+    "Lokasjon": "Plasserings-ID", "Løpenummer": "Nummer", "Subnr": "Undernummer", "Komponent": "Komponentkode",
+    "Komp.nr": "Komponentforekomstnummer", "Typekode": "Komponentkode (type)", "Typenr": "Komponenttypenummer",
+    "Instansnr": "Instansnummer", "Kode": "TFM-ID",
+}
 PART_NAME = {PLACEHOLDER_RE.search(t).group(1): PART_LABEL.get(p, p) for p, t in PART_TO_TEMPLATE.items()}
 
 SEP_CHARS = ".-_/ =+%"
@@ -173,7 +177,7 @@ def _read(code: str, tokens, rules: TFMRules, loose_seps: bool):
             continue
         parts[val] = got
         form = re.compile(rules.part_form(val))
-        label = PART_NAME.get(val, val)
+        label = (rules.part_labels or {}).get(val) or PART_NAME.get(val, val)
         if form.fullmatch(got):
             fixed.append(got)
             continue

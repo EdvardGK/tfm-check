@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Location } from "../types";
-import { locationText, sameLocation } from "./setup";
+import { sameLocation } from "./setup";
+import SourceName from "./SourceName";
 
 /** How a mapping step's source is chosen: the standard, or another one,
  *  picked in the model's tree or entered there by name. */
@@ -33,14 +34,18 @@ export function ChoiceCard({
       <div className="opts" role="radiogroup">
         <button type="button" className="opt" role="radio" aria-checked={mode === "standard"} onClick={() => onMode("standard")}>
           <span className="t">Bruk standard</span>
-          <span className="x">{locationText(std)}</span>
+          <span className="x">
+            <SourceName loc={std} />
+          </span>
           <span className="badge" data-verdict={stdFound ? "pass" : "fail"}>
             {stdFound ? "✓ I modellen" : "✕ Ikke i modellen"}
           </span>
         </button>
         <button type="button" className="opt" role="radio" aria-checked={mode === "other"} onClick={() => onMode("other")}>
           <span className="t">Velg annen</span>
-          <span className="x">{other ? locationText(other) : "–"}</span>
+          <span className="x">
+            <SourceName loc={other} />
+          </span>
         </button>
       </div>
     </section>

@@ -31,6 +31,8 @@ export interface RulesDict {
   part_rules?: Record<string, PartRule>;
   /** A part linked to a standard beyond Systemkode / Komponent. */
   part_links?: Record<string, string>;
+  /** A project's own name per part key ({"sloyfe": "Sløyfe"}). */
+  part_labels?: Record<string, string>;
 }
 
 export type PartRule =
@@ -176,10 +178,15 @@ export interface InventoryStorey {
 export interface Inventory {
   products: number;
   standard: { location: Location; n: number };
+  /** The whole code's standard sources: Statsbygg (NOSSB), NS 8360-1 (NONS). */
+  standards?: { location: Location; n: number }[];
   sets: InventorySet[];
   attributes: InventoryProp[];
   candidates: Candidate[];
-  roles: Record<Role, { standard: { location: Location; n: number }; candidates: Candidate[] }>;
+  roles: Record<
+    Role,
+    { standard: { location: Location; n: number }; standards?: { location: Location; n: number }[]; candidates: Candidate[] }
+  >;
   storeys: InventoryStorey[];
 }
 
