@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { getValues } from "../api";
+import { getValues, peek, peekLatest } from "../api";
 import type { Inventory, Location, Phase, RulesDict, SourceValues } from "../types";
 import { Canvas, Fig, Meter, StepBar, Val } from "./Shell";
-import { MiniLoader } from "./Loader";
 import SourceTree, { propOf, type Pin } from "./SourceTree";
 import { ChoiceCard, modeOf, type SourceMode } from "./SourceChoice";
 import SourceName from "./SourceName";
@@ -11,23 +10,31 @@ import { STATUS_STANDARD, fmt, locationText, sameLocation, sourceCount } from ".
 
 const PHASES: Exclude<Phase, "">[] = ["ny", "bevares", "ombruk", "rives"];
 
-/** A source's values, following the pick. */
+/** A source's values, following the pick: what is already fetched (or the
+ *  previous values) at once, updated in place. */
 function useValues(uploadId: string, loc: Location | null): SourceValues | null {
-  const [vals, setVals] = useState<SourceValues | null>(null);
+  const [vals, setVals] = useState<SourceValues | null>(
+    () => (loc ? peek<SourceValues>("values", uploadId, loc) : null) ?? peekLatest<SourceValues>("values", uploadId),
+  );
   const key = loc ? JSON.stringify(loc) : "";
   useEffect(() => {
     if (!key) return;
-    const ctl = new AbortController();
-    const timer = window.setTimeout(() => {
-      getValues(uploadId, JSON.parse(key) as Location, ctl.signal)
-        .then(setVals)
-        .catch(() => {
-          /* aborted */
-        });
-    }, 120);
+    const parsed = JSON.parse(key) as Location;
+    const ready = peek<SourceValues>("values", uploadId, parsed);
+    if (ready) {
+      setVals(ready);
+      return;
+    }
+    let live = true;
+    getValues(uploadId, parsed)
+      .then((v) => {
+        if (live) setVals(v);
+      })
+      .catch(() => {
+        /* the model left the cache: the bar says so */
+      });
     return () => {
-      window.clearTimeout(timer);
-      ctl.abort();
+      live = false;
     };
   }, [uploadId, key]);
   return vals;
@@ -145,7 +152,6 @@ export default function StatusStep({
           <span className="lbl num">{vals ? `${fmt(vals.distinct)} ulike` : ""}</span>
         </div>
         <div className="scroll">
-          {!vals ? <MiniLoader /> : null}
           {(vals?.values ?? []).map((v) => (
             <div key={v.v} className="lrow rule">
               <span>{v.phase ? <span className="ph" data-ph={v.phase} title={v.phase} style={{ display: "inline-block", width: 12, height: 12, padding: 0 }} /> : null}</span>

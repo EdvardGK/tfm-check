@@ -69,7 +69,7 @@ const cache = new Map<string, { promise: Promise<unknown>; value?: unknown }>();
 const latest = new Map<string, unknown>();
 
 /** The latest result of a kind for a model, or null. */
-export function peekLatest<T>(kind: "preview" | "rollup", uploadId: string | null): T | null {
+export function peekLatest<T>(kind: "preview" | "rollup" | "values", uploadId: string | null): T | null {
   return uploadId ? ((latest.get(`${kind}|${uploadId}`) as T | undefined) ?? null) : null;
 }
 
@@ -125,7 +125,7 @@ function cached<T>(kind: string, uploadId: string, rules: unknown, load: () => P
 }
 
 /** A result already fetched for these rules, or null. */
-export function peek<T>(kind: "preview" | "rollup", uploadId: string | null, rules: unknown): T | null {
+export function peek<T>(kind: "preview" | "rollup" | "values", uploadId: string | null, rules: unknown): T | null {
   if (!uploadId || !rules) return null;
   return (cache.get(`${kind}|${uploadId}|${stable(rules)}`)?.value as T | undefined) ?? null;
 }
@@ -158,14 +158,15 @@ export function getPreview(uploadId: string, rules: RulesDict): Promise<Preview>
   );
 }
 
-export async function getValues(uploadId: string, location: Location, signal?: AbortSignal): Promise<SourceValues> {
-  return jsonOrThrow<SourceValues>(
-    await fetch("/api/values", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ upload_id: uploadId, location }),
-      signal,
-    }),
+export function getValues(uploadId: string, location: Location): Promise<SourceValues> {
+  return cached("values", uploadId, location, async () =>
+    jsonOrThrow<SourceValues>(
+      await fetch("/api/values", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ upload_id: uploadId, location }),
+      }),
+    ),
   );
 }
 

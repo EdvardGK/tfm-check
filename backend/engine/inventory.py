@@ -305,6 +305,8 @@ def inventory_payload(index: ModelIndex, preset_rules: list[TFMRules]) -> dict:
         "products": len(index.product_ids),
         "standard": {"location": ["pset", *STANDARD_SOURCE], "n": len(std_values)},
         "standards": [counted(STANDARD_SOURCE), counted(NONS_SOURCE)],
+        # Scope's type list: the model's own, ready before any rule is set.
+        "types": [{"name": t, "n": n} for t, n in Counter(index.type_of.values()).most_common()],
         "roles": roles,
         "sets": sets,
         "attributes": [_prop_entry(a, index.attrs[a]) for a in ATTRIBUTES],

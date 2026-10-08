@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
 import { ASPECTS, type Aspect, type Inventory, type Location, type RulesDict, type TfmMode } from "../types";
 import { Canvas, Fig, Lamp, Meter, RailOptions, RailSection, RailTile, StepBar, Val } from "./Shell";
-import { MiniLoader } from "./Loader";
 import { ChoiceCard, modeOf, type SourceMode } from "./SourceChoice";
 import SourceTree, { propOf, type Pin } from "./SourceTree";
 import SourceName from "./SourceName";
@@ -251,7 +250,6 @@ export default function KildeStep({
           <span className="lbl num">{preview && countable ? `${fmt(preview.distinct)} ulike` : ""}</span>
         </div>
         <div className="scroll">
-          {!preview && countable ? <MiniLoader /> : null}
           {(preview && countable ? preview.values : []).map((v) => (
             <div key={v.v} className="lrow rule">
               <Lamp verdict={v.shaped ? "ok" : "fail"} />

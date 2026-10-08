@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
-import type { RulesDict } from "../types";
+import type { Inventory, RulesDict } from "../types";
 import { Bar10, Canvas, Fig, Meter, StepBar } from "./Shell";
-import { MiniLoader } from "./Loader";
 import { useLiveAnswer } from "./live";
 import { usePreview } from "./usePreview";
 import { fmt } from "./setup";
@@ -18,10 +17,13 @@ const toggle = (list: string[], v: string) => (list.includes(v) ? list.filter((x
  *  elements leave. Band 2: the model's types | what is out, with counts. */
 export default function ScopeStep({
   uploadId,
+  inv,
   rules,
   onUse,
 }: {
   uploadId: string | null;
+  /** The model's inventory: its types, before any preview. */
+  inv?: Inventory | null;
   rules: RulesDict;
   onUse: (patch: ScopePatch) => void;
 }) {
@@ -40,7 +42,7 @@ export default function ScopeStep({
   const seenComps = all?.components ?? [];
   const extraComps = comps.filter((c) => !seenComps.some((s) => s.code === c));
   const compN = new Map(seenComps.map((c) => [c.code, c.n]));
-  const allTypes = all?.types ?? [];
+  const allTypes = all?.types ?? (inv?.types ?? []).map((t) => ({ ...t, out: 0 }));
   const typeN = new Map(allTypes.map((t) => [t.name, t.n]));
   const ql = q.trim().toLowerCase();
   const shownTypes = ql === "" ? allTypes : allTypes.filter((t) => t.name.toLowerCase().includes(ql));
@@ -102,7 +104,6 @@ export default function ScopeStep({
           <input className="search" type="search" placeholder="Søk" aria-label="Søk" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <div className="scroll">
-          {!all && uploadId ? <MiniLoader /> : null}
           {shownTypes.map((t) => (
             <button key={t.name} type="button" className="typerow pick rule" aria-pressed={types.includes(t.name)} onClick={() => setTypes((l) => toggle(l, t.name))}>
               <span className="tnm ell" title={t.name}>

@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { getRollup, peek, peekLatest, type ModelRules } from "../api";
 import type { Rollup, RollupRow } from "../types";
 import { Lamp } from "./Shell";
-import { MiniLoader } from "./Loader";
 import { fmt } from "./setup";
 
 /** The rules' system and component codes rolled up, following the rules. */
@@ -64,7 +63,6 @@ export default function RollupTiles({ roll }: { roll: Rollup | null }) {
           <span className="lbl num">{roll ? `${fmt(ok(roll.systems))} / ${fmt(roll.systems.length)}` : ""}</span>
         </div>
         <div className="scroll">
-          {!roll ? <MiniLoader /> : null}
           {(roll?.systems ?? []).map((r) => (
             <Row key={r.code} r={r} with={[...r.systems, ...(r.components ?? [])]} />
           ))}
@@ -76,7 +74,6 @@ export default function RollupTiles({ roll }: { roll: Rollup | null }) {
           <span className="lbl num">{roll ? `${fmt(ok(roll.components))} / ${fmt(roll.components.length)}` : ""}</span>
         </div>
         <div className="scroll">
-          {!roll ? <MiniLoader /> : null}
           {(roll?.components ?? []).map((r) => (
             <Row key={r.code} r={r} with={r.systems} />
           ))}

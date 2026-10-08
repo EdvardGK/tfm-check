@@ -10,7 +10,7 @@
  *  returns to the summary. «Forrige» goes back along the path taken. */
 
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { downloadRegister, getInventory, getRollup, importIds, onModelGone, readIfc as readModel, type IdsSpec, type ReadProgress } from "../api";
+import { downloadRegister, getInventory, getPreview, getRollup, getValues, importIds, onModelGone, readIfc as readModel, type IdsSpec, type ReadProgress } from "../api";
 import type { ModelEntry } from "./Models";
 import Pending from "./Pending";
 import { progressText } from "./Loader";
@@ -152,6 +152,25 @@ export default function Oppsett({
     base === "custom" ? { ...statsbyggRules(f), floor_style: "" } : statsbyggRules(f);
   const rulesOf = (m: ModelEntry): RulesDict =>
     session[m.fag ?? ANY_FAG] ?? (opened ? rulesFor(saved, m.fag) : null) ?? defaultsFor(m.fag);
+
+  // What later steps read, fetched in the background whenever the rules
+  // change, so a step opens on current data: Scope's unscoped preview and
+  // Status's values (the walk's own preview above serves the rest).
+  const prefetchKey = loaded && rules ? JSON.stringify(rules) : "";
+  useEffect(() => {
+    if (!prefetchKey || !upload) return;
+    const r = JSON.parse(prefetchKey) as RulesDict;
+    const uid = upload.upload_id;
+    const t = window.setTimeout(() => {
+      void getPreview(uid, { ...r, scope_components: [], scope_types: [] }).catch(() => undefined);
+      if (r.status_location) void getValues(uid, r.status_location).catch(() => undefined);
+      // Status pre-picks the model's suggestion when the standard is missing.
+      const cand = inv?.roles.status.candidates[0]?.location;
+      if (cand) void getValues(uid, cand).catch(() => undefined);
+    }, 300);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefetchKey]);
 
   // Later data in the background once a model is in: the rollup over the
   // loaded models for Oppsummering.
@@ -496,7 +515,7 @@ export default function Oppsett({
         />
       );
     } else if (step === "scope") {
-      body = <ScopeStep uploadId={uid} rules={rules} onUse={(patch) => commit("scope", patch)} />;
+      body = <ScopeStep uploadId={uid} inv={inv} rules={rules} onUse={(patch) => commit("scope", patch)} />;
     } else if (step === "status") {
       body = (
         <StatusStep

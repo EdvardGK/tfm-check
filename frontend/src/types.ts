@@ -178,6 +178,8 @@ export interface InventoryStorey {
 export interface Inventory {
   products: number;
   standard: { location: Location; n: number };
+  /** The model's types with element counts (Scope), rule-independent. */
+  types?: { name: string; n: number }[];
   /** The whole code's standard sources: Statsbygg (NOSSB), NS 8360-1 (NONS). */
   standards?: { location: Location; n: number }[];
   sets: InventorySet[];
