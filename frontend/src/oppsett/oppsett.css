@@ -413,3 +413,5 @@
 @media (hover: none) {
   #oppsett .bub, #oppsett .rowdel { opacity: 1; }
 }
+#oppsett .blocks { overflow: auto; }
+#oppsett .prow { grid-template-columns: 120px minmax(0, 1fr); }

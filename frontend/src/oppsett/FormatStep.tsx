@@ -213,12 +213,12 @@ type Drag = { pi: number; ti: number } | { token: string };
 type Drop = { pi: number; at: number } | null;
 
 /** Format: building the TFM code form, without model data (the data
- *  belongs with the results). Band 1: the built string, its forms as rows of
- *  segments with «eller» between them (a code passes on any one) | each
- *  part's rule. Band 2: the building blocks: parts, separators, text. A
- *  block drags to where it goes or, clicked, lands after the picked
- *  segment; a segment drags, or is picked and moved with ‹ › ✕. Rail: the
- *  bundled forms and the discipline. */
+ *  belongs with the results). Band 1, full width: the built string, its
+ *  forms as rows of segments with «eller» between them (a code passes on
+ *  any one). Band 2: «Deler», each part's rule and standard link | the
+ *  building blocks: parts, «Deletegn», text. A block drags to where it goes,
+ *  or a gap's «+» bubble picks one there; a segment drags, or is picked and
+ *  moved with ‹ › ✕. Rail: the bundled forms and the discipline. */
 export default function FormatStep({
   uploadId,
   rules,
@@ -533,7 +533,7 @@ export default function FormatStep({
   );
 
   return (
-    <Canvas rows="auto minmax(0, 1fr) auto">
+    <Canvas rows="auto minmax(0, 1fr) minmax(0, 1fr)">
       <StepBar>
         <button
           type="button"
@@ -579,7 +579,7 @@ export default function FormatStep({
         </RailSection>
       </RailOptions>
 
-      <section className="tile card major built" aria-label={BUILT_STRING}>
+      <section className="tile card full built" aria-label={BUILT_STRING}>
         <div className="lh">
           <span className="lbl">{BUILT_STRING}</span>
           <span className="tag">{current ? current.label : "Egendefinert"}</span>
@@ -642,7 +642,7 @@ export default function FormatStep({
         </div>
       </section>
 
-      <section className="tile card minor" aria-label="Deler">
+      <section className="tile card major" aria-label="Deler">
         <span className="lbl">Deler</span>
         <div className="parts scroll">
           {parts.map((t) => (
@@ -651,7 +651,7 @@ export default function FormatStep({
         </div>
       </section>
 
-      <section className="tile card full blocks" aria-label={BUILDING_BLOCKS}>
+      <section className="tile card minor blocks" aria-label={BUILDING_BLOCKS}>
         <span className="lbl">{BUILDING_BLOCKS}</span>
         <div className="palette">{PART_TYPES.map((t) => piece(t, `+ ${partLabel(t)}`, paint(PART_COLORS[t])))}</div>
         <span className="lbl">Deletegn</span>
