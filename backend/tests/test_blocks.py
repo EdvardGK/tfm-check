@@ -98,3 +98,18 @@ def test_generic_number_block():
                              "part_rules": {"komponent": {"kind": "pattern", "pattern": "[A-Z]{3}"}}})
     d2 = diagnose("KKA001%SQZ008.06", r2)
     assert d2.ok and d2.parts["kompnr"] == "001" and d2.parts["typeundernr"] == "06"
+
+
+def test_own_named_numbers_are_parts_of_their_own():
+    from engine.ifc_io import list_products  # noqa: F401
+    from engine.register import register_rows  # noqa: F401
+
+    r = TFMRules.from_dict({
+        "patterns": [{"sequence": ["=", "Systemkode", ".", "Løpenummer", ".", "N:Sløyfe", ".", "N:Linje", "-", "Komponent", "Komp.nr"]}],
+        "part_rules": {"n_sloyfe": {"kind": "pattern", "pattern": r"\d{2}"}},
+    })
+    assert r.own_numbers() == {"n_sloyfe": "Sløyfe", "n_linje": "Linje"}
+    d = diagnose("=542.501.08.5-RY012", r)
+    assert d.ok and d.parts["n_sloyfe"] == "08" and d.parts["n_linje"] == "5"
+    d = diagnose("=542.501.8.5-RY012", r)
+    assert not d.ok and "Sløyfe «8», skal være" in d.reason and d.fix == "=542.501.08.5-RY012"

@@ -22,6 +22,24 @@ from .constants import PART_TO_TEMPLATE, PLACEHOLDER_RE, SEP_TO_CHAR, freetext_v
 
 LIST_PREFIX = "SL:"
 REGEX_PREFIX = "SR:"
+# A number block with a project's own name: "N:Sløyfe". Each name is its own
+# part (key n_<name>), with its own rule and its own register column.
+OWN_PREFIX = "N:"
+# A code part with its own config, one block: B:{"p": part token, "r": rule,
+# "l": label}. "p" a segment name («Systemkode», «Nummer» …); "r" its data
+# type (value / list / standard / pattern); "l" its name. A number with no
+# represented part ("p" «Nummer» or absent) and a name is a part of its own
+# (key n_<name>). Two blocks are two configs.
+CONFIG_PREFIX = "B:"
+OWN_FORM = r"\d{1,6}"
+
+_FOLD = str.maketrans({"æ": "ae", "ø": "o", "å": "a", "Æ": "ae", "Ø": "o", "Å": "a"})
+
+
+def own_key(label: str) -> str:
+    """The part key of an own-named number: n_ + the name folded to [a-z0-9_]."""
+    s = label.translate(_FOLD).lower()
+    return "n_" + (re.sub(r"[^a-z0-9]+", "_", s).strip("_") or "nummer")
 NEVER = r"(?!x)x"
 
 # The form of a code in each standard list, for a part whose data type is
@@ -68,6 +86,11 @@ def block_of(token: str):
     k = part_key(token)
     if k:
         return ("part", k)
+    if token.startswith(OWN_PREFIX) and token[len(OWN_PREFIX):].strip():
+        return ("part", own_key(token[len(OWN_PREFIX):].strip()))
+    if token.startswith(CONFIG_PREFIX):
+        c = block_config(token)
+        return ("part", c["key"]) if c else None
     if token in SEP_TO_CHAR:
         return ("fixed", SEP_TO_CHAR[token])
     if is_freetext(token):
@@ -77,6 +100,25 @@ def block_of(token: str):
     if token.startswith(REGEX_PREFIX):
         return ("pattern", token[len(REGEX_PREFIX):])
     return None
+
+
+def block_config(token: str) -> dict | None:
+    """A configured part block: {key, part, rule, label}, or None."""
+    try:
+        d = json.loads(token[len(CONFIG_PREFIX):])
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(d, dict):
+        return None
+    part = str(d.get("p") or "Nummer")
+    label = str(d.get("l") or "").strip()
+    key = part_key(part)
+    if part == "Nummer" and label:
+        key = own_key(label)
+    if not key:
+        return None
+    rule = d.get("r") if isinstance(d.get("r"), dict) else None
+    return {"key": key, "part": part, "rule": rule, "label": label}
 
 
 def list_regex(values: list[str]) -> str:

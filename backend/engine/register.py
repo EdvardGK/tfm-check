@@ -101,7 +101,9 @@ def register_rows(ifc, products, index: ModelIndex, rules: TFMRules,
                   file_name: str, fag: str | None) -> tuple[list[str], list[dict], dict, dict]:
     """(columns, rows, summary, rollup) for one model."""
     fields = _field_columns(rules)
-    columns = [KODE, *[h for h, _ in fields], *COLUMNS_AFTER]
+    own = rules.own_numbers()
+    columns = [KODE, *[h for h, _ in fields], *[lbl for lbl in own.values() if lbl not in [h for h, _ in fields]],
+               *COLUMNS_AFTER]
     field_values = [(h, index.values_for(loc) or {}) for h, loc in fields]
     status = (index.values_for(rules.status_location) if rules.status_location else None) or {}
     storeys = _storey_names(ifc)
@@ -119,6 +121,8 @@ def register_rows(ifc, products, index: ModelIndex, rules: TFMRules,
         row = {KODE: c.code}
         for h, vals in field_values:
             row[h] = vals.get(c.pid, "")
+        for key, lbl in own.items():
+            row.setdefault(lbl, c.parts.get(key, ""))
         row.update({
             "Kilde": "modell",
             "Gyldig format": "ja" if c.diag.ok else "nei",

@@ -23,7 +23,7 @@ from .constants import (
     PART_TO_TEMPLATE, PLACEHOLDER_RE, SEP_TO_CHAR, freetext_value, is_freetext,
 )
 from .blocks import block_display, block_of, list_regex, safe_regex
-from .rules import TFMRules
+from .rules import TFMRules, base_part
 
 # Template part name (lokasjon) -> the part's display name (Lokasjon).
 # A part's display name: the token, except where the UI says it longer.
@@ -55,7 +55,8 @@ _PART_RULE = {
 
 
 def part_rule(name: str, rules: TFMRules) -> str:
-    own = (rules.part_rules or {}).get(name)
+    own = _block_rule(name, rules) or (rules.part_rules or {}).get(base_part(name))
+    name = base_part(name)
     if own:
         if own["kind"] == "value":
             return f"«{own['value']}»"
@@ -65,14 +66,37 @@ def part_rule(name: str, rules: TFMRules) -> str:
         if own["kind"] == "standard":
             from .standards import STANDARDS
             return f"en kode i {STANDARDS[own['standard']][1]}"
+        m = re.fullmatch(r"\\d\{(\d+)(?:,(\d+))?\}", own["pattern"])
+        if m:
+            return f"{m.group(1)}–{m.group(2)} siffer" if m.group(2) else f"{m.group(1)} siffer"
         return f"mønsteret {own['pattern']}"
     n = (rules.part_digits or {}).get(name)
     if isinstance(n, int) and n > 0:
         if name == "lokasjon":
             return f"{n} tegn"
-        if name in PADDABLE:
+        if name in PADDABLE or name.startswith("n_"):
             return f"{n} siffer"
+    if name.startswith("n_"):
+        return "1–6 siffer"
     return _PART_RULE.get(name, "")
+
+
+def _block_rule(group: str, rules: TFMRules) -> dict | None:
+    """The rule a configured block carries, by its group name."""
+    from .blocks import CONFIG_PREFIX, block_config
+    from .rules import clean_rule
+    for p in rules.patterns:
+        used: dict[str, int] = {}
+        for t in p.get("sequence") or []:
+            b = block_of(t)
+            if not b or b[0] != "part":
+                continue
+            used[b[1]] = used.get(b[1], 0) + 1
+            g = b[1] if used[b[1]] == 1 else f"{b[1]}__{used[b[1]]}"
+            if g == group and t.startswith(CONFIG_PREFIX):
+                c = block_config(t)
+                return clean_rule(c["rule"]) if c and c["rule"] else None
+    return None
 
 
 def _tokens(sequence: list[str]):
@@ -80,13 +104,16 @@ def _tokens(sequence: list[str]):
     fixed values merged. A list block's fix is its first value; a pattern
     block has none."""
     out: list = []
+    used: dict[str, int] = {}
     for t in sequence:
         b = block_of(t)
         if b is None:
             continue
         kind, v = b
         if kind == "part":
-            out.append(("part", v))
+            # By group name, as the form's regex names it (komponent__2).
+            used[v] = used.get(v, 0) + 1
+            out.append(("part", v if used[v] == 1 else f"{v}__{used[v]}"))
         elif kind == "fixed":
             if not v:
                 continue
@@ -123,7 +150,7 @@ def _lenient(tokens, loose_seps: bool) -> re.Pattern:
             continue
         nxt = tokens[i + 1] if i + 1 < len(tokens) else None
         if nxt is not None and nxt[0] == "part":
-            src.append("([A-Za-zÆØÅæøå]*)" if val in LETTER_PARTS else r"(\d*)")
+            src.append("([A-Za-zÆØÅæøå]*)" if base_part(val) in LETTER_PARTS else r"(\d*)")
         elif nxt is None:
             src.append("(.*)")
         else:
@@ -144,8 +171,11 @@ def _fix_part(name: str, text: str, form: re.Pattern) -> str:
     t = text.strip().strip(_EDGE)
     if name in UPPER_PARTS:
         t = t.upper()
-    if name in PADDABLE and t.isdigit():
-        m = re.fullmatch(r"\\d\{(\d+)\}", form.pattern)
+    if (name in PADDABLE or name.startswith("n_")) and t.isdigit():
+        pat = form.pattern
+        if pat.startswith("(?:") and pat.endswith(")"):
+            pat = pat[3:-1]
+        m = re.fullmatch(r"\\d\{(\d+)\}", pat)
         if m and len(t) < int(m.group(1)):
             t = t.zfill(int(m.group(1)))
     return t
@@ -178,7 +208,9 @@ def _read(code: str, tokens, rules: TFMRules, loose_seps: bool):
             continue
         parts[val] = got
         form = re.compile(rules.part_form(val))
-        label = (rules.part_labels or {}).get(val) or PART_NAME.get(val, val)
+        base = base_part(val)
+        label = (rules.block_labels().get(val) or (rules.part_labels or {}).get(base)
+                 or rules.own_numbers().get(base) or PART_NAME.get(base, base))
         if form.fullmatch(got):
             fixed.append(got)
             continue
@@ -189,7 +221,7 @@ def _read(code: str, tokens, rules: TFMRules, loose_seps: bool):
             reasons.append(f"{label} mangler")
         else:
             reasons.append(f"{label} «{got}», skal være {part_rule(val, rules)}")
-        f = _fix_part(val, got, form)
+        f = _fix_part(base, got, form)
         if not form.fullmatch(f):
             unfixable += 1
         fixed.append(f)

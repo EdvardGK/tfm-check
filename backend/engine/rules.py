@@ -5,7 +5,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field, asdict
 
-from .blocks import STANDARD_FORM, block_of, list_regex, safe_regex
+from .blocks import (
+    CONFIG_PREFIX, OWN_FORM, OWN_PREFIX, STANDARD_FORM, block_config, block_of, list_regex, own_key, safe_regex,
+)
 from .constants import (
     APP_VERSION, DEFAULT_SEQUENCE, DISCIPLINES, DIGIT_LOCKABLE_PARTS,
     PLACEHOLDER_FALLBACK, sequence_to_template,
@@ -143,11 +145,70 @@ class TFMRules:
                 return r"\d{" + str(n) + "}"
             if name == "lokasjon":
                 return r"[A-Za-z0-9]{" + str(n) + "}"
+        if name.startswith("n_"):
+            return OWN_FORM
         return PLACEHOLDER_FALLBACK.get(name, r"\S+")
 
     def part_form(self, name: str) -> str:
-        """A template part's strict form (lokasjon, systemkode …)."""
-        return self._pattern_for_group(name)
+        """A part's strict form, by its group name (lokasjon, systemkode__2):
+        the block's own rule when it has one, else the part's."""
+        form = self.group_forms().get(name)
+        return form if form is not None else self._pattern_for_group(name)
+
+    def _token_form(self, token: str, key: str) -> str:
+        if token.startswith(CONFIG_PREFIX):
+            c = block_config(token)
+            own = rule_form(clean_rule(c["rule"])) if c and c["rule"] else None
+            if own is not None:
+                return own
+        return self._pattern_for_group(key)
+
+    def group_forms(self) -> dict[str, str]:
+        """Each part block's form by its group name, over all forms (the first
+        form's numbering of a repeated part wins)."""
+        out: dict[str, str] = {}
+        for p in self.patterns:
+            used: dict[str, int] = {}
+            for token in p.get("sequence") or []:
+                b = block_of(token)
+                if not b or b[0] != "part":
+                    continue
+                key = b[1]
+                used[key] = used.get(key, 0) + 1
+                group = key if used[key] == 1 else f"{key}__{used[key]}"
+                out.setdefault(group, self._token_form(token, key))
+        return out
+
+    def block_labels(self) -> dict[str, str]:
+        """A block's own name by its group name (configured blocks)."""
+        out: dict[str, str] = {}
+        for p in self.patterns:
+            used: dict[str, int] = {}
+            for token in p.get("sequence") or []:
+                b = block_of(token)
+                if not b or b[0] != "part":
+                    continue
+                key = b[1]
+                used[key] = used.get(key, 0) + 1
+                group = key if used[key] == 1 else f"{key}__{used[key]}"
+                c = block_config(token) if token.startswith(CONFIG_PREFIX) else None
+                if c and c["label"]:
+                    out.setdefault(group, c["label"])
+        return out
+
+    def own_numbers(self) -> dict[str, str]:
+        """The own-named number parts of the forms: {key: name}, in order."""
+        out: dict[str, str] = {}
+        for p in self.patterns:
+            for t in p.get("sequence") or []:
+                if t.startswith(OWN_PREFIX) and t[len(OWN_PREFIX):].strip():
+                    label = t[len(OWN_PREFIX):].strip()
+                    out.setdefault(own_key(label), label)
+                elif t.startswith(CONFIG_PREFIX):
+                    c = block_config(t)
+                    if c and c["key"].startswith("n_"):
+                        out.setdefault(c["key"], c["label"])
+        return out
 
     def structures(self) -> list[str]:
         return [sequence_to_template(p.get("sequence", [])) for p in self.patterns]
@@ -168,7 +229,7 @@ class TFMRules:
                 if kind == "part":
                     used[v] = used.get(v, 0) + 1
                     group = v if used[v] == 1 else f"{v}__{used[v]}"
-                    src.append(f"(?P<{group}>{self._pattern_for_group(v)})")
+                    src.append(f"(?P<{group}>{self._token_form(token, v)})")
                 elif kind == "fixed":
                     src.append(re.escape(v))
                 elif kind == "list":
@@ -246,7 +307,27 @@ class TFMRules:
     def _with_rule_links(self) -> "TFMRules":
         """A part whose data type is a standard list is linked to it (the
         older fields bygningsdel_system / komponent_system / part_links)."""
-        for part, r in (self.part_rules or {}).items():
+        rules = dict(self.part_rules or {})
+        # A configured block's data type speaks for its part (the first one).
+        seen: set[str] = set()
+        for p in self.patterns:
+            for t in p.get("sequence") or []:
+                c = block_config(t) if t.startswith(CONFIG_PREFIX) else None
+                if not c or c["key"] in seen:
+                    continue
+                seen.add(c["key"])
+                r = clean_rule(c["rule"]) if c["rule"] else None
+                if r:
+                    rules[c["key"]] = r
+                if not r or r["kind"] != "standard":
+                    # Its own non-list type unlinks the part.
+                    if c["key"] == "systemkode" and r:
+                        self.bygningsdel_system = "Ingen"
+                    elif c["key"] == "komponent" and r:
+                        self.komponent_system = "Ingen"
+                    elif r:
+                        self.part_links = {k: v for k, v in (self.part_links or {}).items() if k != c["key"]}
+        for part, r in rules.items():
             if r.get("kind") != "standard":
                 continue
             if part == "systemkode":
