@@ -26,3 +26,12 @@ Branch `hi90-phase-a`, from `feat/oppsett-walk` (the approved Oppsett walk of 20
 - DNS `test.tfm-sjekk.skiplum.com` not created (edkjo runs `dns.sh`), so staging is not public yet.
 - HI90 RIV has KOMPONENTTYPE-ID (type, `SQ.001T`) but no component occurrence ID.
 - Phase B left: ifc-check mapping interchange, ST28 cleanup steps and checks.
+
+## Same day, round 2 (staging live at https://test.tfm-sjekk.skiplum.com)
+- Loading screen: skiplum.com's «Norge i punkter» loader animation (`logo-outline.webm`, copied as is) with a counter: upload %, read seconds, index % (upload is a job, `/api/jobs`).
+- Format: drag and drop of segments and pieces, click variant kept.
+- A segment's rule: standard form, length, pattern, value or list.
+- Linked standards: Systemkode → NS 3451:2022 (813), Komponent → NS 3457-8:2021 (910) / PA 0802 / IEC 81346, copied from ifc-check's generated lists (`backend/scripts/import_codelists.py`). Validity beyond shape, with reason and nearest parent.
+- Rollup of system and component codes in Oppsummering and as register sheets Systemkoder / Komponentkoder.
+- HI90_RIV on staging: 360 (154 objects) is not an NS 3451:2022 code (36 Luftbehandling); SFZ (260) is not in NS 3457-8 (SF Fraluftsventiler); KRA, QLB, KNA, KK… are.
+- pytest 69 passed, tsc + vite build pass, parity passes.
