@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { getPreview } from "../api";
 import {
   DISCIPLINES, FREETEXT_COLOR, FREETEXT_PREFIX, PART_COLORS, PART_EXAMPLE, PART_TO_DIGITKEY, PART_TYPES, SEP_KEYS,
-  SEP_TO_CHAR, KIND_LABEL, PART_KIND, PART_TECH, blockOf, fixedToken, freetextValue, isFreetext, listToken, partLabel,
+  SEP_TO_CHAR, KIND_LABEL, NUMBER_ROLES, PART_KIND, PART_TECH, blockOf, fixedToken, freetextValue, isFreetext, listToken, partLabel,
   regexToken, sequenceToExample, type Palette,
 } from "../constants";
 import type { PartRule, Preset, RulesDict } from "../types";
@@ -54,7 +54,7 @@ const TEMPLATE_PART: Record<string, string> = {
   lokasjon: "Lokasjon", rom: "Rom", systemkode: "Systemkode", etasje: "Etasje", subnr: "Subnr",
   lopenummer: "Løpenummer", komponent: "Komponent", kompnr: "Komp.nr", typeflag: "T-suffiks",
   omrade: "Område", linje: "Linje", sloyfe: "Sløyfe", adresse: "Adresse 2", typekode: "Typekode", typenr: "Typenr",
-  instansnr: "Instansnr", kode: "Kode",
+  instansnr: "Instansnr", kode: "Kode", nummer: "Nummer", typeundernr: "Typeundernr",
 };
 const PART_KEY: Record<string, string> = Object.fromEntries(Object.entries(TEMPLATE_PART).map(([k, v]) => [v, k]));
 
@@ -65,6 +65,7 @@ const PART_RULE: Record<string, string> = {
   Løpenummer: "3 siffer", Komponent: "2 bokstaver", "Komp.nr": "3 siffer", "T-suffiks": "T",
   "Område": "1–2 siffer", Linje: "1–2 siffer", "Sløyfe": "2 siffer", "Adresse 2": "3 siffer",
   Typekode: "1–3 bokstaver", Typenr: "3 siffer", Instansnr: "2 siffer", Kode: "hele koden",
+  Nummer: "1–6 siffer", Typeundernr: "1–3 siffer",
 };
 
 const paint = (c: Palette) => ({ background: c.bg, color: c.text, boxShadow: `inset 0 0 0 1px ${c.border}` });
@@ -75,7 +76,7 @@ const DEFAULT_FORM: Record<string, string> = {
   lokasjon: "[A-Za-z0-9]{6}", rom: "\\d{1,5}", systemkode: "\\d{3}", etasje: "[A-Za-z0-9æøåÆØÅ_\\- ]{1,12}",
   subnr: "\\d{1,4}", lopenummer: "\\d{3}", komponent: "[A-Z]{2}", kompnr: "\\d{3}", typeflag: "T?",
   omrade: "\\d{1,2}", linje: "\\d{1,2}", sloyfe: "\\d{2}", adresse: "\\d{3}", typekode: "[A-ZÆØÅ]{1,3}",
-  typenr: "\\d{3}", instansnr: "\\d{2}", kode: "\\S+",
+  typenr: "\\d{3}", instansnr: "\\d{2}", kode: "\\S+", nummer: "\\d{1,6}", typeundernr: "\\d{1,3}",
 };
 
 /** Mønster in plain words: the regex shown under the pick. */
@@ -142,10 +143,13 @@ function PartRow({
   part,
   draft,
   edit,
+  onRepresent,
 }: {
   part: string;
   draft: FormatDraft;
   edit: (f: (d: FormatDraft) => FormatDraft) => void;
+  /** A number part: what it represents (every block of this part). */
+  onRepresent?: (to: string) => void;
 }) {
   const key = PART_KEY[part];
   const st = partState(draft, part, key);
@@ -217,6 +221,7 @@ function PartRow({
         {PART_TECH[part] ? <span className="tech">{PART_TECH[part]}</span> : null}
       </span>
       <span className="pr">
+        {onRepresent ? <RepresentSelect token={part} onChange={onRepresent} /> : null}
         {types.length > 1 ? (
           <select className="field" aria-label={`${part} datatype`} value={type} onChange={(e) => onType(e.target.value as DataType)}>
             {types.map((t) => (
@@ -414,6 +419,75 @@ function BlockRow({
   );
 }
 
+/** What a number block represents: the generic «Nummer» (not said), a
+ *  standard number (NS 8360-1) or a project's own number part. */
+function RepresentSelect({ token, onChange }: { token: string; onChange: (to: string) => void }) {
+  return (
+    <select className="field" aria-label="Representerer" value={token} onChange={(e) => onChange(e.target.value)}>
+      <option value="Nummer">–</option>
+      {NUMBER_ROLES.map((t) => (
+        <option key={t} value={t}>
+          {partLabel(t)}
+          {PART_TECH[t] ? ` · ${PART_TECH[t]}` : ""}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** An example value for a part, fitting its rule. */
+function partExample(t: string, d: FormatDraft): string {
+  const key = PART_KEY[t];
+  const rule = key ? d.part_rules?.[key] : undefined;
+  if (rule?.kind === "value") return rule.value;
+  if (rule?.kind === "list") return rule.values[0] ?? "";
+  const dk = PART_TO_DIGITKEY[t];
+  const n = dk ? d.part_digits?.[dk] : undefined;
+  const rx = rule?.kind === "pattern" ? rule.pattern : n ? (key === "lokasjon" ? `[A-Za-z0-9]{${n}}` : `\\d{${n}}`) : null;
+  const ex = PART_EXAMPLE[t] ?? "";
+  if (!rx) return ex;
+  try {
+    if (new RegExp(`^(?:${rx})$`).test(ex)) return ex;
+  } catch {
+    return ex;
+  }
+  const m = /^\\d(?:\{(\d+)(?:,\d+)?\})?$/.exec(rx);
+  if (m) return "1".padStart(Number(m[1] ?? 1), "0");
+  const l = /^\[A-Z[^\]]*\](?:\{(\d+)(?:,\d+)?\})?$/.exec(rx);
+  if (l) return "ABCDEF".slice(0, Number(l[1] ?? 1));
+  const c = /^\[A-Za-z0-9\](?:\{(\d+)\})?$/.exec(rx);
+  if (c) return "1".padStart(Number(c[1] ?? 1), "0");
+  return ex;
+}
+
+/** A variant as it reads: each block an example value. */
+function exampleString(seq: string[], d: FormatDraft): string {
+  return seq
+    .map((t) => {
+      const b = blockOf(t);
+      if (!b) return "";
+      if (b.kind === "part") return partExample(t, d);
+      if (b.kind === "fixed") return b.text;
+      if (b.kind === "list") return b.values[0] ?? "";
+      return "…";
+    })
+    .join("");
+}
+
+/** A variant with each part's technical key (its label where it has none). */
+function techString(seq: string[], d: FormatDraft): string {
+  return seq
+    .map((t) => {
+      const b = blockOf(t);
+      if (!b) return "";
+      if (b.kind === "part") return PART_TECH[t] ?? partLabel(t, d.part_labels);
+      if (b.kind === "fixed") return b.text;
+      if (b.kind === "list") return b.values[0] ?? "";
+      return "…";
+    })
+    .join("");
+}
+
 /** The two areas' headers, edkjo's terms; the Norwegian words to come. */
 const BUILT_STRING = "Merkestreng";
 const BUILDING_BLOCKS = "building blocks";
@@ -593,6 +667,26 @@ export default function FormatStep({
     setSel(null);
   };
 
+  /** A number block (or every block of a number part) made to represent
+   *  another part; its digit rule goes with it when the target has none. */
+  const represent = (from: string, to: string, only: { pi: number; ti: number } | null) => {
+    if (from === to) return;
+    const fk = PART_KEY[from];
+    const tk = PART_KEY[to];
+    edit((d) => {
+      const patterns = d.patterns.map((p, pi) => ({
+        sequence: p.sequence.map((t, ti) => (t === from && (!only || (only.pi === pi && only.ti === ti)) ? to : t)),
+      }));
+      const pr = { ...(d.part_rules ?? {}) };
+      if (fk && tk && pr[fk] && !pr[tk]) pr[tk] = pr[fk];
+      const pd = { ...(d.part_digits ?? {}) };
+      if (fk && tk && pd[fk] && !pd[tk]) pd[tk] = pd[fk];
+      return { ...d, patterns, part_rules: pr, part_digits: pd };
+    });
+    setFormKey((k) => k + 1);
+  };
+  const selToken = sel ? (draft.patterns[sel.pi]?.sequence[sel.ti] ?? null) : null;
+
   // ---- Drag and drop ----
   const startDrag = (src: Drag) => (e: DragEvent) => {
     e.dataTransfer.effectAllowed = "move";
@@ -742,7 +836,7 @@ export default function FormatStep({
               <Fragment key={kd}>
                 <span className="lbl">{KIND_LABEL[kd]}</span>
                 <span className="palette">
-                  {PART_TYPES.filter((t) => PART_KIND[t] === kd).map((t, k) => (
+                  {PART_TYPES.filter((t) => (kd === "lopenummer" ? t === "Nummer" : PART_KIND[t] === kd)).map((t, k) => (
                     <button
                       key={t}
                       type="button"
@@ -899,6 +993,14 @@ export default function FormatStep({
             </button>
           </div>
         </div>
+        <div className="patsum">
+          {draft.patterns.map((p, pi) => (
+            <div key={pi} className="patex">
+              <span className="mono">{exampleString(p.sequence, draft)}</span>
+              <span className="mono tech">{techString(p.sequence, draft)}</span>
+            </div>
+          ))}
+        </div>
         <div className="segtools">
           <button type="button" className="mini" disabled={!sel || sel.ti === 0} onClick={() => move(-1)} aria-label="Flytt til venstre">
             ‹
@@ -915,6 +1017,9 @@ export default function FormatStep({
           <button type="button" className="mini" disabled={!sel} onClick={remove} aria-label="Fjern">
             ✕
           </button>
+          {selToken && PART_KIND[selToken] === "lopenummer" ? (
+            <RepresentSelect token={selToken} onChange={(to) => sel && represent(selToken, to, sel)} />
+          ) : null}
         </div>
       </section>
 
@@ -922,7 +1027,13 @@ export default function FormatStep({
         <span className="lbl">Deler</span>
         <div className="parts scroll">
           {parts.map((t) => (
-            <PartRow key={`${t}-${formKey}`} part={t} draft={draft} edit={edit} />
+            <PartRow
+              key={`${t}-${formKey}`}
+              part={t}
+              draft={draft}
+              edit={edit}
+              onRepresent={PART_KIND[t] === "lopenummer" ? (to) => represent(t, to, null) : undefined}
+            />
           ))}
           {draft.patterns.flatMap((p, pi) =>
             p.sequence.map((t, ti) => {
@@ -958,7 +1069,7 @@ export default function FormatStep({
           <Fragment key={k}>
             <span className="lbl">{KIND_LABEL[k]}</span>
             <div className="palette">
-              {PART_TYPES.filter((t) => PART_KIND[t] === k).map((t) =>
+              {PART_TYPES.filter((t) => (k === "lopenummer" ? t === "Nummer" : PART_KIND[t] === k)).map((t) =>
                 piece(t, `+ ${partLabel(t, draft.part_labels)}`, paint(PART_COLORS[t])),
               )}
             </div>

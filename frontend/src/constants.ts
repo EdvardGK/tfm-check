@@ -9,6 +9,7 @@ export const PART_TYPES = [
   "Område", "Linje", "Sløyfe", "Adresse 2",
   "Typekode", "Typenr", "Instansnr",
   "Kode",
+  "Nummer", "Typeundernr",
 ] as const;
 export type PartType = (typeof PART_TYPES)[number];
 
@@ -25,6 +26,7 @@ export const PART_LABEL: Record<string, string> = {
   Typenr: "Komponenttypenummer",
   Instansnr: "Instansnummer",
   Kode: "TFM-ID",
+  Typeundernr: "(Komponenttype)undernummer",
 };
 export const partLabel = (t: string, own?: Record<string, string>): string => {
   const key = PART_TEMPLATE_KEY[t];
@@ -40,6 +42,7 @@ export const PART_KIND: Record<string, PartKind> = {
   Etasje: "klassifikasjon", Rom: "klassifikasjon", Kode: "klassifikasjon",
   Løpenummer: "lopenummer", Subnr: "lopenummer", "Komp.nr": "lopenummer", Typenr: "lopenummer",
   Instansnr: "lopenummer", Område: "lopenummer", Linje: "lopenummer", Sløyfe: "lopenummer", "Adresse 2": "lopenummer",
+  Nummer: "lopenummer", Typeundernr: "lopenummer",
   "T-suffiks": "skilletegn",
 };
 /** The technical key of a part (NS 8360-1 G1:2025, NONS_Reference), shown
@@ -47,8 +50,14 @@ export const PART_KIND: Record<string, PartKind> = {
 export const PART_TECH: Record<string, string> = {
   Lokasjon: "RefPriSysLoc", Systemkode: "RefPriSysClass", Løpenummer: "RefPriSysNo1", Subnr: "RefPriSysNo2",
   Komponent: "RefCompClass", "Komp.nr": "RefCompOccNo", Typekode: "RefCompClass", Typenr: "RefCompTypeNo1",
-  Etasje: "RefCompLocVer", Rom: "RefCompLocRoom", Kode: "RefString",
+  Etasje: "RefCompLocVer", Rom: "RefCompLocRoom", Kode: "RefString", Typeundernr: "RefCompTypeNo2",
 };
+
+/** What a number block can represent: its segment token. The generic
+ *  «Nummer» is a number not yet said (no specific part in the register). */
+export const NUMBER_ROLES: string[] = [
+  "Løpenummer", "Subnr", "Komp.nr", "Typenr", "Typeundernr", "Instansnr", "Område", "Linje", "Sløyfe", "Adresse 2",
+];
 
 export const KIND_LABEL: Record<PartKind, string> = {
   klassifikasjon: "Klassifikasjon",
@@ -61,7 +70,7 @@ export const PART_TEMPLATE_KEY: Record<string, string> = {
   Lokasjon: "lokasjon", Rom: "rom", Systemkode: "systemkode", Etasje: "etasje", Subnr: "subnr",
   Løpenummer: "lopenummer", Komponent: "komponent", "Komp.nr": "kompnr", "T-suffiks": "typeflag",
   Område: "omrade", Linje: "linje", Sløyfe: "sloyfe", "Adresse 2": "adresse", Typekode: "typekode",
-  Typenr: "typenr", Instansnr: "instansnr", Kode: "kode",
+  Typenr: "typenr", Instansnr: "instansnr", Kode: "kode", Nummer: "nummer", Typeundernr: "typeundernr",
 };
 
 // Separator key → rendered character
@@ -86,6 +95,7 @@ export const PART_EXAMPLE: Record<string, string> = {
   Subnr: "01", Løpenummer: "001", Komponent: "DI", "Komp.nr": "001",
   "T-suffiks": "T", "Område": "1", "Linje": "5", "Sløyfe": "08", "Adresse 2": "013",
   Typekode: "SQZ", Typenr: "008", Instansnr: "06", Kode: "+02=360.017",
+  Nummer: "001", Typeundernr: "01",
 };
 
 export const FREETEXT_PREFIX = "T:";
@@ -157,6 +167,8 @@ export const PART_COLORS: Record<string, Palette> = {
   "Typenr": { bg: "#efe6ea", border: "#b896a4", text: "#5a4049" },
   "Instansnr": { bg: "#ebe7f0", border: "#a597b8", text: "#4a4058" },
   Kode: { bg: "#e9eef0", border: "#7f97a3", text: "#2f4049" },
+  Nummer: { bg: "#eceae6", border: "#9c968a", text: "#45413a" },
+  Typeundernr: { bg: "#ece6ee", border: "#a896b0", text: "#4c4052" },
 };
 export const SEP_COLOR: Palette = { bg: "var(--color-ink)", border: "var(--color-ink)", text: "var(--color-cream)" };
 export const FREETEXT_COLOR: Palette = { bg: "var(--color-input)", border: "var(--color-line)", text: "var(--color-muted)" };
@@ -194,6 +206,8 @@ export const PART_TO_DIGITKEY: Record<string, string> = {
   "Adresse 2": "adresse",
   Typenr: "typenr",
   Instansnr: "instansnr",
+  Nummer: "nummer",
+  Typeundernr: "typeundernr",
   Etasje: "etasje", Subnr: "subnr", Løpenummer: "lopenummer",
   "Komp.nr": "kompnr", Rom: "rom",
 };

@@ -65,6 +65,9 @@ PART_TYPES = [
     "Typekode", "Typenr", "Instansnr",
     # The whole code as one segment, for a form given as one regex (IDS).
     "Kode",
+    # A number not yet said what it represents, and the component type's
+    # sub number (NS 8360-1 RefCompTypeNo2).
+    "Nummer", "Typeundernr",
 ]
 PART_TO_TEMPLATE = {
     "Lokasjon":   "{lokasjon}",
@@ -84,6 +87,8 @@ PART_TO_TEMPLATE = {
     "Typenr":     "{typenr}",
     "Instansnr":  "{instansnr}",
     "Kode":       "{kode}",
+    "Nummer":     "{nummer}",
+    "Typeundernr": "{typeundernr}",
 }
 SEP_TO_CHAR = {
     "+": "+", ".": ".", "-": "-", "_": "_", "/": "/",
@@ -129,13 +134,15 @@ PLACEHOLDER_FALLBACK = {
     "typenr":     r"\d{3}",
     "instansnr":  r"\d{2}",
     "kode":       r"\S+",
+    "nummer":     r"\d{1,6}",
+    "typeundernr": r"\d{1,3}",
 }
 PLACEHOLDER_RE = re.compile(r"\{(\w+)\}")
 
 # Digit-type parts where users may lock an exact digit count
 # (so {etasje}{subnr} on "103" parses as etasje="1" + subnr="03").
 DIGIT_LOCKABLE_PARTS = ["etasje", "subnr", "kompnr", "lopenummer", "rom",
-                        "omrade", "linje", "sloyfe", "adresse", "typenr", "instansnr"]
+                        "omrade", "linje", "sloyfe", "adresse", "typenr", "instansnr", "nummer", "typeundernr"]
 
 THRESHOLDS = {"ok": 95, "warn": 50}
 
@@ -147,6 +154,7 @@ PART_EXAMPLE = {
     "Subnr": "01", "Løpenummer": "001", "Komponent": "DI", "Komp.nr": "001",
     "T-suffiks": "T", "Område": "1", "Linje": "5", "Sløyfe": "08", "Adresse 2": "013",
     "Typekode": "SQZ", "Typenr": "008", "Instansnr": "06", "Kode": "+02=360.017",
+    "Nummer": "001", "Typeundernr": "01",
 }
 
 

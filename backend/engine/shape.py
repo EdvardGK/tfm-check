@@ -30,7 +30,7 @@ from .rules import TFMRules
 PART_LABEL = {
     "Lokasjon": "Plasserings-ID", "Løpenummer": "Nummer", "Subnr": "Undernummer", "Komponent": "Komponentkode",
     "Komp.nr": "Komponentforekomstnummer", "Typekode": "Komponentkode (type)", "Typenr": "Komponenttypenummer",
-    "Instansnr": "Instansnummer", "Kode": "TFM-ID",
+    "Instansnr": "Instansnummer", "Kode": "TFM-ID", "Typeundernr": "(Komponenttype)undernummer",
 }
 PART_NAME = {PLACEHOLDER_RE.search(t).group(1): PART_LABEL.get(p, p) for p, t in PART_TO_TEMPLATE.items()}
 
@@ -42,7 +42,7 @@ LETTER_PARTS = {"komponent", "typekode"}
 UPPER_PARTS = {"komponent", "lokasjon", "typekode"}
 # Running numbers: zero-padding keeps the number.
 PADDABLE = {"lopenummer", "kompnr", "subnr", "rom", "etasje", "omrade", "linje", "sloyfe", "adresse", "typenr",
-            "instansnr"}
+            "instansnr", "nummer", "typeundernr"}
 
 # What a part takes when no length is locked, in plain terms.
 _PART_RULE = {
@@ -50,6 +50,7 @@ _PART_RULE = {
     "subnr": "1–4 siffer", "lopenummer": "3 siffer", "komponent": "2 bokstaver", "kompnr": "3 siffer",
     "typeflag": "T", "omrade": "1–2 siffer", "linje": "1–2 siffer", "sloyfe": "2 siffer", "adresse": "3 siffer",
     "typekode": "1–3 bokstaver", "typenr": "3 siffer", "instansnr": "2 siffer", "kode": "én kode uten mellomrom",
+    "nummer": "1–6 siffer", "typeundernr": "1–3 siffer",
 }
 
 
