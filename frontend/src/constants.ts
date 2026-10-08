@@ -1,3 +1,4 @@
+import type { PartRule } from "./types";
 // Builder data model — mirrors backend/engine/constants.py.
 
 export const PART_TYPES = [
@@ -112,15 +113,26 @@ export function freetextValue(t: string): string {
 // ("SL:" + JSON array) or a pattern ("SR:" + regex).
 export const LIST_PREFIX = "SL:";
 export const REGEX_PREFIX = "SR:";
+/** A part block with its own config: B:{"p": part, "r": rule, "l": name}. */
+export const CONFIG_PREFIX = "B:";
 
 export type Block =
-  | { kind: "part"; part: string }
+  | { kind: "part"; part: string; rule?: PartRule; label?: string }
   | { kind: "fixed"; text: string }
   | { kind: "list"; values: string[] }
   | { kind: "pattern"; rx: string };
 
 export function blockOf(t: string): Block | null {
   if ((PART_TYPES as readonly string[]).includes(t)) return { kind: "part", part: t };
+  if (t.startsWith(CONFIG_PREFIX)) {
+    try {
+      const d = JSON.parse(t.slice(CONFIG_PREFIX.length)) as { p?: string; r?: PartRule; l?: string };
+      const part = d.p && (PART_TYPES as readonly string[]).includes(d.p) ? d.p : "Nummer";
+      return { kind: "part", part, rule: d.r ?? undefined, label: d.l ?? undefined };
+    } catch {
+      return null;
+    }
+  }
   if (t in SEP_TO_CHAR) return { kind: "fixed", text: SEP_TO_CHAR[t] };
   if (isFreetext(t)) return { kind: "fixed", text: freetextValue(t) };
   if (t.startsWith(LIST_PREFIX)) {
@@ -142,6 +154,7 @@ export function fixedToken(text: string): string {
 }
 export const listToken = (values: string[]) => LIST_PREFIX + JSON.stringify(values);
 export const regexToken = (rx: string) => REGEX_PREFIX + rx;
+export const configToken = (d: Record<string, unknown>) => CONFIG_PREFIX + JSON.stringify(d);
 
 // Per-part chip palette — cohesive, on-brand, distinguishable.
 export interface Palette {
@@ -224,6 +237,12 @@ export function sequenceToExample(seq: string[]): string {
         return b && b.kind === "list" ? (b.values[0] ?? "") : "";
       }
       if (t.startsWith(REGEX_PREFIX)) return "…";
+      const b = blockOf(t);
+      if (b && b.kind === "part") {
+        if (b.rule?.kind === "value") return b.rule.value;
+        if (b.rule?.kind === "list") return b.rule.values[0] ?? "";
+        return PART_EXAMPLE[b.part] ?? "";
+      }
       return "";
     })
     .join("");
