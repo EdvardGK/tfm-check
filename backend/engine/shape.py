@@ -45,6 +45,14 @@ _PART_RULE = {
 
 
 def part_rule(name: str, rules: TFMRules) -> str:
+    own = (rules.part_rules or {}).get(name)
+    if own:
+        if own["kind"] == "value":
+            return f"«{own['value']}»"
+        if own["kind"] == "list":
+            vals = own["values"]
+            return "en av " + ", ".join(vals[:6]) + (" …" if len(vals) > 6 else "")
+        return f"mønsteret {own['pattern']}"
     n = (rules.part_digits or {}).get(name)
     if isinstance(n, int) and n > 0:
         if name == "lokasjon":

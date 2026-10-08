@@ -100,7 +100,10 @@ def _text(value) -> str | None:
 
 
 class ModelIndex:
-    def __init__(self, ifc, products):
+    def __init__(self, ifc, products, progress=None):
+        """``progress(fraction)``: called as the index is built (0 to 1, by
+        the share of the model's relationships read)."""
+        tick = progress or (lambda f: None)
         self.product_ids: list[int] = [e.id() for e in products]
         pid_set = set(self.product_ids)
         # (set, prop) -> {product id: value}
@@ -117,7 +120,14 @@ class ModelIndex:
                 self.attrs["Tag"][e.id()] = tag
 
         occurrence_sets: dict[str, set[int]] = {}
-        for rel in ifc.by_type("IfcRelDefinesByProperties"):
+        prop_rels = ifc.by_type("IfcRelDefinesByProperties")
+        type_rels = ifc.by_type("IfcRelDefinesByType")
+        n_rels = max(1, len(prop_rels) + len(type_rels))
+        step = max(1, n_rels // 200)
+        tick(0.0)
+        for i, rel in enumerate(prop_rels):
+            if i % step == 0:
+                tick(i / n_rels)
             pset = rel.RelatingPropertyDefinition
             if not pset.is_a("IfcPropertySet") or not pset.Name:
                 continue
@@ -137,7 +147,9 @@ class ModelIndex:
 
         # Types: the type name per product, and the type's property sets for
         # every occurrence that does not carry the same set itself.
-        for rel in ifc.by_type("IfcRelDefinesByType"):
+        for j, rel in enumerate(type_rels):
+            if j % step == 0:
+                tick((len(prop_rels) + j) / n_rels)
             typ = rel.RelatingType
             owners = [o.id() for o in rel.RelatedObjects if o.id() in pid_set]
             tname = _text(typ.Name)

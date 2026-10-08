@@ -166,7 +166,7 @@ def test_run_checks_on_composed_codes(model):
 
 def test_register(model):
     f, products, index = model
-    columns, rows, summary = register_rows(f, products, index, parts_rules(), "HI90_RIV.ifc", "RIV")
+    columns, rows, summary, roll = register_rows(f, products, index, parts_rules(), "HI90_RIV.ifc", "RIV")
     assert columns[:4] == ["Kode som funnet", LOK, SYS, KOMP]
     assert len(rows) == 4
     by = {r["Kode som funnet"]: r for r in rows}
@@ -177,9 +177,9 @@ def test_register(model):
     assert by["+05.=360.001-JP4"][LOK] == "05."
     assert by["+05.=360.001-JP4"]["Status"] == "rives"
     assert summary["Gyldig format"] == 2 and summary["Med ny kode"] == 1
-    data = build_register_xlsx(columns, rows, summary)
+    data = build_register_xlsx(columns, rows, summary, roll)
     wb = load_workbook(io.BytesIO(data))
-    assert wb.sheetnames == ["Sammendrag", "Register"]
+    assert wb.sheetnames == ["Sammendrag", "Register", "Systemkoder", "Komponentkoder"]
     ws = wb["Register"]
     assert [c.value for c in ws[1]][:4] == columns[:4]
     assert ws.max_row == 5

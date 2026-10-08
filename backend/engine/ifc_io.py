@@ -30,11 +30,17 @@ def load_codes(file_name: str | None) -> dict:
 
 
 def codes_for_bygningsdel(system_key: str) -> dict:
-    return load_codes(BYGNINGSDEL_SYSTEMS.get(system_key, {}).get("file"))
+    """{code: name} of the system-code standard ({} for none)."""
+    from .standards import codelist
+    cl = codelist(system_key) if system_key in BYGNINGSDEL_SYSTEMS else None
+    return dict(cl.codes) if cl else {}
 
 
 def codes_for_komponent(system_key: str) -> dict:
-    return load_codes(KOMPONENT_SYSTEMS.get(system_key, {}).get("file"))
+    """{code: name} of the component-code standard ({} for none)."""
+    from .standards import codelist
+    cl = codelist(system_key) if system_key in KOMPONENT_SYSTEMS else None
+    return dict(cl.codes) if cl else {}
 
 
 # <PROSJEKT>_<FAG>[_…].ifc: the discipline is the second name part.

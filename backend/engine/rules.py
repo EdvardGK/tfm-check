@@ -38,6 +38,50 @@ def _loc(v) -> tuple | None:
     return tuple(v[:3])
 
 
+NEVER = r"(?!x)x"
+
+
+def clean_rule(r) -> dict | None:
+    """A part rule as the engine takes it, or None when it sets nothing."""
+    if not isinstance(r, dict):
+        return None
+    kind = r.get("kind")
+    if kind == "pattern" and str(r.get("pattern") or "").strip():
+        return {"kind": "pattern", "pattern": str(r["pattern"]).strip()}
+    if kind == "value" and str(r.get("value") or "") != "":
+        return {"kind": "value", "value": str(r["value"])}
+    if kind == "list":
+        vals = [str(v).strip() for v in (r.get("values") or []) if str(v).strip()]
+        if vals:
+            return {"kind": "list", "values": list(dict.fromkeys(vals))}
+    return None
+
+
+def rule_form(r: dict | None) -> str | None:
+    """A part rule as a regex fragment: the pattern (anchors dropped), the
+    value literally, or the listed values. A pattern that does not compile
+    matches nothing, so the check fails loudly rather than passing."""
+    if not r:
+        return None
+    if r["kind"] == "value":
+        return re.escape(r["value"])
+    if r["kind"] == "list":
+        vals = sorted(r["values"], key=len, reverse=True)
+        return "(?:" + "|".join(re.escape(v) for v in vals) + ")"
+    p = r["pattern"]
+    if p.startswith("^"):
+        p = p[1:]
+    if p.endswith("$") and not p.endswith("\\$"):
+        p = p[:-1]
+    try:
+        re.compile(p)
+        if re.compile(p).groupindex:
+            return NEVER
+    except re.error:
+        return NEVER
+    return "(?:" + p + ")"
+
+
 def compose(values: dict[str, str]) -> str:
     """A code composed from aspect values, each behind its sign (a value
     already carrying its sign keeps it). Empty aspects are left out."""
@@ -80,8 +124,15 @@ class TFMRules:
     tfm_parts: dict = field(default_factory=dict)
     # Status: the source of the element's MMI (status) code, or None.
     status_location: tuple | None = None
+    # A part's own rule, over its standard form: {part: {"kind": "pattern",
+    # "pattern": "..."} | {"kind": "value", "value": "..."} |
+    # {"kind": "list", "values": [...]}}.
+    part_rules: dict = field(default_factory=dict)
 
     def _pattern_for_group(self, name: str) -> str:
+        own = rule_form((self.part_rules or {}).get(name))
+        if own is not None:
+            return own
         n = self.part_digits.get(name) if self.part_digits else None
         if n and isinstance(n, int) and n > 0:
             if name in DIGIT_LOCKABLE_PARTS:
@@ -168,4 +219,6 @@ class TFMRules:
             tfm_parts={k: _loc(v) for k, v in (data.get("tfm_parts") or {}).items()
                        if k in ASPECTS and _loc(v) is not None},
             status_location=_loc(data.get("status_location")),
+            part_rules={str(k): r for k, r in ((k, clean_rule(v)) for k, v in
+                                               (data.get("part_rules") or {}).items()) if r},
         )

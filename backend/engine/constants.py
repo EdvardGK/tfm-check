@@ -40,11 +40,13 @@ FILENAME_DISCIPLINE_PATTERNS = [
 ]
 
 BYGNINGSDEL_SYSTEMS = {
-    "NS3451": dict(label="NS3451 — Systemkodetabell (norsk)", file="ns3451_codes.json"),
+    "NS3451": dict(label="NS 3451:2022", file="ns3451_2022.json"),
     "Ingen":  dict(label="Ingen sjekk", file=None),
 }
 
 KOMPONENT_SYSTEMS = {
+    "NS3457-8": dict(label="NS 3457-8:2021", file="ns3457-8_2021.json"),
+    "PA0802":   dict(label="PA 0802 komponentkoder", file="pa0802_komponent.json"),
     "IEC81346": dict(label="IEC 81346-2 — Funksjonsbokstaver", file="iec81346_letters.json"),
     "Ingen":    dict(label="Ingen sjekk", file=None),
 }

@@ -9,6 +9,7 @@ import ifcopenshell.util.element as eu
 from .constants import BYGNINGSDEL_SYSTEMS, KOMPONENT_SYSTEMS, THRESHOLDS
 from .ifc_io import build_storey_map, candidate_strings_for
 from .rules import TFMRules, loose_component
+from .standards import check_code
 
 
 def status_for_pct(pct: float):
@@ -158,7 +159,7 @@ def run_checks(ifc, products, rules: TFMRules,
             if has_bd:
                 part_total["systemkode"] += 1
                 n_bd_total += 1
-                if bd in bygningsdel_codes:
+                if check_code(bd, rules.bygningsdel_system).ok:
                     part_ok["systemkode"] += 1
                     n_bd_valid += 1
                     if expected_ns:
@@ -194,8 +195,8 @@ def run_checks(ifc, products, rules: TFMRules,
             if has_komp:
                 part_total["komponent"] += 1
                 n_komp_total += 1
-                first = ko[:1].upper()
-                if first in komponent_codes:
+                first = ko[:1].upper() if rules.komponent_system == "IEC81346" else ko
+                if check_code(ko, rules.komponent_system).ok:
                     part_ok["komponent"] += 1
                     n_komp_valid += 1
                 else:

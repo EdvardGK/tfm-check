@@ -9,7 +9,9 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
+import threading
 import time
+import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -27,9 +29,10 @@ from engine import (
     codes_for_bygningsdel, codes_for_komponent,
     list_presets, suggest_preset, suggest_field,
 )
-from engine.ifc_io import load_codes
 from engine.inventory import ModelIndex, inventory_payload, preview, values_payload
+from engine.codes import coded_objects, rollup
 from engine.register import build_register_xlsx, register_rows
+from engine.standards import STANDARDS, codelist
 from engine.presets import PRESETS, preset_to_rules_dict
 from store import UploadStore
 
@@ -106,15 +109,14 @@ def presets():
     return {"presets": list_presets()}
 
 
-_CODE_FILES = {"ns3451": "ns3451_codes.json", "iec81346": "iec81346_letters.json"}
-
-
 @app.get("/api/codes/{system}")
 def codes(system: str):
-    fname = _CODE_FILES.get(system.lower())
-    if not fname:
+    """A linked standard's code list: {code: name}."""
+    key = next((k for k in STANDARDS if k.lower() == system.lower()), None)
+    cl = codelist(key)
+    if cl is None:
         raise HTTPException(404, f"Ukjent kodesystem: {system!r}")
-    return load_codes(fname)
+    return cl.codes
 
 
 @app.post("/api/upload")
@@ -173,6 +175,100 @@ async def upload(file: UploadFile = File(...)):
     }
 
 
+# =============================================================================
+# Upload as a job: the client polls the reading and indexing progress.
+# =============================================================================
+
+_jobs: dict[str, dict] = {}
+_jobs_lock = threading.Lock()
+
+
+def _job_set(job_id: str, **kw) -> None:
+    with _jobs_lock:
+        _jobs[job_id].update(kw)
+
+
+def _read_job(job_id: str, tmp_path: str, file_name: str, size: int) -> None:
+    t0 = time.time()
+    try:
+        try:
+            ifc = open_ifc(tmp_path)
+        except Exception as e:
+            raise HTTPException(400, f"Kunne ikke lese IFC-fil: {e}")
+        schema = ifc.schema
+        if not any(schema.upper().startswith(p) for p in ACCEPTED_SCHEMA_PREFIXES):
+            raise HTTPException(
+                415, f"IFC-schema {schema!r} støttes ikke. Tillatt: IFC2X3 og IFC4 (inkl. IFC4X1/2/3).")
+        products = list_products(ifc)
+        _job_set(job_id, stage="indekser", fraction=0.0, products=len(products))
+        index = ModelIndex(ifc, products, progress=lambda f: _job_set(job_id, fraction=round(f, 3)))
+        facts = model_facts(ifc, products)
+        psets = build_pset_index(ifc)
+        storeys = extract_storey_codes_from_ifc(ifc)
+        detected = detect_discipline_from_filename(file_name)
+        load_seconds = time.time() - t0
+        up = store.put(
+            ifc=ifc, products=products, facts=facts, psets=psets, storeys=storeys,
+            detected_discipline=detected, file_name=file_name, file_size=size,
+            load_seconds=load_seconds,
+        )
+        up.index = index
+        _job_set(job_id, stage="ferdig", fraction=1.0, result={
+            "upload_id": up.upload_id,
+            "file_name": file_name,
+            "file_size": size,
+            "facts": facts,
+            "psets": psets,
+            "storeys": storeys,
+            "detected_discipline": detected,
+            "suggested_preset": suggest_preset(detected),
+            "suggested_field": suggest_field(psets),
+            "load_seconds": round(load_seconds, 2),
+        })
+    except HTTPException as e:
+        _job_set(job_id, stage="feil", error=e.detail)
+    except Exception as e:  # noqa: BLE001 — reported to the client, not swallowed
+        _job_set(job_id, stage="feil", error=f"Kunne ikke lese IFC-fil: {e}")
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+
+@app.post("/api/jobs")
+async def start_job(file: UploadFile = File(...)):
+    """Take the file, then read and index it in the background."""
+    suffix = Path(file.filename).suffix.lower()
+    if suffix not in (".ifc", ".ifczip"):
+        raise HTTPException(400, "Filen må være en .ifc- eller .ifczip-fil.")
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        tmp_path = tmp.name
+    size = os.path.getsize(tmp_path)
+    job_id = uuid.uuid4().hex[:16]
+    with _jobs_lock:
+        # Finished jobs older than an hour are dropped.
+        now = time.time()
+        for k in [k for k, j in _jobs.items() if now - j["t"] > 3600]:
+            _jobs.pop(k, None)
+        _jobs[job_id] = {"t": now, "stage": "les", "fraction": None, "products": None,
+                         "file_size": size, "result": None, "error": None}
+    threading.Thread(target=_read_job, args=(job_id, tmp_path, file.filename, size), daemon=True).start()
+    return {"job_id": job_id, "file_size": size}
+
+
+@app.get("/api/jobs/{job_id}")
+def job_status(job_id: str):
+    with _jobs_lock:
+        j = _jobs.get(job_id)
+        if j is None:
+            raise HTTPException(404, "Ukjent jobb.")
+        out = {k: v for k, v in j.items() if k != "t"}
+        out["elapsed"] = round(time.time() - j["t"], 1)
+        return out
+
+
 def _resolve(upload_id: str):
     up = store.get(upload_id)
     if up is None:
@@ -217,15 +313,25 @@ def register(req: PreviewRequest):
     """The TFM register for the loaded model, one row per object with a code."""
     up = _resolve(req.upload_id)
     rules = TFMRules.from_dict(req.rules)
-    columns, rows, summary = register_rows(
+    columns, rows, summary, roll = register_rows(
         up.ifc, up.products, _index(up), rules, up.file_name, up.detected_discipline)
-    data = build_register_xlsx(columns, rows, summary)
+    data = build_register_xlsx(columns, rows, summary, roll)
     stem = Path(up.file_name).stem
     return Response(
         data,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{stem}_TFM-register.xlsx"'},
     )
+
+
+@app.post("/api/rollup")
+def code_rollup(req: PreviewRequest):
+    """System and component codes rolled up: objects, valid in the linked
+    standard, description, and what they appear with."""
+    up = _resolve(req.upload_id)
+    rules = TFMRules.from_dict(req.rules)
+    coded, _ = coded_objects(_index(up), rules)
+    return rollup(coded, rules)
 
 
 def _codes(up, rules: TFMRules):

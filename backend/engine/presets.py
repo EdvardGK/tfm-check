@@ -24,7 +24,7 @@ PRESETS: list[dict] = [
         # PA 0802 also codes a system without a component: +123456=244.001.
         "extra_sequences": [["+", "Lokasjon", "=", "Systemkode", ".", "Løpenummer"]],
         "bygningsdel_system": "NS3451",
-        "komponent_system": "IEC81346",
+        "komponent_system": "NS3457-8",
         "part_digits": {},
     },
     {
