@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getRollup, peek, type ModelRules } from "../api";
+import { getRollup, peek, peekLatest, type ModelRules } from "../api";
 import type { Rollup, RollupRow } from "../types";
 import { Lamp } from "./Shell";
 import { MiniLoader } from "./Loader";
@@ -7,7 +7,7 @@ import { fmt } from "./setup";
 
 /** The rules' system and component codes rolled up, following the rules. */
 export function useRollup(items: ModelRules[]): Rollup | null {
-  const [roll, setRoll] = useState<Rollup | null>(() => peek<Rollup>("rollup", "*", items));
+  const [roll, setRoll] = useState<Rollup | null>(() => peek<Rollup>("rollup", "*", items) ?? peekLatest<Rollup>("rollup", "*"));
   const key = JSON.stringify(items);
   useEffect(() => {
     const parsed = JSON.parse(key) as ModelRules[];

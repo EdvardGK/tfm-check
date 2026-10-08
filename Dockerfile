@@ -19,7 +19,7 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 COPY backend/ ./backend/
 COPY --from=frontend /app/frontend/dist ./frontend/dist
 
-ENV TFM_STORE_TTL=900 \
+ENV TFM_STORE_TTL=7200 \
     TFM_STORE_MAX=3 \
     PYTHONUNBUFFERED=1
 EXPOSE 8000

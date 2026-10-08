@@ -50,7 +50,7 @@ FRAME_ANCESTORS = os.environ.get(
 
 app = FastAPI(title="TFM-sjekk", version=APP_VERSION)
 store = UploadStore(
-    ttl_seconds=int(os.environ.get("TFM_STORE_TTL", "900")),
+    ttl_seconds=int(os.environ.get("TFM_STORE_TTL", "7200")),
     max_items=int(os.environ.get("TFM_STORE_MAX", "3")),
 )
 

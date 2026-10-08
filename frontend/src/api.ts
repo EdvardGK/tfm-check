@@ -64,6 +64,22 @@ export async function getInventory(uploadId: string): Promise<Inventory> {
 // request (the walk's own, or a prefetch) already fetched.
 const CACHE_MAX = 40;
 const cache = new Map<string, { promise: Promise<unknown>; value?: unknown }>();
+// The latest result per kind and model, whatever the rules: a step opens on
+// it while its own result is on the way, so data once there never blanks.
+const latest = new Map<string, unknown>();
+
+/** The latest result of a kind for a model, or null. */
+export function peekLatest<T>(kind: "preview" | "rollup", uploadId: string | null): T | null {
+  return uploadId ? ((latest.get(`${kind}|${uploadId}`) as T | undefined) ?? null) : null;
+}
+
+// A model the server no longer holds (idle past its time): the walk says so
+// instead of waiting for data that will not come.
+const goneListeners = new Set<(msg: string) => void>();
+export function onModelGone(cb: (msg: string) => void): () => void {
+  goneListeners.add(cb);
+  return () => goneListeners.delete(cb);
+}
 
 /** JSON with object keys sorted, so equal rules give one key. */
 function stable(v: unknown): string {
@@ -93,10 +109,13 @@ function cached<T>(kind: string, uploadId: string, rules: unknown, load: () => P
   entry.promise = load().then(
     (v) => {
       entry.value = v;
+      latest.set(`${kind}|${uploadId}`, v);
       return v;
     },
     (e) => {
       cache.delete(key);
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/ikke lenger i minnet/i.test(msg)) for (const cb of goneListeners) cb(msg);
       throw e;
     },
   );

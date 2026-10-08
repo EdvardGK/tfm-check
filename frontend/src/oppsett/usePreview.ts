@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getPreview, peek } from "../api";
+import { getPreview, peek, peekLatest } from "../api";
 import type { Preview, RulesDict } from "../types";
 
 /** The rules' result on the loaded model, following every edit (a short
@@ -7,7 +7,9 @@ import type { Preview, RulesDict } from "../types";
  *  Opens on a result already fetched for the same rules; keeps the last
  *  result while the next is on its way. */
 export function usePreview(uploadId: string | null, rules: RulesDict | null): Preview | null {
-  const [preview, setPreview] = useState<Preview | null>(() => peek<Preview>("preview", uploadId, rules));
+  const [preview, setPreview] = useState<Preview | null>(
+    () => peek<Preview>("preview", uploadId, rules) ?? peekLatest<Preview>("preview", uploadId),
+  );
   const key = uploadId && rules ? JSON.stringify(rules) : "";
   useEffect(() => {
     if (!uploadId || !key) return;

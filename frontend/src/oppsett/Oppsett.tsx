@@ -10,7 +10,7 @@
  *  returns to the summary. «Forrige» goes back along the path taken. */
 
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { downloadRegister, getInventory, getRollup, importIds, readIfc as readModel, type IdsSpec, type ReadProgress } from "../api";
+import { downloadRegister, getInventory, getRollup, importIds, onModelGone, readIfc as readModel, type IdsSpec, type ReadProgress } from "../api";
 import type { ModelEntry } from "./Models";
 import Pending from "./Pending";
 import { progressText } from "./Loader";
@@ -136,6 +136,9 @@ export default function Oppsett({
   const fag = upload?.detected_discipline ?? fileFag;
   const savedRules = rulesFor(saved, fag);
   const preview = usePreview(loaded ? upload.upload_id : null, rules);
+
+  // A model the server no longer holds: said in the bar, not a silent wait.
+  useEffect(() => onModelGone((msg) => onError(msg)), [onError]);
 
   // The walk's rules are its discipline's rules in the session.
   useEffect(() => {
