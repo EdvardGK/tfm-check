@@ -41,6 +41,11 @@ def _loc(v) -> tuple | None:
 NEVER = r"(?!x)x"
 
 
+def base_part(name: str) -> str:
+    """A template part name without its repeat suffix (komponent__2)."""
+    return name.split("__", 1)[0]
+
+
 def clean_rule(r) -> dict | None:
     """A part rule as the engine takes it, or None when it sets nothing."""
     if not isinstance(r, dict):
@@ -128,8 +133,12 @@ class TFMRules:
     # "pattern": "..."} | {"kind": "value", "value": "..."} |
     # {"kind": "list", "values": [...]}}.
     part_rules: dict = field(default_factory=dict)
+    # A part linked to a standard beyond Systemkode / Komponent (which use
+    # bygningsdel_system / komponent_system): {"typekode": "NS3457-8"}.
+    part_links: dict = field(default_factory=dict)
 
     def _pattern_for_group(self, name: str) -> str:
+        name = base_part(name)
         own = rule_form((self.part_rules or {}).get(name))
         if own is not None:
             return own
@@ -152,10 +161,13 @@ class TFMRules:
         out = []
         for s in self.structures():
             parts, i = [], 0
+            used: dict[str, int] = {}
             for m in PLACEHOLDER_RE.finditer(s):
                 parts.append(re.escape(s[i:m.start()]))
                 name = m.group(1)
-                parts.append(f"(?P<{name}>{self._pattern_for_group(name)})")
+                used[name] = used.get(name, 0) + 1
+                group = name if used[name] == 1 else f"{name}__{used[name]}"
+                parts.append(f"(?P<{group}>{self._pattern_for_group(name)})")
                 i = m.end()
             parts.append(re.escape(s[i:]))
             out.append(re.compile("^" + "".join(parts)))
@@ -219,6 +231,7 @@ class TFMRules:
             tfm_parts={k: _loc(v) for k, v in (data.get("tfm_parts") or {}).items()
                        if k in ASPECTS and _loc(v) is not None},
             status_location=_loc(data.get("status_location")),
+            part_links={str(k): str(v) for k, v in (data.get("part_links") or {}).items() if v},
             part_rules={str(k): r for k, r in ((k, clean_rule(v)) for k, v in
                                                (data.get("part_rules") or {}).items()) if r},
         )

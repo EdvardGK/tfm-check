@@ -27,20 +27,22 @@ from .rules import TFMRules
 # Template part name (lokasjon) -> the part's display name (Lokasjon).
 PART_NAME = {PLACEHOLDER_RE.search(t).group(1): p for p, t in PART_TO_TEMPLATE.items()}
 
-SEP_CHARS = ".-_/ =+"
+SEP_CHARS = ".-_/ =+%"
 _SEP_CLASS = "[" + re.escape(SEP_CHARS) + "]"
 _EDGE = SEP_CHARS + "\t"
 
-LETTER_PARTS = {"komponent"}
-UPPER_PARTS = {"komponent", "lokasjon"}
+LETTER_PARTS = {"komponent", "typekode"}
+UPPER_PARTS = {"komponent", "lokasjon", "typekode"}
 # Running numbers: zero-padding keeps the number.
-PADDABLE = {"lopenummer", "kompnr", "subnr", "rom", "etasje"}
+PADDABLE = {"lopenummer", "kompnr", "subnr", "rom", "etasje", "omrade", "linje", "sloyfe", "adresse", "typenr",
+            "instansnr"}
 
 # What a part takes when no length is locked, in plain terms.
 _PART_RULE = {
     "lokasjon": "6 tegn", "rom": "1–5 siffer", "systemkode": "3 siffer", "etasje": "1–12 tegn",
     "subnr": "1–4 siffer", "lopenummer": "3 siffer", "komponent": "2 bokstaver", "kompnr": "3 siffer",
-    "typeflag": "T",
+    "typeflag": "T", "omrade": "1–2 siffer", "linje": "1–2 siffer", "sloyfe": "2 siffer", "adresse": "3 siffer",
+    "typekode": "1–3 bokstaver", "typenr": "3 siffer", "instansnr": "2 siffer",
 }
 
 
@@ -57,7 +59,7 @@ def part_rule(name: str, rules: TFMRules) -> str:
     if isinstance(n, int) and n > 0:
         if name == "lokasjon":
             return f"{n} tegn"
-        if name in ("etasje", "subnr", "kompnr", "lopenummer", "rom"):
+        if name in PADDABLE:
             return f"{n} siffer"
     return _PART_RULE.get(name, "")
 

@@ -29,6 +29,8 @@ export interface RulesDict {
   /** A segment's own rule over its standard form, by template part name
    *  (lokasjon, systemkode …). */
   part_rules?: Record<string, PartRule>;
+  /** A part linked to a standard beyond Systemkode / Komponent. */
+  part_links?: Record<string, string>;
 }
 
 export type PartRule =

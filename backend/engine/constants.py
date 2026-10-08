@@ -58,6 +58,11 @@ PART_TYPES = [
     "Subnr", "Løpenummer",
     "Komponent", "Komp.nr",
     "T-suffiks",
+    # Subsystems and addresses (ST28 elektro: KNX område/linje, brann- og
+    # nødlyssløyfe, a second address on a data outlet) and the NS 3457-7
+    # component occurrence after «%» (HI90: %SQZ.008.06).
+    "Område", "Linje", "Sløyfe", "Adresse 2",
+    "Typekode", "Typenr", "Instansnr",
 ]
 PART_TO_TEMPLATE = {
     "Lokasjon":   "{lokasjon}",
@@ -69,16 +74,24 @@ PART_TO_TEMPLATE = {
     "Komponent":  "{komponent}",
     "Komp.nr":    "{kompnr}",
     "T-suffiks":  "{typeflag}",
+    "Område":     "{omrade}",
+    "Linje":      "{linje}",
+    "Sløyfe":     "{sloyfe}",
+    "Adresse 2":  "{adresse}",
+    "Typekode":   "{typekode}",
+    "Typenr":     "{typenr}",
+    "Instansnr":  "{instansnr}",
 }
 SEP_TO_CHAR = {
     "+": "+", ".": ".", "-": "-", "_": "_", "/": "/",
-    "mellomrom": " ", "=": "=", "++": "++",
+    "mellomrom": " ", "=": "=", "++": "++", "%": "%",
 }
 SEP_OPTIONS_DISPLAY = list(SEP_TO_CHAR.keys())
 
 SEP_NORWEGIAN_NAMES = {
     "+": "pluss", ".": "punktum", "-": "bindestrek", "_": "understrek",
     "/": "skråstrek", "=": "likhetstegn", "++": "dobbeltpluss", "mellomrom": "mellomrom",
+    "%": "prosent",
 }
 
 # Default starting sequence — minimal system aspect (RIE element-level shape)
@@ -105,12 +118,20 @@ PLACEHOLDER_FALLBACK = {
     "komponent":  r"[A-Z]{2}",
     "kompnr":     r"\d{3}",
     "typeflag":   r"T?",
+    "omrade":     r"\d{1,2}",
+    "linje":      r"\d{1,2}",
+    "sloyfe":     r"\d{2}",
+    "adresse":    r"\d{3}",
+    "typekode":   r"[A-ZÆØÅ]{1,3}",
+    "typenr":     r"\d{3}",
+    "instansnr":  r"\d{2}",
 }
 PLACEHOLDER_RE = re.compile(r"\{(\w+)\}")
 
 # Digit-type parts where users may lock an exact digit count
 # (so {etasje}{subnr} on "103" parses as etasje="1" + subnr="03").
-DIGIT_LOCKABLE_PARTS = ["etasje", "subnr", "kompnr", "lopenummer", "rom"]
+DIGIT_LOCKABLE_PARTS = ["etasje", "subnr", "kompnr", "lopenummer", "rom",
+                        "omrade", "linje", "sloyfe", "adresse", "typenr", "instansnr"]
 
 THRESHOLDS = {"ok": 95, "warn": 50}
 
@@ -120,7 +141,8 @@ FREETEXT_PREFIX = "T:"  # sentinel for free-text literal blocks
 PART_EXAMPLE = {
     "Lokasjon": "123456", "Rom": "012", "Systemkode": "244", "Etasje": "01",
     "Subnr": "01", "Løpenummer": "001", "Komponent": "DI", "Komp.nr": "001",
-    "T-suffiks": "T",
+    "T-suffiks": "T", "Område": "1", "Linje": "5", "Sløyfe": "08", "Adresse 2": "013",
+    "Typekode": "SQZ", "Typenr": "008", "Instansnr": "06",
 }
 
 

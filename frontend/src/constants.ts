@@ -6,19 +6,21 @@ export const PART_TYPES = [
   "Subnr", "Løpenummer",
   "Komponent", "Komp.nr",
   "T-suffiks",
+  "Område", "Linje", "Sløyfe", "Adresse 2",
+  "Typekode", "Typenr", "Instansnr",
 ] as const;
 export type PartType = (typeof PART_TYPES)[number];
 
 // Separator key → rendered character
 export const SEP_TO_CHAR: Record<string, string> = {
   "+": "+", ".": ".", "-": "-", "_": "_", "/": "/",
-  mellomrom: " ", "=": "=", "++": "++",
+  mellomrom: " ", "=": "=", "++": "++", "%": "%",
 };
 export const SEP_KEYS = Object.keys(SEP_TO_CHAR);
 
 export const SEP_NAMES: Record<string, string> = {
   "+": "pluss", ".": "punktum", "-": "bindestrek", _: "understrek",
-  "/": "skråstrek", "=": "likhetstegn", "++": "dobbeltpluss", mellomrom: "mellomrom",
+  "/": "skråstrek", "=": "likhetstegn", "++": "dobbeltpluss", mellomrom: "mellomrom", "%": "prosent",
 };
 
 export function sepLabel(key: string): string {
@@ -29,7 +31,8 @@ export function sepLabel(key: string): string {
 export const PART_EXAMPLE: Record<string, string> = {
   Lokasjon: "123456", Rom: "012", Systemkode: "244", Etasje: "01",
   Subnr: "01", Løpenummer: "001", Komponent: "DI", "Komp.nr": "001",
-  "T-suffiks": "T",
+  "T-suffiks": "T", "Område": "1", "Linje": "5", "Sløyfe": "08", "Adresse 2": "013",
+  Typekode: "SQZ", Typenr: "008", Instansnr: "06",
 };
 
 export const FREETEXT_PREFIX = "T:";
@@ -56,6 +59,13 @@ export const PART_COLORS: Record<string, Palette> = {
   Komponent: { bg: "#f7e6e0", border: "#cf9077", text: "#7a4632" },
   "Komp.nr": { bg: "#f0e8e0", border: "#c0a487", text: "#5e4a36" },
   "T-suffiks": { bg: "#e9e6e0", border: "#a89f90", text: "#4a4438" },
+  "Område": { bg: "#e6edf2", border: "#8fa7bb", text: "#384a59" },
+  "Linje": { bg: "#e8eef0", border: "#94adb3", text: "#3c4f54" },
+  "Sløyfe": { bg: "#f2e9e4", border: "#c39d8a", text: "#5c4337" },
+  "Adresse 2": { bg: "#ecebe2", border: "#a9a68a", text: "#4f4d39" },
+  "Typekode": { bg: "#f4e4e4", border: "#c98d8d", text: "#6e3a3a" },
+  "Typenr": { bg: "#efe6ea", border: "#b896a4", text: "#5a4049" },
+  "Instansnr": { bg: "#ebe7f0", border: "#a597b8", text: "#4a4058" },
 };
 export const SEP_COLOR: Palette = { bg: "var(--color-ink)", border: "var(--color-ink)", text: "var(--color-cream)" };
 export const FREETEXT_COLOR: Palette = { bg: "var(--color-input)", border: "var(--color-line)", text: "var(--color-muted)" };
@@ -87,6 +97,12 @@ export const DIGIT_LOCKABLE: { key: string; label: string }[] = [
 // Map a part-type token to its internal digit-lock key (for part_digits).
 export const PART_TO_DIGITKEY: Record<string, string> = {
   Lokasjon: "lokasjon",
+  "Område": "omrade",
+  Linje: "linje",
+  "Sløyfe": "sloyfe",
+  "Adresse 2": "adresse",
+  Typenr: "typenr",
+  Instansnr: "instansnr",
   Etasje: "etasje", Subnr: "subnr", Løpenummer: "lopenummer",
   "Komp.nr": "kompnr", Rom: "rom",
 };

@@ -25,7 +25,11 @@ STANDARDS = {
     "IEC81346": ("iec81346_letters.json", "IEC 81346-2", "first"),
 }
 # Which part a link applies to.
-LINKABLE = {"systemkode": ("NS3451",), "komponent": ("NS3457-8", "PA0802", "IEC81346")}
+LINKABLE = {
+    "systemkode": ("NS3451",),
+    "komponent": ("NS3457-8", "PA0802", "IEC81346"),
+    "typekode": ("NS3457-8", "PA0802", "IEC81346"),
+}
 # A list entry that exists but is not to be used.
 _AVOID = "bør ikke benyttes"
 
@@ -93,6 +97,9 @@ def links(rules) -> dict[str, str]:
         out["systemkode"] = rules.bygningsdel_system
     if rules.komponent_system in LINKABLE["komponent"]:
         out["komponent"] = rules.komponent_system
+    for part, key in (getattr(rules, "part_links", None) or {}).items():
+        if key in LINKABLE.get(part, ()):
+            out[part] = key
     return out
 
 

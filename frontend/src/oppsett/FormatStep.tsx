@@ -12,13 +12,14 @@ import { STATSBYGG_PATTERNS, fmt, verdictOf } from "./setup";
 
 export type FormatDraft = Pick<
   RulesDict,
-  "patterns" | "part_digits" | "part_rules" | "bygningsdel_system" | "komponent_system" | "discipline_key"
+  "patterns" | "part_digits" | "part_rules" | "part_links" | "bygningsdel_system" | "komponent_system" | "discipline_key"
 >;
 
 const draftOf = (r: RulesDict): FormatDraft => ({
   patterns: r.patterns.map((p) => ({ sequence: [...p.sequence] })),
   part_digits: { ...(r.part_digits ?? {}) },
   part_rules: { ...(r.part_rules ?? {}) },
+  part_links: { ...(r.part_links ?? {}) },
   bygningsdel_system: r.bygningsdel_system,
   komponent_system: r.komponent_system,
   discipline_key: r.discipline_key,
@@ -29,6 +30,7 @@ const presetDraft = (p: Preset, cur: FormatDraft): FormatDraft => ({
   patterns: p.rules.patterns.map((x) => ({ sequence: [...x.sequence] })),
   part_digits: { ...(p.rules.part_digits ?? {}) },
   part_rules: {},
+  part_links: {},
   bygningsdel_system: p.rules.bygningsdel_system ?? cur.bygningsdel_system,
   komponent_system: p.rules.komponent_system ?? cur.komponent_system,
 });
@@ -42,6 +44,8 @@ const sameForm = (a: FormatDraft, b: FormatDraft) =>
 const TEMPLATE_PART: Record<string, string> = {
   lokasjon: "Lokasjon", rom: "Rom", systemkode: "Systemkode", etasje: "Etasje", subnr: "Subnr",
   lopenummer: "Løpenummer", komponent: "Komponent", kompnr: "Komp.nr", typeflag: "T-suffiks",
+  omrade: "Område", linje: "Linje", sloyfe: "Sløyfe", adresse: "Adresse 2", typekode: "Typekode", typenr: "Typenr",
+  instansnr: "Instansnr",
 };
 const PART_KEY: Record<string, string> = Object.fromEntries(Object.entries(TEMPLATE_PART).map(([k, v]) => [v, k]));
 
@@ -50,10 +54,15 @@ const PART_KEY: Record<string, string> = Object.fromEntries(Object.entries(TEMPL
 const PART_RULE: Record<string, string> = {
   Lokasjon: "6 tegn", Rom: "1–5 siffer", Systemkode: "3 siffer", Etasje: "1–12 tegn", Subnr: "1–4 siffer",
   Løpenummer: "3 siffer", Komponent: "2 bokstaver", "Komp.nr": "3 siffer", "T-suffiks": "T",
+  "Område": "1–2 siffer", Linje: "1–2 siffer", "Sløyfe": "2 siffer", "Adresse 2": "3 siffer",
+  Typekode: "1–3 bokstaver", Typenr: "3 siffer", Instansnr: "2 siffer",
 };
 
 /** The standards a part can be linked to (backend engine/standards.py). */
-const LINKS: Record<string, { field: "bygningsdel_system" | "komponent_system"; options: [string, string][] }> = {
+const COMPONENT_LISTS: [string, string][] = [["NS3457-8", "NS 3457-8"], ["PA0802", "PA 0802"], ["IEC81346", "IEC 81346"]];
+/** Typekode links through part_links; the field is the part's key. */
+const LINKS: Record<string, { field: "bygningsdel_system" | "komponent_system" | "typekode"; options: [string, string][] }> = {
+  Typekode: { field: "typekode", options: [...COMPONENT_LISTS, ["Ingen", "–"]] },
   Systemkode: { field: "bygningsdel_system", options: [["NS3451", "NS 3451"], ["Ingen", "–"]] },
   Komponent: {
     field: "komponent_system",
@@ -71,7 +80,7 @@ function Coloured({ v }: { v: PreviewValue }): ReactNode {
   let at = 0;
   spans.forEach(([name, a, b], i) => {
     if (a > at) out.push(v.v.slice(at, a));
-    const part = TEMPLATE_PART[name];
+    const part = TEMPLATE_PART[name.split("__")[0]];
     out.push(
       <i key={i} style={paint(PART_COLORS[part] ?? FREETEXT_COLOR)} title={part}>
         {v.v.slice(a, b)}
@@ -191,10 +200,17 @@ function PartRow({
           <select
             className="field"
             aria-label={`${part} standard`}
-            value={draft[link.field]}
+            value={link.field === "typekode" ? (draft.part_links?.typekode ?? "Ingen") : draft[link.field]}
             onChange={(e) => {
               const v = e.target.value;
-              edit((d) => ({ ...d, [link.field]: v }));
+              if (link.field === "typekode") {
+                edit((d) => {
+                  const pl = { ...(d.part_links ?? {}) };
+                  if (v === "Ingen") delete pl.typekode;
+                  else pl.typekode = v;
+                  return { ...d, part_links: pl };
+                });
+              } else edit((d) => ({ ...d, [link.field]: v }));
             }}
           >
             {link.options.map(([v, label]) => (
