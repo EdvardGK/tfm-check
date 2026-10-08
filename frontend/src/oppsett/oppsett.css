@@ -340,3 +340,6 @@
 #oppsett .rurow .rd { display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 12.5px; }
 #oppsett .rurow .ra { font-family: var(--font-mono); font-size: 11px; color: var(--d-label-color); }
 #oppsett .srow { min-height: 44px; }
+
+#oppsett .miniload { display: grid; place-items: center; flex: 1 1 auto; min-height: 72px; }
+#oppsett .miniload video { width: 96px; height: auto; pointer-events: none; }

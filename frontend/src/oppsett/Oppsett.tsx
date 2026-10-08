@@ -9,8 +9,8 @@
  *  a step's answer and moves on; a summary row opens its step and its «Bruk»
  *  returns to the summary. «Forrige» goes back along the path taken. */
 
-import { useRef, useState, type DragEvent } from "react";
-import { downloadRegister, getInventory, readIfc as readModel, type ReadProgress } from "../api";
+import { useEffect, useRef, useState, type DragEvent } from "react";
+import { downloadRegister, getInventory, getRollup, readIfc as readModel, type ReadProgress } from "../api";
 import Pending from "./Pending";
 import { progressText } from "./Loader";
 import { allowedFloors, proposeCodes } from "./floors";
@@ -128,6 +128,13 @@ export default function Oppsett({
   const fag = upload?.detected_discipline ?? fileFag;
   const savedRules = rulesFor(saved, fag);
   const preview = usePreview(loaded ? upload.upload_id : null, rules);
+  // Later data in the background once the model is in: the rollup for
+  // Oppsummering (the walk's own preview above serves the other steps).
+  useEffect(() => {
+    if (!loaded || !rules) return;
+    const t = window.setTimeout(() => void getRollup(upload.upload_id, rules).catch(() => undefined), 400);
+    return () => window.clearTimeout(t);
+  }, [loaded, upload, rules]);
 
   const go = (s: Step) => {
     if (s !== step) setTrail((t) => [...t, step]);
@@ -199,7 +206,7 @@ export default function Oppsett({
     // in; the walk then opens with its data.
     try {
       const up = await readModel(file, setReadProgress);
-      const inventory = await getInventory(up.upload_id);
+      const inventory = up.inventory ?? (await getInventory(up.upload_id));
       setUpload(up);
       setInv(inventory);
       go("kilde");

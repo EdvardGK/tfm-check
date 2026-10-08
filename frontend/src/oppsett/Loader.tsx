@@ -38,3 +38,12 @@ export default function Loader({ progress }: { progress: ReadProgress | null }) 
     </span>
   );
 }
+
+/** The same animation, small, in a tile whose data is still on its way. */
+export function MiniLoader() {
+  return (
+    <span className="miniload" role="status" aria-busy="true">
+      <video src="/brand/logo-outline.webm" autoPlay loop muted playsInline preload="auto" aria-hidden />
+    </span>
+  );
+}

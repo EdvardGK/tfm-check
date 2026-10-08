@@ -204,7 +204,12 @@ def _read_job(job_id: str, tmp_path: str, file_name: str, size: int) -> None:
         _job_set(job_id, stage="indekser", fraction=0.0, products=len(products))
         index = ModelIndex(ifc, products, progress=lambda f: _job_set(job_id, fraction=round(f, 3)))
         facts = model_facts(ifc, products)
-        psets = build_pset_index(ifc)
+        # The property sets from the index just built (a second pass over
+        # the relationships, build_pset_index, took as long as the index).
+        psets: dict[str, set] = {}
+        for pset_name, prop in index.props:
+            psets.setdefault(pset_name, set()).add(prop)
+        psets = {k: sorted(v) for k, v in sorted(psets.items())}
         storeys = extract_storey_codes_from_ifc(ifc)
         detected = detect_discipline_from_filename(file_name)
         load_seconds = time.time() - t0
@@ -214,7 +219,11 @@ def _read_job(job_id: str, tmp_path: str, file_name: str, size: int) -> None:
             load_seconds=load_seconds,
         )
         up.index = index
+        # The inventory rides with the result: the walk opens on it with no
+        # further round trip.
+        inventory = inventory_payload(index, [TFMRules.from_dict(preset_to_rules_dict(p)) for p in PRESETS])
         _job_set(job_id, stage="ferdig", fraction=1.0, result={
+            "inventory": inventory,
             "upload_id": up.upload_id,
             "file_name": file_name,
             "file_size": size,

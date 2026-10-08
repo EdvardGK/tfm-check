@@ -1,26 +1,35 @@
 import { useEffect, useState } from "react";
-import { getRollup } from "../api";
+import { getRollup, peek } from "../api";
 import type { Rollup, RollupRow, RulesDict } from "../types";
 import { Lamp } from "./Shell";
+import { MiniLoader } from "./Loader";
 import { fmt } from "./setup";
 
 /** The rules' system and component codes rolled up, following the rules. */
 export function useRollup(uploadId: string | null, rules: RulesDict): Rollup | null {
-  const [roll, setRoll] = useState<Rollup | null>(null);
+  const [roll, setRoll] = useState<Rollup | null>(() => peek<Rollup>("rollup", uploadId, rules));
   const key = JSON.stringify(rules);
   useEffect(() => {
     if (!uploadId) return;
-    const ctl = new AbortController();
+    const parsed = JSON.parse(key) as RulesDict;
+    const ready = peek<Rollup>("rollup", uploadId, parsed);
+    if (ready) {
+      setRoll(ready);
+      return;
+    }
+    let live = true;
     const timer = window.setTimeout(() => {
-      getRollup(uploadId, JSON.parse(key) as RulesDict, ctl.signal)
-        .then(setRoll)
+      getRollup(uploadId, parsed)
+        .then((r) => {
+          if (live) setRoll(r);
+        })
         .catch(() => {
-          /* aborted, or the model left the cache */
+          /* the model left the cache */
         });
     }, 150);
     return () => {
+      live = false;
       window.clearTimeout(timer);
-      ctl.abort();
     };
   }, [uploadId, key]);
   return roll;
@@ -55,6 +64,7 @@ export default function RollupTiles({ roll }: { roll: Rollup | null }) {
           <span className="lbl num">{roll ? `${fmt(ok(roll.systems))} / ${fmt(roll.systems.length)}` : ""}</span>
         </div>
         <div className="scroll">
+          {!roll ? <MiniLoader /> : null}
           {(roll?.systems ?? []).map((r) => (
             <Row key={r.code} r={r} with={[...r.systems, ...(r.components ?? [])]} />
           ))}
@@ -66,6 +76,7 @@ export default function RollupTiles({ roll }: { roll: Rollup | null }) {
           <span className="lbl num">{roll ? `${fmt(ok(roll.components))} / ${fmt(roll.components.length)}` : ""}</span>
         </div>
         <div className="scroll">
+          {!roll ? <MiniLoader /> : null}
           {(roll?.components ?? []).map((r) => (
             <Row key={r.code} r={r} with={r.systems} />
           ))}

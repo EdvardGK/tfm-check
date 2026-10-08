@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { getValues } from "../api";
 import type { Inventory, Location, Phase, RulesDict, SourceValues } from "../types";
 import { Canvas, Fig, Meter, StepBar, Val, breakDots } from "./Shell";
+import { MiniLoader } from "./Loader";
 import SourceTree, { propOf, type Pin } from "./SourceTree";
 import { useLiveAnswer } from "./live";
 import { STATUS_STANDARD, fmt, locationText, sameLocation, sourceCount } from "./setup";
@@ -146,6 +147,7 @@ export default function StatusStep({
           <span className="lbl num">{vals ? `${fmt(vals.distinct)} ulike` : ""}</span>
         </div>
         <div className="scroll">
+          {!vals ? <MiniLoader /> : null}
           {(vals?.values ?? []).map((v) => (
             <div key={v.v} className="lrow rule">
               <span>{v.phase ? <span className="ph" data-ph={v.phase} title={v.phase} style={{ display: "inline-block", width: 12, height: 12, padding: 0 }} /> : null}</span>

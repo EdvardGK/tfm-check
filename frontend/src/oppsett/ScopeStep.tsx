@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { RulesDict } from "../types";
 import { Bar10, Canvas, Fig, Meter, StepBar } from "./Shell";
+import { MiniLoader } from "./Loader";
 import { useLiveAnswer } from "./live";
 import { usePreview } from "./usePreview";
 import { fmt } from "./setup";
@@ -101,6 +102,7 @@ export default function ScopeStep({
           <input className="search" type="search" placeholder="Søk" aria-label="Søk" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <div className="scroll">
+          {!all && uploadId ? <MiniLoader /> : null}
           {shownTypes.map((t) => (
             <button key={t.name} type="button" className="typerow pick rule" aria-pressed={types.includes(t.name)} onClick={() => setTypes((l) => toggle(l, t.name))}>
               <span className="tnm ell" title={t.name}>

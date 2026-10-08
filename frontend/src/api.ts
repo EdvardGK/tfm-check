@@ -60,18 +60,60 @@ export async function getInventory(uploadId: string): Promise<Inventory> {
   return jsonOrThrow<Inventory>(await fetch(`/api/inventory/${encodeURIComponent(uploadId)}`));
 }
 
-export async function getPreview(
-  uploadId: string,
-  rules: RulesDict,
-  signal?: AbortSignal,
-): Promise<Preview> {
-  return jsonOrThrow<Preview>(
-    await fetch("/api/preview", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ upload_id: uploadId, rules }),
-      signal,
-    }),
+// Results per model and rules, kept so a step opens on what an earlier
+// request (the walk's own, or a prefetch) already fetched.
+const CACHE_MAX = 40;
+const cache = new Map<string, { promise: Promise<unknown>; value?: unknown }>();
+
+/** JSON with object keys sorted, so equal rules give one key. */
+function stable(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(stable).join(",")}]`;
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    return `{${Object.keys(o)
+      .filter((k) => o[k] !== undefined)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${stable(o[k])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(v);
+}
+
+function cached<T>(kind: string, uploadId: string, rules: RulesDict, load: () => Promise<T>): Promise<T> {
+  const key = `${kind}|${uploadId}|${stable(rules)}`;
+  const hit = cache.get(key);
+  if (hit) return hit.promise as Promise<T>;
+  const entry: { promise: Promise<unknown>; value?: unknown } = { promise: Promise.resolve() };
+  entry.promise = load().then(
+    (v) => {
+      entry.value = v;
+      return v;
+    },
+    (e) => {
+      cache.delete(key);
+      throw e;
+    },
+  );
+  cache.set(key, entry);
+  if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value as string);
+  return entry.promise as Promise<T>;
+}
+
+/** A result already fetched for these rules, or null. */
+export function peek<T>(kind: "preview" | "rollup", uploadId: string | null, rules: RulesDict | null): T | null {
+  if (!uploadId || !rules) return null;
+  return (cache.get(`${kind}|${uploadId}|${stable(rules)}`)?.value as T | undefined) ?? null;
+}
+
+export function getPreview(uploadId: string, rules: RulesDict): Promise<Preview> {
+  return cached("preview", uploadId, rules, async () =>
+    jsonOrThrow<Preview>(
+      await fetch("/api/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ upload_id: uploadId, rules }),
+      }),
+    ),
   );
 }
 
@@ -156,7 +198,7 @@ export interface JobStatus {
   products: number | null;
   file_size: number;
   elapsed: number;
-  result: UploadResponse | null;
+  result: (UploadResponse & { inventory?: Inventory }) | null;
   error: string | null;
 }
 
@@ -215,7 +257,10 @@ function postFile(file: Blob, name: string, onPct: (pct: number) => void): Promi
 }
 
 /** Upload, then follow the server's reading until the model is ready. */
-export async function readIfc(file: File, onProgress: (p: ReadProgress) => void): Promise<UploadResponse> {
+export async function readIfc(
+  file: File,
+  onProgress: (p: ReadProgress) => void,
+): Promise<UploadResponse & { inventory?: Inventory }> {
   onProgress({ stage: "pakk", pct: 0 });
   const packed = await gzipped(file, (pct) => onProgress({ stage: "pakk", pct }));
   const { job_id } = await postFile(packed ?? file, packed ? `${file.name}.gz` : file.name, (pct) =>
@@ -231,13 +276,14 @@ export async function readIfc(file: File, onProgress: (p: ReadProgress) => void)
   }
 }
 
-export async function getRollup(uploadId: string, rules: RulesDict, signal?: AbortSignal): Promise<Rollup> {
-  return jsonOrThrow<Rollup>(
-    await fetch("/api/rollup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ upload_id: uploadId, rules }),
-      signal,
-    }),
+export function getRollup(uploadId: string, rules: RulesDict): Promise<Rollup> {
+  return cached("rollup", uploadId, rules, async () =>
+    jsonOrThrow<Rollup>(
+      await fetch("/api/rollup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ upload_id: uploadId, rules }),
+      }),
+    ),
   );
 }

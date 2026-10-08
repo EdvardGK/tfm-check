@@ -6,6 +6,7 @@ import {
 } from "../constants";
 import type { PartRule, Preset, PreviewValue, RulesDict } from "../types";
 import { Canvas, Fig, Lamp, Meter, RailOptions, RailSection, RailTile, StepBar } from "./Shell";
+import { MiniLoader } from "./Loader";
 import { useLiveAnswer } from "./live";
 import { usePreview } from "./usePreview";
 import { STATSBYGG_PATTERNS, fmt, verdictOf } from "./setup";
@@ -575,7 +576,10 @@ export default function FormatStep({
           <span className="lbl">Verdier</span>
           <span className="lbl num">{preview && countable ? `${fmt(preview.distinct)} ulike` : ""}</span>
         </div>
-        <div className="scroll">{valueRows}</div>
+        <div className="scroll">
+          {!preview && uploadId ? <MiniLoader /> : null}
+          {valueRows}
+        </div>
       </section>
 
       <section className="tile card minor vals" aria-label="Avvik">
