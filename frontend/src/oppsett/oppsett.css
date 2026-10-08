@@ -458,3 +458,17 @@
 #oppsett .pop .popbar { display: flex; align-items: center; gap: 6px; }
 #oppsett .pop .popbar .sp { flex: 1; }
 #oppsett .segw .seg { cursor: pointer; }
+
+/* ── Merkestreng: each variant its own card (number, blocks, its two lines, delete) ── */
+#oppsett .pcard {
+  position: relative; display: flex; flex-direction: column; gap: 8px; padding: 12px 40px 10px 44px;
+  border-radius: 12px; background: var(--color-panel); box-shadow: 0 0 0 1px var(--d-ring), var(--d-key-shadow);
+}
+#oppsett .pcard .pnum {
+  position: absolute; left: 12px; top: 12px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 700; background: var(--color-ink); color: var(--color-cream);
+}
+#oppsett .pcard .pat { padding-right: 0; }
+#oppsett .pcard .rowdel { top: 12px; right: 10px; transform: none; }
+#oppsett .pcard:hover .rowdel { opacity: 1; }
+#oppsett .pcard .patex { padding-top: 6px; box-shadow: inset 0 1px 0 var(--d-hair); }

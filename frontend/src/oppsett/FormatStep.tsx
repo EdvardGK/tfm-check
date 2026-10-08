@@ -937,19 +937,26 @@ export default function FormatStep({
                   </button>
                 </div>
               ) : null}
-              <div className="pat" onDragOver={overEnd(pi)} onDrop={onDrop}>
-                {p.sequence.map((t, ti) => (
-                  <Fragment key={ti}>
-                    {gap(pi, ti)}
-                    {segment(t, pi, ti)}
-                  </Fragment>
-                ))}
-                {gap(pi, p.sequence.length)}
+              <div className="pcard" aria-label={`Variant ${pi + 1}`}>
+                <span className="pnum">{pi + 1}</span>
                 {draft.patterns.length > 1 ? (
                   <button type="button" className="rowdel" aria-label="Fjern variant" title="Fjern variant" onClick={() => dropPattern(pi)}>
                     ✕
                   </button>
                 ) : null}
+                <div className="pat" onDragOver={overEnd(pi)} onDrop={onDrop}>
+                  {p.sequence.map((t, ti) => (
+                    <Fragment key={ti}>
+                      {gap(pi, ti)}
+                      {segment(t, pi, ti)}
+                    </Fragment>
+                  ))}
+                  {gap(pi, p.sequence.length)}
+                </div>
+                <div className="patex">
+                  <span className="mono">{exampleString(p.sequence, draft)}</span>
+                  <span className="mono tech">{techString(p.sequence, draft)}</span>
+                </div>
               </div>
             </Fragment>
           ))}
@@ -964,14 +971,6 @@ export default function FormatStep({
               +
             </button>
           </div>
-        </div>
-        <div className="patsum">
-          {draft.patterns.map((p, pi) => (
-            <div key={pi} className="patex">
-              <span className="mono">{exampleString(p.sequence, draft)}</span>
-              <span className="mono tech">{techString(p.sequence, draft)}</span>
-            </div>
-          ))}
         </div>
       </section>
 
