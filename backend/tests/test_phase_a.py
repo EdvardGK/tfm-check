@@ -144,6 +144,8 @@ def test_composed_preview(model):
     p = preview(index, parts_rules())
     assert p["valued"] == 4
     assert p["matched"] == 2
+    # +02=320.003-JP401 takes the first form, +02=360.017 the second.
+    assert p["pattern_hits"] == [1, 1]
     off = {o["v"]: o for o in p["off"]}
     assert off["+05.=360.001-JP4"]["fix"] == "+05=360.001-JP004"
     assert off["+04=360.001-SQ.001T"]["fix"] == ""

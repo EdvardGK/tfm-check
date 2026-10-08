@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { getPreview } from "../api";
 import {
   DISCIPLINES, FREETEXT_COLOR, FREETEXT_PREFIX, PART_COLORS, PART_EXAMPLE, PART_TO_DIGITKEY, PART_TYPES, SEP_KEYS,
@@ -499,7 +499,13 @@ export default function FormatStep({
         <span className="lbl">{current ? current.label : "Egendefinert"}</span>
         <div className="pats">
           {draft.patterns.map((p, pi) => (
-            <div key={pi} className="pat" onDragOver={overEnd(pi)} onDrop={onDrop}>
+            <Fragment key={pi}>
+            {pi > 0 ? (
+              <div className="orrow" aria-hidden="true">
+                <span className="lbl">eller</span>
+              </div>
+            ) : null}
+            <div className="pat" onDragOver={overEnd(pi)} onDrop={onDrop}>
               {p.sequence.map((t, ti) => segment(t, pi, ti))}
               {drag && drop?.pi === pi && drop.at === p.sequence.length ? <span className="dropmark" /> : null}
               {draft.patterns.length > 1 ? (
@@ -512,7 +518,13 @@ export default function FormatStep({
                   +
                 </button>
               ) : null}
+              <span className="phits num" title="Treff">
+                {preview?.pattern_hits && preview.pattern_hits.length === draft.patterns.length
+                  ? fmt(preview.pattern_hits[pi])
+                  : "–"}
+              </span>
             </div>
+            </Fragment>
           ))}
         </div>
         <div className="segtools">

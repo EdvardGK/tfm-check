@@ -220,6 +220,8 @@ export interface Preview {
   countable: boolean;
   valued: number;
   matched: number;
+  /** Elements whose code takes each form, in form order. */
+  pattern_hits?: number[];
   off: OffValue[];
   off_distinct: number;
   distinct: number;

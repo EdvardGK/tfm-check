@@ -353,13 +353,18 @@ def preview(index: ModelIndex, rules: TFMRules) -> dict:
     parsed: dict[str, dict | None] = {}
     spans: dict[str, list] = {}
 
+    # The form each value takes (the first that does), per value.
+    which: dict[str, int] = {}
+    pattern_hits = [0] * len(regexes)
+
     def parse(v: str):
         if v not in parsed:
             g = None
-            for rx in regexes:
+            for k, rx in enumerate(regexes):
                 m = rx.search(v)
                 if m:
                     g = m.groupdict()
+                    which[v] = k
                     # Where each part of the form falls in the value, for
                     # the Format step's coloured values.
                     spans[v] = [
@@ -412,6 +417,7 @@ def preview(index: ModelIndex, rules: TFMRules) -> dict:
             off[v] += 1
             continue
         matched += 1
+        pattern_hits[which[v]] += 1
         et = g.get("etasje")
         if et is not None:
             seen_floors[et] += 1
@@ -435,6 +441,8 @@ def preview(index: ModelIndex, rules: TFMRules) -> dict:
         "countable": values is not None,
         "valued": valued,
         "matched": matched,
+        # Elements whose code takes each form (any form passes).
+        "pattern_hits": pattern_hits,
         "off": [_off_entry(v, n, rules, regexes) for v, n in off.most_common(OFF_SHOWN)],
         "off_distinct": len(off),
         "distinct": len(counted),
