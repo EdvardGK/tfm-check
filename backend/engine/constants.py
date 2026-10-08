@@ -85,7 +85,8 @@ PART_TO_TEMPLATE = {
     "Adresse 2":  "{adresse}",
     "Typekode":   "{typekode}",
     "Typenr":     "{typenr}",
-    "Instansnr":  "{instansnr}",
+    # The same thing as Komp.nr (an occurrence number); kept so older files read.
+    "Instansnr":  "{kompnr}",
     "Kode":       "{kode}",
     "Nummer":     "{nummer}",
     "Typeundernr": "{typeundernr}",

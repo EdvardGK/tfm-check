@@ -156,6 +156,13 @@ class TFMRules:
         return form if form is not None else self._pattern_for_group(name)
 
     def _token_form(self, token: str, key: str) -> str:
+        if token == "Instansnr":
+            # The older instance segment: its own rule, else two digits.
+            own = rule_form((self.part_rules or {}).get("instansnr"))
+            if own is not None:
+                return own
+            n = (self.part_digits or {}).get("instansnr")
+            return r"\d{" + str(n) + "}" if isinstance(n, int) and n > 0 else r"\d{2}"
         if token.startswith(CONFIG_PREFIX):
             c = block_config(token)
             own = rule_form(clean_rule(c["rule"])) if c and c["rule"] else None

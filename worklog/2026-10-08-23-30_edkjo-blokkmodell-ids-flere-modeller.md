@@ -30,3 +30,8 @@ Branch `hi90-phase-a` (pushed), staging `https://test.tfm-sjekk.skiplum.com` (se
 - The Results page (Aksepter) is still single-model.
 - Phase B left: ifc-check mapping interchange; ST28 cleanup steps.
 - Production on skiplum.com waits for edkjo's live look on staging.
+
+## Reopened: Skilletegn as a data type, number names
+- Skilletegn is a data type, not a block kind: any block can take it (presets . - _ / + = ++ % ␣ or typed); no Skilletegn group in building blocks or the picker, the separator presets insert a block of that type.
+- Numbers named for what they number, «Nummer» while unset: Systemnr (RefPriSysNo1), Undernr (RefPriSysNo2), Forekomstnr (RefCompOccNo), Typenr (RefCompTypeNo1), Typeundernr (RefCompTypeNo2), Sløyfenr, Linjenr, Områdenr, Adressenr, or an own name.
+- Instansnr dropped: instance = occurrence, so HI90's `.06` in `%SQZ.008.06` is a Forekomstnr; the older instance segment reads as one (two digits by default).

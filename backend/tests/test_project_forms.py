@@ -106,6 +106,9 @@ def test_hi90_agilitek_forms(code):
     assert d.ok, d.reason
 
 
+# A Forekomstnr of two digits, as a block of its own.
+FOREKOMST2 = 'B:{"p": "Komp.nr", "r": {"kind": "pattern", "pattern": "\\\\d{2}"}}'
+
 # The HI90 BIM- og merkemanual, pset HI90_TFM, column «Eksempel».
 HI90_MANUAL = TFMRules.from_dict({
     "patterns": [
@@ -113,11 +116,11 @@ HI90_MANUAL = TFMRules.from_dict({
         {"sequence": ["=", "Systemkode", ".", "Løpenummer"]},
         # TFM Komponenttype-ID -SQZ008T
         {"sequence": ["-", "Komponent", "Komp.nr", "T-suffiks"]},
-        # TFM Komponentforekost-ID %SQZ.008.06
-        {"sequence": ["%", "Typekode", ".", "Typenr", ".", "Instansnr"]},
+        # TFM Komponentforekost-ID %SQZ.008.06: .06 is the Forekomstnr under type SQZ.008
+        {"sequence": ["%", "Typekode", ".", "Typenr", ".", FOREKOMST2]},
         # TFM-ID <>++ =360.014-SQZ033%SQZ.008.06 (no location in the example)
         {"sequence": ["T:<>", "++", "Lokasjon", "mellomrom", "=", "Systemkode", ".", "Løpenummer", "-",
-                      "Komponent", "Komp.nr", "%", "Typekode", ".", "Typenr", ".", "Instansnr"]},
+                      "Komponent", "Komp.nr", "%", "Typekode", ".", "Typenr", ".", FOREKOMST2]},
     ],
     "part_rules": {
         "komponent": {"kind": "pattern", "pattern": r"[A-ZÆØÅ]{1,3}"},
@@ -139,7 +142,7 @@ def test_hi90_tfm_id_parts_and_standard():
     d = diagnose("<>++ =360.014-SQZ033%SQZ.008.06", HI90_MANUAL)
     p = d.parts
     assert (p["systemkode"], p["lopenummer"], p["komponent"], p["kompnr"]) == ("360", "014", "SQZ", "033")
-    assert (p["typekode"], p["typenr"], p["instansnr"]) == ("SQZ", "008", "06")
+    assert (p["typekode"], p["typenr"], p["kompnr__2"]) == ("SQZ", "008", "06")
 
     class One:
         product_ids = [1]
@@ -160,3 +163,10 @@ def test_part_used_twice_in_one_form():
                             "part_rules": {"subnr": {"kind": "pattern", "pattern": r"\d{2}"}}})
     d = diagnose("04.10-RY045", r)
     assert d.ok and d.parts["subnr"] == "04" and d.parts["subnr__2"] == "10"
+
+
+
+def test_older_instance_segment_reads_as_forekomstnr():
+    r = TFMRules.from_dict({"patterns": [{"sequence": ["%", "Typekode", ".", "Typenr", ".", "Instansnr"]}]})
+    d = diagnose("%SQZ.008.06", r)
+    assert d.ok and d.parts["kompnr"] == "06"

@@ -19,15 +19,21 @@ export type PartType = (typeof PART_TYPES)[number];
  *  part (rules.part_labels). */
 export const PART_LABEL: Record<string, string> = {
   Lokasjon: "Plasserings-ID",
-  Løpenummer: "Nummer",
-  Subnr: "Undernummer",
+  // Numbers, named for what they number; «Nummer» is one not yet said.
+  Løpenummer: "Systemnr",
+  Subnr: "Undernr",
   Komponent: "Komponentkode",
   "Komp.nr": "Forekomstnr",
   Typekode: "Komponentkode (type)",
-  Typenr: "Komponenttypenummer",
-  Instansnr: "Instansnummer",
+  Typenr: "Typenr",
+  // The older instance segment is a Forekomstnr (instance = occurrence).
+  Instansnr: "Forekomstnr",
   Kode: "TFM-ID",
-  Typeundernr: "(Komponenttype)undernummer",
+  Typeundernr: "Typeundernr",
+  Sløyfe: "Sløyfenr",
+  Linje: "Linjenr",
+  Område: "Områdenr",
+  "Adresse 2": "Adressenr",
 };
 export const partLabel = (t: string, own?: Record<string, string>): string => {
   const key = PART_TEMPLATE_KEY[t];
@@ -52,12 +58,13 @@ export const PART_TECH: Record<string, string> = {
   Lokasjon: "RefPriSysLoc", Systemkode: "RefPriSysClass", Løpenummer: "RefPriSysNo1", Subnr: "RefPriSysNo2",
   Komponent: "RefCompClass", "Komp.nr": "RefCompOccNo", Typekode: "RefCompClass", Typenr: "RefCompTypeNo1",
   Etasje: "RefCompLocVer", Rom: "RefCompLocRoom", Kode: "RefString", Typeundernr: "RefCompTypeNo2",
+  Instansnr: "RefCompOccNo",
 };
 
 /** What a number block can represent: its segment token. The generic
  *  «Nummer» is a number not yet said (no specific part in the register). */
 export const NUMBER_ROLES: string[] = [
-  "Løpenummer", "Subnr", "Komp.nr", "Typenr", "Typeundernr", "Instansnr", "Område", "Linje", "Sløyfe", "Adresse 2",
+  "Løpenummer", "Subnr", "Komp.nr", "Typenr", "Typeundernr", "Sløyfe", "Linje", "Område", "Adresse 2",
 ];
 
 export const KIND_LABEL: Record<PartKind, string> = {

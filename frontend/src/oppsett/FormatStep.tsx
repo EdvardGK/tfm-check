@@ -92,7 +92,9 @@ const LISTS_FOR: Record<string, string[]> = {
   typekode: ["NS3457-8", "PA0802", "IEC81346"],
 };
 
-type DataType = "value" | "list" | "pattern";
+/** «sep» is Skilletegn: a data type, not a kind; a separator preset or typed. */
+type DataType = "value" | "list" | "pattern" | "sep";
+const SEP_PRESETS = [".", "-", "_", "/", "+", "=", "++", "%", " "];
 
 /** The rule a plain part block reads with from an older ruleset: its
  *  part_rules, a length lock, an older standard link, or the default form. */
@@ -200,7 +202,7 @@ function BlockConfig({ token, draft, onToken }: { token: string; draft: FormatDr
   // ---- A block that is not a part: a fixed value, accepted values, a pattern.
   if (!c || b.kind !== "part") {
     const values = b.kind === "list" ? b.values : b.kind === "fixed" ? [b.text] : [];
-    const type: DataType = b.kind === "list" ? "list" : b.kind === "pattern" ? "pattern" : "value";
+    const type: DataType = b.kind === "list" ? "list" : b.kind === "pattern" ? "pattern" : "sep";
     const toggle = (ch: string) => {
       const next = values.includes(ch) ? values.filter((v) => v !== ch) : [...values, ch];
       if (next.length) onToken(listToken(next));
@@ -214,30 +216,38 @@ function BlockConfig({ token, draft, onToken }: { token: string; draft: FormatDr
             value={type}
             onChange={(e) => {
               const t = e.target.value as DataType;
-              if (t === "value") onToken(fixedToken(values[0] || text || "."));
+              if (t === "sep") onToken(fixedToken(values[0] || text || "."));
               else if (t === "list") onToken(listToken(values.length ? values : ["."]));
             }}
           >
-            <option value="value">Fast verdi</option>
+            <option value="sep">Skilletegn</option>
             <option value="list">Liste</option>
             {type === "pattern" ? <option value="pattern">Mønster</option> : null}
           </select>
         </span>
-        {type === "value" ? (
-          <input
-            className="field mono"
-            aria-label="Verdi"
-            value={text}
-            autoFocus
-            onChange={(e) => {
-              setText(e.target.value);
-              if (e.target.value !== "") onToken(fixedToken(e.target.value));
-            }}
-          />
+        {type === "sep" ? (
+          <>
+            <span className="rchips">
+              {SEP_PRESETS.map((ch) => (
+                <button key={ch} type="button" className="mini mono" aria-pressed={values[0] === ch} onClick={() => onToken(fixedToken(ch))}>
+                  {show(ch)}
+                </button>
+              ))}
+            </span>
+            <input
+              className="field mono"
+              aria-label="Skilletegn"
+              value={text}
+              onChange={(e) => {
+                setText(e.target.value);
+                if (e.target.value !== "") onToken(fixedToken(e.target.value));
+              }}
+            />
+          </>
         ) : null}
         {type === "list" ? (
           <span className="rchips">
-            {Object.values(SEP_TO_CHAR).map((ch) => (
+            {SEP_PRESETS.map((ch) => (
               <button key={ch} type="button" className="mini mono" aria-pressed={values.includes(ch)} onClick={() => toggle(ch)}>
                 {show(ch)}
               </button>
@@ -261,6 +271,7 @@ function BlockConfig({ token, draft, onToken }: { token: string; draft: FormatDr
   const type: DataType = c.rule.kind === "value" ? "value" : c.rule.kind === "pattern" ? "pattern" : "list";
   const types: DataType[] = kind === "klassifikasjon" ? ["list", "value"] : kind === "lopenummer" ? ["pattern"] : ["value"];
   if (!types.includes(type)) types.push(type);
+  types.push("sep");
   const presets = kind === "lopenummer" ? PATTERN_PRESETS.filter(([, rx]) => rx.startsWith("\\d")) : PATTERN_PRESETS;
   const listKey = c.rule.kind === "standard" ? c.rule.standard : "";
   const pick = c.rule.kind === "pattern" ? (presets.some(([, r]) => r === (c.rule as { pattern: string }).pattern) ? c.rule.pattern : "custom") : "";
@@ -306,6 +317,7 @@ function BlockConfig({ token, draft, onToken }: { token: string; draft: FormatDr
             value={type}
             onChange={(e) => {
               const t = e.target.value as DataType;
+              if (t === "sep") return onToken(fixedToken("."));
               if (t === "value") write({ rule: { kind: "value", value: text || ruleExample(c.part, c.rule) } });
               else if (t === "list") {
                 const lists = LISTS_FOR[key] ?? [];
@@ -315,7 +327,7 @@ function BlockConfig({ token, draft, onToken }: { token: string; draft: FormatDr
           >
             {types.map((t) => (
               <option key={t} value={t}>
-                {t === "value" ? "Fast verdi" : t === "list" ? "Liste" : "Mønster"}
+                {t === "value" ? "Fast verdi" : t === "list" ? "Liste" : t === "sep" ? "Skilletegn" : "Mønster"}
               </option>
             ))}
           </select>
@@ -812,7 +824,6 @@ export default function FormatStep({
                 </span>
               </Fragment>
             ))}
-            <span className="lbl">{KIND_LABEL.skilletegn}</span>
             <span className="palette">
               {SEP_KEYS.map((k) => (
                 <button
@@ -976,7 +987,6 @@ export default function FormatStep({
             </div>
           </Fragment>
         ))}
-        <span className="lbl">{KIND_LABEL.skilletegn}</span>
         <div className="palette">
           {SEP_KEYS.map((k) => piece(k, SEP_TO_CHAR[k] === " " ? "␣" : SEP_TO_CHAR[k], undefined, "mini mono"))}
           {piece("T-suffiks", "T", undefined, "mini mono")}

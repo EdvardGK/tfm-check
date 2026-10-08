@@ -27,10 +27,13 @@ from .rules import TFMRules, base_part
 
 # Template part name (lokasjon) -> the part's display name (Lokasjon).
 # A part's display name: the token, except where the UI says it longer.
+# Numbers are named for what they number (edkjo): Systemnr, Undernr,
+# Forekomstnr, Typenr, Typeundernr, Sløyfenr …; «Nummer» is one not yet said.
 PART_LABEL = {
-    "Lokasjon": "Plasserings-ID", "Løpenummer": "Nummer", "Subnr": "Undernummer", "Komponent": "Komponentkode",
-    "Komp.nr": "Forekomstnr", "Typekode": "Komponentkode (type)", "Typenr": "Komponenttypenummer",
-    "Instansnr": "Instansnummer", "Kode": "TFM-ID", "Typeundernr": "(Komponenttype)undernummer",
+    "Lokasjon": "Plasserings-ID", "Løpenummer": "Systemnr", "Subnr": "Undernr", "Komponent": "Komponentkode",
+    "Komp.nr": "Forekomstnr", "Typekode": "Komponentkode (type)", "Typenr": "Typenr",
+    "Instansnr": "Forekomstnr", "Kode": "TFM-ID", "Typeundernr": "Typeundernr",
+    "Sløyfe": "Sløyfenr", "Linje": "Linjenr", "Område": "Områdenr", "Adresse 2": "Adressenr",
 }
 PART_NAME = {PLACEHOLDER_RE.search(t).group(1): PART_LABEL.get(p, p) for p, t in PART_TO_TEMPLATE.items()}
 
