@@ -30,6 +30,8 @@ LINKABLE = {
     "komponent": ("NS3457-8", "PA0802", "IEC81346"),
     "typekode": ("NS3457-8", "PA0802", "IEC81346"),
 }
+# Any part may take a standard list as its data type.
+ANY_PART = ("NS3451", "NS3457-8", "PA0802", "IEC81346")
 # A list entry that exists but is not to be used.
 _AVOID = "bør ikke benyttes"
 
@@ -98,7 +100,7 @@ def links(rules) -> dict[str, str]:
     if rules.komponent_system in LINKABLE["komponent"]:
         out["komponent"] = rules.komponent_system
     for part, key in (getattr(rules, "part_links", None) or {}).items():
-        if key in LINKABLE.get(part, ()):
+        if key in LINKABLE.get(part, ANY_PART):
             out[part] = key
     return out
 

@@ -158,6 +158,20 @@ def freetext_value(item: str) -> str:
     return item[len(FREETEXT_PREFIX):] if is_freetext(item) else item
 
 
+def _other_block(item: str) -> str:
+    """A list block as its first value, a pattern block as «…»."""
+    if item.startswith("SL:"):
+        try:
+            import json
+            vals = json.loads(item[3:])
+            return str(vals[0]) if vals else ""
+        except (ValueError, TypeError, IndexError):
+            return ""
+    if item.startswith("SR:"):
+        return "…"
+    return ""
+
+
 def sequence_to_template(seq: list[str]) -> str:
     parts = []
     for item in seq:
@@ -167,6 +181,8 @@ def sequence_to_template(seq: list[str]) -> str:
             parts.append(SEP_TO_CHAR[item])
         elif is_freetext(item):
             parts.append(freetext_value(item))
+        else:
+            parts.append(_other_block(item))
     return "".join(parts)
 
 
@@ -179,4 +195,6 @@ def sequence_to_example(seq: list[str]) -> str:
             parts.append(SEP_TO_CHAR[item])
         elif is_freetext(item):
             parts.append(freetext_value(item))
+        else:
+            parts.append(_other_block(item))
     return "".join(parts)

@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from .constants import (
     PART_TO_TEMPLATE, PLACEHOLDER_RE, SEP_TO_CHAR, freetext_value, is_freetext,
 )
+from .blocks import block_display, block_of, list_regex, safe_regex
 from .rules import TFMRules
 
 # Template part name (lokasjon) -> the part's display name (Lokasjon).
@@ -56,6 +57,9 @@ def part_rule(name: str, rules: TFMRules) -> str:
         if own["kind"] == "list":
             vals = own["values"]
             return "en av " + ", ".join(vals[:6]) + (" …" if len(vals) > 6 else "")
+        if own["kind"] == "standard":
+            from .standards import STANDARDS
+            return f"en kode i {STANDARDS[own['standard']][1]}"
         return f"mønsteret {own['pattern']}"
     n = (rules.part_digits or {}).get(name)
     if isinstance(n, int) and n > 0:
@@ -66,20 +70,30 @@ def part_rule(name: str, rules: TFMRules) -> str:
     return _PART_RULE.get(name, "")
 
 
-def _tokens(sequence: list[str]) -> list[tuple[str, str]]:
-    """("part", name) | ("lit", text), adjacent literals merged."""
-    out: list[tuple[str, str]] = []
+def _tokens(sequence: list[str]):
+    """("part", key) | ("lit", text) | ("alt", {rx, show, fix}), adjacent
+    fixed values merged. A list block's fix is its first value; a pattern
+    block has none."""
+    out: list = []
     for t in sequence:
-        if t in PART_TO_TEMPLATE:
-            out.append(("part", PLACEHOLDER_RE.search(PART_TO_TEMPLATE[t]).group(1)))
+        b = block_of(t)
+        if b is None:
             continue
-        text = SEP_TO_CHAR.get(t) if t in SEP_TO_CHAR else (freetext_value(t) if is_freetext(t) else "")
-        if not text:
-            continue
-        if out and out[-1][0] == "lit":
-            out[-1] = ("lit", out[-1][1] + text)
+        kind, v = b
+        if kind == "part":
+            out.append(("part", v))
+        elif kind == "fixed":
+            if not v:
+                continue
+            if out and out[-1][0] == "lit":
+                out[-1] = ("lit", out[-1][1] + v)
+            else:
+                out.append(("lit", v))
+        elif kind == "list":
+            sep = bool(v) and all(not ch.isalnum() for x in v for ch in x)
+            out.append(("alt", {"rx": list_regex(v), "show": block_display(b), "fix": v[0] if v else None, "sep": sep}))
         else:
-            out.append(("lit", text))
+            out.append(("alt", {"rx": safe_regex(v), "show": block_display(b), "fix": None, "sep": False}))
     return out
 
 
@@ -92,6 +106,15 @@ def _lenient(tokens, loose_seps: bool) -> re.Pattern:
                 src.append(f"({_SEP_CLASS}{{{len(val)}}})")
             else:
                 src.append(f"({re.escape(val)})")
+            continue
+        if kind == "alt":
+            # Read loosely, any short text stands where the block is.
+            if not loose_seps:
+                src.append(f"({val['rx']})")
+            else:
+                # Read loosely: where accepted separators stand, any other
+                # separator; else any short text.
+                src.append("([^A-Za-z0-9ÆØÅæøå]{1,4})" if val["sep"] else "(.{1,4}?)")
             continue
         nxt = tokens[i + 1] if i + 1 < len(tokens) else None
         if nxt is not None and nxt[0] == "part":
@@ -132,6 +155,16 @@ def _read(code: str, tokens, rules: TFMRules, loose_seps: bool):
     reasons, fixed, parts, bad = [], [], {}, 0
     unfixable = 0
     for (kind, val), got in zip(tokens, m.groups()):
+        if kind == "alt":
+            if re.fullmatch(val["rx"], got):
+                fixed.append(got)
+                continue
+            bad += 1
+            reasons.append(f"«{got}» der formatet har {val['show']}")
+            if val["fix"] is None:
+                unfixable += 1
+            fixed.append(val["fix"] if val["fix"] is not None else got)
+            continue
         if kind == "lit":
             if got != val:
                 bad += 1

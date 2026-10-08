@@ -5,9 +5,10 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field, asdict
 
+from .blocks import STANDARD_FORM, block_of, list_regex, safe_regex
 from .constants import (
     APP_VERSION, DEFAULT_SEQUENCE, DISCIPLINES, DIGIT_LOCKABLE_PARTS,
-    PLACEHOLDER_FALLBACK, PLACEHOLDER_RE, sequence_to_template,
+    PLACEHOLDER_FALLBACK, sequence_to_template,
 )
 
 
@@ -59,6 +60,8 @@ def clean_rule(r) -> dict | None:
         vals = [str(v).strip() for v in (r.get("values") or []) if str(v).strip()]
         if vals:
             return {"kind": "list", "values": list(dict.fromkeys(vals))}
+    if kind == "standard" and r.get("standard") in STANDARD_FORM:
+        return {"kind": "standard", "standard": r["standard"]}
     return None
 
 
@@ -71,20 +74,10 @@ def rule_form(r: dict | None) -> str | None:
     if r["kind"] == "value":
         return re.escape(r["value"])
     if r["kind"] == "list":
-        vals = sorted(r["values"], key=len, reverse=True)
-        return "(?:" + "|".join(re.escape(v) for v in vals) + ")"
-    p = r["pattern"]
-    if p.startswith("^"):
-        p = p[1:]
-    if p.endswith("$") and not p.endswith("\\$"):
-        p = p[:-1]
-    try:
-        re.compile(p)
-        if re.compile(p).groupindex:
-            return NEVER
-    except re.error:
-        return NEVER
-    return "(?:" + p + ")"
+        return list_regex(r["values"])
+    if r["kind"] == "standard":
+        return STANDARD_FORM[r["standard"]]
+    return safe_regex(r["pattern"])
 
 
 def compose(values: dict[str, str]) -> str:
@@ -158,19 +151,29 @@ class TFMRules:
         return [sequence_to_template(p.get("sequence", [])) for p in self.patterns]
 
     def regexes(self) -> list[re.Pattern]:
+        """Each form's blocks in order, nothing implied between them: a part
+        as a named group, a fixed value literally, a list as its values, a
+        pattern as itself."""
         out = []
-        for s in self.structures():
-            parts, i = [], 0
+        for p in self.patterns:
+            src = []
             used: dict[str, int] = {}
-            for m in PLACEHOLDER_RE.finditer(s):
-                parts.append(re.escape(s[i:m.start()]))
-                name = m.group(1)
-                used[name] = used.get(name, 0) + 1
-                group = name if used[name] == 1 else f"{name}__{used[name]}"
-                parts.append(f"(?P<{group}>{self._pattern_for_group(name)})")
-                i = m.end()
-            parts.append(re.escape(s[i:]))
-            out.append(re.compile("^" + "".join(parts)))
+            for token in p.get("sequence") or []:
+                b = block_of(token)
+                if b is None:
+                    continue
+                kind, v = b
+                if kind == "part":
+                    used[v] = used.get(v, 0) + 1
+                    group = v if used[v] == 1 else f"{v}__{used[v]}"
+                    src.append(f"(?P<{group}>{self._pattern_for_group(v)})")
+                elif kind == "fixed":
+                    src.append(re.escape(v))
+                elif kind == "list":
+                    src.append(list_regex(v))
+                else:
+                    src.append(safe_regex(v))
+            out.append(re.compile("^" + "".join(src)))
         return out
 
     def full_regexes(self) -> list[re.Pattern]:
@@ -234,4 +237,18 @@ class TFMRules:
             part_links={str(k): str(v) for k, v in (data.get("part_links") or {}).items() if v},
             part_rules={str(k): r for k, r in ((k, clean_rule(v)) for k, v in
                                                (data.get("part_rules") or {}).items()) if r},
-        )
+        )._with_rule_links()
+
+    def _with_rule_links(self) -> "TFMRules":
+        """A part whose data type is a standard list is linked to it (the
+        older fields bygningsdel_system / komponent_system / part_links)."""
+        for part, r in (self.part_rules or {}).items():
+            if r.get("kind") != "standard":
+                continue
+            if part == "systemkode":
+                self.bygningsdel_system = r["standard"]
+            elif part == "komponent":
+                self.komponent_system = r["standard"]
+            else:
+                self.part_links = {**(self.part_links or {}), part: r["standard"]}
+        return self
