@@ -14,6 +14,10 @@ from .shape import Diagnosis, diagnose
 from .standards import STANDARDS, Validity, check_code, links
 
 
+_LOOSE_SYSTEM = re.compile(r"=(\d{2,4})(?:\.(\d{1,4}))?(?![\d])")
+_LOOSE_COMPONENT = re.compile(r"-([A-Za-zÆØÅæøå]{1,4})(?=[\d.\s]|$)")
+
+
 @dataclass
 class Coded:
     pid: int
@@ -60,6 +64,19 @@ def coded_objects(index: ModelIndex, rules: TFMRules) -> tuple[list[Coded], int]
                 form = forms.get(name) or forms.setdefault(name, rules.part_form(name))
                 if re.fullmatch(form, text):
                     parts[name] = text
+            # Off the form, the system and component codes are still read
+            # behind their PA 0802 signs (=360.001, -SFZ.004T), so the rollup
+            # and the standard check see every code that appears.
+            if "systemkode" not in parts:
+                m = _LOOSE_SYSTEM.search(code)
+                if m:
+                    parts["systemkode"] = m.group(1)
+                    if m.group(2) and "lopenummer" not in parts:
+                        parts["lopenummer"] = m.group(2)
+            if "komponent" not in parts:
+                m = _LOOSE_COMPONENT.search(code)
+                if m:
+                    parts["komponent"] = m.group(1)
             validity = {}
             for part, key in links(rules).items():
                 if part in parts:

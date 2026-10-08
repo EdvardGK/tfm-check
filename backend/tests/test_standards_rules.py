@@ -164,3 +164,28 @@ def test_upload_job_reads_and_indexes(model):
     up = main.store.get(j["result"]["upload_id"])
     assert up is not None and up.index is not None
     assert not Path(path).exists()
+
+
+class _Codes:
+    """The index surface coded_objects reads."""
+
+    def __init__(self, codes):
+        self.product_ids = list(codes)
+        self.type_of = {}
+        self._codes = codes
+
+    def code_values(self, rules):
+        return self._codes
+
+
+def test_codes_off_the_form_still_roll_up():
+    r = rules()
+    coded, _ = coded_objects(_Codes({1: "-SFZ.004T", 2: "+04=360.001-KRA.016", 3: "+04-QLB.04T"}), r)
+    by = {c.pid: c for c in coded}
+    assert by[1].parts["komponent"] == "SFZ"
+    assert by[2].parts["komponent"] == "KRA" and by[2].parts["systemkode"] == "360"
+    assert by[3].parts["komponent"] == "QLB"
+    roll = rollup(coded, r)
+    comp = {c["code"]: c for c in roll["components"]}
+    assert comp["KRA"]["valid"] is True and comp["KRA"]["description"] == "Rør for væske"
+    assert comp["SFZ"]["valid"] is False
