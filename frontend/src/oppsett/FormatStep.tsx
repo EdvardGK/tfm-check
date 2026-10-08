@@ -573,20 +573,19 @@ export default function FormatStep({
     const seq = draft.patterns[pi]?.sequence ?? [];
     place({ token }, pi, sel ? sel.ti + 1 : seq.length);
   };
-  const remove = () => {
-    if (!sel) return;
+  const removeAt = (pi: number, ti: number) => {
     setPatterns((ps) => {
-      ps[sel.pi].splice(sel.ti, 1);
+      ps[pi].splice(ti, 1);
       return ps;
     });
-    const len = draft.patterns[sel.pi].sequence.length - 1;
-    setSel(len > 0 ? { pi: sel.pi, ti: Math.min(sel.ti, len - 1) } : null);
+    setCfg(null);
+    setSel(null);
   };
-  const move = (by: number) => {
-    if (!sel) return;
-    const to = sel.ti + by;
-    if (to < 0 || to >= draft.patterns[sel.pi].sequence.length) return;
-    place(sel, sel.pi, by > 0 ? to + 1 : to);
+  const moveAt = (pi: number, ti: number, by: number) => {
+    const to = ti + by;
+    if (to < 0 || to >= draft.patterns[pi].sequence.length) return;
+    place({ pi, ti }, pi, by > 0 ? to + 1 : to);
+    setCfg({ pi, ti: to });
   };
   /** A new, empty variant at `at` (between rows or after the last). */
   const addPatternAt = (at: number) => {
@@ -641,8 +640,13 @@ export default function FormatStep({
 
 
   const segment = (t: string, pi: number, ti: number) => {
-    const pressed = sel?.pi === pi && sel.ti === ti;
-    const onClick = () => setSel(pressed ? null : { pi, ti });
+    const open = cfg?.pi === pi && cfg.ti === ti;
+    const onClick = () => {
+      setPicker(null);
+      setCfg(open ? null : { pi, ti });
+      // A building block clicked meanwhile lands after this one.
+      setSel(open ? null : { pi, ti });
+    };
     const mark = drop?.pi === pi ? (drop.at === ti ? "before" : drop.at === ti + 1 ? "after" : undefined) : undefined;
     const dnd = {
       draggable: true,
@@ -655,7 +659,6 @@ export default function FormatStep({
     };
     const b = blockOf(t);
     const v = blockView(t, draft);
-    const open = cfg?.pi === pi && cfg.ti === ti;
     const sep = !v.part;
     const caret = (
       <button
@@ -676,7 +679,15 @@ export default function FormatStep({
     const c = sep ? SEP_COLOR_STYLE : paint(b && b.kind === "part" ? (PART_COLORS[b.part] ?? FREETEXT_COLOR) : FREETEXT_COLOR);
     return (
       <span key={ti} className={"segw" + (sep ? " sepw" : "")} data-open={open || undefined}>
-        <button type="button" className={"seg" + (sep ? " sep" : "")} aria-pressed={pressed} onClick={onClick} style={c} {...dnd}>
+        <button
+          type="button"
+          className={"seg" + (sep ? " sep" : "")}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          onClick={onClick}
+          style={c}
+          {...dnd}
+        >
           {v.part ? <span className="sn">{v.name}</span> : null}
           <span className="sx">{sep ? show(v.ex) || "–" : v.ex}</span>
           {v.tech ? <span className="tech">{v.tech}</span> : null}
@@ -685,6 +696,23 @@ export default function FormatStep({
         {open ? (
           <FloatingPop anchor={`[data-cfg="${pi}-${ti}"]`} label="Innstillinger">
             <span className="popbar">
+              <button type="button" className="mini" disabled={ti === 0} onClick={() => moveAt(pi, ti, -1)} aria-label="Flytt til venstre" title="Flytt til venstre">
+                ‹
+              </button>
+              <button
+                type="button"
+                className="mini"
+                disabled={ti >= (draft.patterns[pi]?.sequence.length ?? 0) - 1}
+                onClick={() => moveAt(pi, ti, 1)}
+                aria-label="Flytt til høyre"
+                title="Flytt til høyre"
+              >
+                ›
+              </button>
+              <button type="button" className="mini" onClick={() => removeAt(pi, ti)} aria-label="Fjern" title="Fjern">
+                Fjern
+              </button>
+              <span className="sp" />
               <button type="button" className="mini" aria-label="Lukk" onClick={() => setCfg(null)}>
                 ✕
               </button>
@@ -933,23 +961,6 @@ export default function FormatStep({
               <span className="mono tech">{techString(p.sequence, draft)}</span>
             </div>
           ))}
-        </div>
-        <div className="segtools">
-          <button type="button" className="mini" disabled={!sel || sel.ti === 0} onClick={() => move(-1)} aria-label="Flytt til venstre">
-            ‹
-          </button>
-          <button
-            type="button"
-            className="mini"
-            disabled={!sel || sel.ti >= (draft.patterns[sel.pi]?.sequence.length ?? 0) - 1}
-            onClick={() => move(1)}
-            aria-label="Flytt til høyre"
-          >
-            ›
-          </button>
-          <button type="button" className="mini" disabled={!sel} onClick={remove} aria-label="Fjern">
-            ✕
-          </button>
         </div>
       </section>
 
