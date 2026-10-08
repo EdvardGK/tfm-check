@@ -472,3 +472,9 @@
 #oppsett .pcard .rowdel { top: 12px; right: 10px; transform: none; }
 #oppsett .pcard:hover .rowdel { opacity: 1; }
 #oppsett .pcard .patex { padding-top: 6px; box-shadow: inset 0 1px 0 var(--d-hair); }
+
+/* ── Rules in check order: «Regel N», move up/down ── */
+#oppsett .pcard { padding-top: 40px; padding-left: 14px; }
+#oppsett .pcard .pnum { width: auto; height: 22px; padding: 0 10px; border-radius: var(--d-pill); left: 12px; top: 10px; }
+#oppsett .pcard .pmove { position: absolute; left: 92px; top: 8px; display: flex; gap: 4px; }
+#oppsett .pcard .pmove .mini { height: 24px; min-width: 24px; padding: 0 6px; font-size: 10px; }

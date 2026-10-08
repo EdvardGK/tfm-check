@@ -36,7 +36,10 @@ class Coded:
         return all(v.ok for v in self.validity.values())
 
     def reason(self) -> str:
-        out = [self.diag.reason] if self.diag.reason else []
+        r = self.diag.reason
+        if r and self.diag.closest is not None:
+            r = f"Regel {self.diag.closest}: {r}"
+        out = [r] if r else []
         out += [v.reason for v in self.validity.values() if not v.ok]
         return "; ".join(out)
 

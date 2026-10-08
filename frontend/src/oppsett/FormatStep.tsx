@@ -612,6 +612,18 @@ export default function FormatStep({
     setPatterns((ps) => ps.filter((_, i) => i !== pi));
     setSel(null);
   };
+  /** A rule moved up or down the check order. */
+  const movePattern = (pi: number, by: number) => {
+    const to = pi + by;
+    if (to < 0 || to >= draft.patterns.length) return;
+    setPatterns((ps) => {
+      const [x] = ps.splice(pi, 1);
+      ps.splice(to, 0, x);
+      return ps;
+    });
+    setCfg(null);
+    setSel(null);
+  };
 
   // ---- Drag and drop ----
   const startDrag = (src: Drag) => (e: DragEvent) => {
@@ -931,14 +943,31 @@ export default function FormatStep({
             <Fragment key={pi}>
               {pi > 0 ? (
                 <div className="orrow">
-                  <span className="lbl">eller</span>
+                  <span className="lbl">↓ ellers</span>
                   <button type="button" className="bub" aria-label="Ny variant" title="Ny variant" onClick={() => addPatternAt(pi)}>
                     +
                   </button>
                 </div>
               ) : null}
               <div className="pcard" aria-label={`Variant ${pi + 1}`}>
-                <span className="pnum">{pi + 1}</span>
+                <span className="pnum">Regel {pi + 1}</span>
+                {draft.patterns.length > 1 ? (
+                  <span className="pmove">
+                    <button type="button" className="mini" disabled={pi === 0} onClick={() => movePattern(pi, -1)} aria-label="Flytt opp" title="Flytt opp">
+                      ▲
+                    </button>
+                    <button
+                      type="button"
+                      className="mini"
+                      disabled={pi === draft.patterns.length - 1}
+                      onClick={() => movePattern(pi, 1)}
+                      aria-label="Flytt ned"
+                      title="Flytt ned"
+                    >
+                      ▼
+                    </button>
+                  </span>
+                ) : null}
                 {draft.patterns.length > 1 ? (
                   <button type="button" className="rowdel" aria-label="Fjern variant" title="Fjern variant" onClick={() => dropPattern(pi)}>
                     ✕

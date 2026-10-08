@@ -113,3 +113,15 @@ def test_own_named_numbers_are_parts_of_their_own():
     assert d.ok and d.parts["n_sloyfe"] == "08" and d.parts["n_linje"] == "5"
     d = diagnose("=542.501.8.5-RY012", r)
     assert not d.ok and "Sløyfe «8», skal være" in d.reason and d.fix == "=542.501.08.5-RY012"
+
+
+
+def test_rules_in_order_first_match_wins():
+    r = TFMRules.from_dict({"patterns": [
+        {"sequence": ["=", "Systemkode", ".", "Løpenummer", "-", "Komponent", "Komp.nr"]},
+        {"sequence": ["=", "Systemkode", ".", "Løpenummer"]},
+    ]})
+    assert diagnose("=360.001-JP401", r).rule == 1
+    assert diagnose("=360.001", r).rule == 2
+    d = diagnose("=360.1", r)
+    assert not d.ok and d.rule is None and d.closest == 2

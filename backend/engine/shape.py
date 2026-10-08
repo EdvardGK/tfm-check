@@ -168,6 +168,10 @@ class Diagnosis:
     fix: str = ""
     # The parts as read (strict when ok, loose otherwise), by template name.
     parts: dict | None = None
+    # The rule (1-based, in check order) the code passed on; None: none.
+    rule: int | None = None
+    # A failing code: the rule its reason is from (the closest one).
+    closest: int | None = None
 
 
 def _fix_part(name: str, text: str, form: re.Pattern) -> str:
@@ -250,16 +254,18 @@ def _missing(code: str, tokens) -> list[str]:
 
 
 def diagnose(code: str, rules: TFMRules, regexes: list[re.Pattern] | None = None) -> Diagnosis:
-    """One code against the rule set's forms."""
+    """One code against the rules, in order: rule 1, then 2 …; it passes on
+    the first it takes. A code taking none fails, with the reason from the
+    rule it comes closest to."""
     full = regexes if regexes is not None else rules.full_regexes()
-    for rx in full:
+    for k, rx in enumerate(full):
         m = rx.match(code)
         if m:
-            return Diagnosis(ok=True, parts=m.groupdict())
+            return Diagnosis(ok=True, parts=m.groupdict(), rule=k + 1)
 
     stripped = code.strip()
-    best = None  # (score, reasons, fixed, parts, full regex)
-    for p, rx in zip(rules.patterns, full):
+    best = None  # (score, reasons, fixed, parts, full regex, rule)
+    for k, (p, rx) in enumerate(zip(rules.patterns, full)):
         tokens = _tokens(p.get("sequence") or [])
         if not tokens:
             continue
@@ -272,18 +278,19 @@ def diagnose(code: str, rules: TFMRules, regexes: list[re.Pattern] | None = None
                 reasons = ["mellomrom før eller etter koden", *reasons]
             score = bad + (1 if loose else 0)
             if best is None or score < best[0]:
-                best = (score, reasons, fixed, parts, rx)
+                best = (score, reasons, fixed, parts, rx, k + 1)
             break
     if best is not None:
-        _, reasons, fixed, parts, rx = best
+        _, reasons, fixed, parts, rx, k = best
         fix = fixed if fixed != code and rx.match(fixed) else ""
-        return Diagnosis(ok=False, reason="; ".join(reasons) or "avviker fra formatet", fix=fix, parts=parts)
+        return Diagnosis(ok=False, reason="; ".join(reasons) or "avviker fra formatet", fix=fix, parts=parts,
+                         closest=k)
 
     # Not readable against any form: the separators it lacks.
-    lacks = None
-    for p in rules.patterns:
+    lacks, at = None, None
+    for k, p in enumerate(rules.patterns):
         miss = _missing(stripped, _tokens(p.get("sequence") or []))
         if miss and (lacks is None or len(miss) < len(lacks)):
-            lacks = miss
+            lacks, at = miss, k + 1
     reason = ("mangler " + ", ".join(lacks)) if lacks else "avviker fra formatet"
-    return Diagnosis(ok=False, reason=reason)
+    return Diagnosis(ok=False, reason=reason, closest=at)

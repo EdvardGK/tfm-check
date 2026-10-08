@@ -477,7 +477,8 @@ def preview(index: ModelIndex, rules: TFMRules) -> dict:
 
 def _off_entry(v: str, n: int, rules: TFMRules, regexes) -> dict:
     d = diagnose(v, rules, regexes)
-    return {"v": v[:80], "n": n, "reason": d.reason, "fix": d.fix}
+    reason = f"Regel {d.closest}: {d.reason}" if d.closest is not None and d.reason else d.reason
+    return {"v": v[:80], "n": n, "reason": reason, "fix": d.fix}
 
 
 # =============================================================================

@@ -23,7 +23,7 @@ from .rules import ASPECTS, TFMRules
 
 KODE = "Kode som funnet"
 COLUMNS_AFTER = [
-    "Kilde", "Gyldig format", "Gyldig i standard", "Årsak", "Ny kode", "Status", "MMI",
+    "Kilde", "Gyldig format", "Regel", "Gyldig i standard", "Årsak", "Ny kode", "Status", "MMI",
     "Modellkobling (fil)", "GlobalId", "IFC-klasse", "Etasje (modell)",
     "Fag", "Systemkode", "Beskrivelse system", "Komponentkode", "Beskrivelse komponent",
     "IfcSystem", "Avvik",
@@ -126,6 +126,7 @@ def register_rows(ifc, products, index: ModelIndex, rules: TFMRules,
         row.update({
             "Kilde": "modell",
             "Gyldig format": "ja" if c.diag.ok else "nei",
+            "Regel": c.diag.rule if c.diag.ok else "ingen",
             "Gyldig i standard": _yn(c.std_ok),
             "Årsak": c.reason(),
             "Ny kode": c.diag.fix,
