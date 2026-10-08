@@ -27,6 +27,7 @@ DISCIPLINES = {
     "RIB":   dict(label="RIB — Bygg",      ns_range=["2"]),
     "ARK":   dict(label="ARK — Arkitekt",  ns_range=["2", "7"]),
     "RIBR":  dict(label="RIBR — Brann",    ns_range=["5"]),
+    "RIA":   dict(label="RIA — Automasjon", ns_range=[]),
     "Annet": dict(label="Annet / ukjent",  ns_range=[]),
 }
 
@@ -87,6 +88,8 @@ STATSBYGG_SEQUENCE = [
     "Systemkode", ".", "Løpenummer", "-",
     "Komponent", "Komp.nr",
 ]
+# ... and a system without a component: +123456=360.001
+STATSBYGG_SYSTEM_SEQUENCE = ["+", "Lokasjon", "=", "Systemkode", ".", "Løpenummer"]
 
 # PA-0802 rev.3 canonical forms (looser project-extension fallbacks where the
 # standard doesn't specify). Etasje/Subnr/Rom are project-local — kept loose.

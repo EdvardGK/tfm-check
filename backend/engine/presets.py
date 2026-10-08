@@ -21,6 +21,8 @@ PRESETS: list[dict] = [
         "description": "Statsbygg TFM rev.3 kanonisk form med lokasjon og systemledd.",
         "example": "+123456=244.001-DI001",
         "sequence": ["+", "Lokasjon", "=", "Systemkode", ".", "Løpenummer", "-", "Komponent", "Komp.nr"],
+        # PA 0802 also codes a system without a component: +123456=244.001.
+        "extra_sequences": [["+", "Lokasjon", "=", "Systemkode", ".", "Løpenummer"]],
         "bygningsdel_system": "NS3451",
         "komponent_system": "IEC81346",
         "part_digits": {},
@@ -94,7 +96,8 @@ def preset_to_rules_dict(preset: dict) -> dict:
         "discipline_key": preset.get("discipline", "Annet"),
         "bygningsdel_system": preset.get("bygningsdel_system", "NS3451"),
         "komponent_system": preset.get("komponent_system", "IEC81346"),
-        "patterns": [{"sequence": list(preset["sequence"])}],
+        "patterns": [{"sequence": list(preset["sequence"])}]
+        + [{"sequence": list(x)} for x in preset.get("extra_sequences") or []],
         "part_digits": dict(preset.get("part_digits") or {}),
     }
 

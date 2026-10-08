@@ -21,10 +21,54 @@ from collections import Counter
 
 import ifcopenshell.util.unit
 
-from .rules import TFMRules, loose_component
+from .rules import ASPECTS, TFMRules, compose, loose_component
+from .shape import diagnose
 
 # The Statsbygg standard source (PA 0802 / NOSSB property sets).
 STANDARD_SOURCE = ("NOSSB_Reference", "RefString")
+# ... and the sources of the aspects a code is composed from.
+PART_STANDARD = {
+    "lokasjon": ("NOSSB_Reference", "RefPriSysLoc"),
+    "system": ("NOSSB_Reference", "RefPriSysOcc"),
+    "komponent": ("NOSSB_Reference", "RefCompOcc"),
+}
+# Status (MMI): the process status code (NS 8360-1 / POFIN).
+STATUS_STANDARD = ("NONS_Process", "ProcessStatus")
+
+# What a value of each role looks like, and what its source tends to be
+# named. A role without a distinctive value form (lokasjon, status) needs the
+# name to match as well; the others rank by form, the name breaking ties.
+ROLE_FORM = {
+    "lokasjon": re.compile(r"^\+?[A-Za-z0-9][A-Za-z0-9.\-]{0,9}$"),
+    "system": re.compile(r"^=?\d{2,4}(?:\.\d{1,4}){1,2}$"),
+    "komponent": re.compile(r"^-?[A-Za-zÆØÅ]{1,3}[.\-]?\d{1,4}T?$"),
+    "status": re.compile(r"^\d{3}$"),
+}
+ROLE_NAME = {
+    "lokasjon": re.compile(r"plass|lokasjon|location|loc|SysLoc", re.I),
+    "system": re.compile(r"system|SysOcc", re.I),
+    "komponent": re.compile(r"komp|comp", re.I),
+    "status": re.compile(r"mmi|status", re.I),
+}
+NAME_REQUIRED = {"lokasjon", "status"}
+
+
+def phase_of(mmi: str | None) -> str:
+    """The phase an MMI code means: 0–6xx ny, 7xx bevares, 8xx ombruk,
+    9xx rives; "" when the value is not an MMI code."""
+    try:
+        n = int(str(mmi or "").strip())
+    except ValueError:
+        return ""
+    if 0 <= n < 700:
+        return "ny"
+    if n < 800:
+        return "bevares"
+    if n < 900:
+        return "ombruk"
+    if n < 1000:
+        return "rives"
+    return ""
 
 ATTRIBUTES = ("Name", "Tag")
 
@@ -134,6 +178,19 @@ class ModelIndex:
                 "n": n,
             })
 
+    def code_values(self, rules: TFMRules) -> dict[int, str] | None:
+        """Each product's TFM code: the whole code's source, or the code
+        composed from the aspects' sources (+lokasjon=system-komponent)."""
+        if not rules.composed:
+            return self.values_for(rules.tfm_location)
+        parts = {a: self.values_for(loc) or {} for a, loc in rules.tfm_parts.items()}
+        out: dict[int, str] = {}
+        for pid in self.product_ids:
+            code = compose({a: v.get(pid, "") for a, v in parts.items()})
+            if code:
+                out[pid] = code
+        return out
+
     def values_for(self, location) -> dict[int, str] | None:
         """The values a rule's source reads, per product. None for «all»,
         which reads every field and has no single source to count."""
@@ -211,13 +268,61 @@ def inventory_payload(index: ModelIndex, preset_rules: list[TFMRules]) -> dict:
     scored.sort(key=lambda x: -x[0])
     candidates = [{"location": list(loc), "n": n, "matched": m} for m, loc, n in scored[:3]]
 
+    roles = {}
+    for role, std in [*PART_STANDARD.items(), ("status", STATUS_STANDARD)]:
+        roles[role] = {
+            "standard": {"location": ["pset", *std], "n": len(index.props.get(std, {}))},
+            "candidates": role_candidates(index, role, exclude=std),
+        }
+
     return {
         "products": len(index.product_ids),
         "standard": {"location": ["pset", *STANDARD_SOURCE], "n": len(std_values)},
+        "roles": roles,
         "sets": sets,
         "attributes": [_prop_entry(a, index.attrs[a]) for a in ATTRIBUTES],
         "candidates": candidates,
         "storeys": classify_storeys(index.storeys),
+    }
+
+
+def role_candidates(index: ModelIndex, role: str, exclude=None, k: int = 3) -> list[dict]:
+    """Up to k sources whose values take the role's form, most elements
+    first; the name breaks ties (and is required where the form is not
+    distinctive)."""
+    form, name_rx = ROLE_FORM[role], ROLE_NAME[role]
+    scored = []
+    sources = [(("pset", s, p), f"{s}.{p}", v) for (s, p), v in index.props.items() if (s, p) != exclude]
+    sources += [(("attr", None, a), a, v) for a, v in index.attrs.items()]
+    for loc, label, values in sources:
+        if not values:
+            continue
+        named = bool(name_rx.search(label))
+        if role in NAME_REQUIRED and not named:
+            continue
+        counts = Counter(values.values())
+        m = sum(n for v, n in counts.items() if form.match(v))
+        if m == 0 or m * 2 < len(values):
+            continue
+        scored.append((m, named, loc, len(values)))
+    scored.sort(key=lambda x: (-x[1], -x[0]))
+    return [{"location": list(loc), "n": n, "matched": m} for m, _, loc, n in scored[:k]]
+
+
+def values_payload(index: ModelIndex, location, k: int = VALUES_SHOWN) -> dict:
+    """One source's values, most carried first (the Status step's list),
+    with the phase each MMI value means."""
+    values = index.values_for(location) or {}
+    counted = Counter(values.values())
+    phases = Counter()
+    for v, n in counted.items():
+        phases[phase_of(v)] += n
+    return {
+        "products": len(index.product_ids),
+        "valued": len(values),
+        "distinct": len(counted),
+        "values": [{"v": v[:80], "n": n, "phase": phase_of(v)} for v, n in counted.most_common(k)],
+        "phases": {ph: phases.get(ph, 0) for ph in ("ny", "bevares", "ombruk", "rives", "")},
     }
 
 
@@ -226,8 +331,8 @@ def inventory_payload(index: ModelIndex, preset_rules: list[TFMRules]) -> dict:
 # =============================================================================
 
 def preview(index: ModelIndex, rules: TFMRules) -> dict:
-    values = index.values_for(rules.tfm_location)
-    regexes = rules.regexes()
+    values = index.code_values(rules)
+    regexes = rules.full_regexes()
     scope_comp = {c.upper() for c in rules.scope_components}
     scope_types = set(rules.scope_types)
     floors = set(rules.floor_codes)
@@ -318,7 +423,7 @@ def preview(index: ModelIndex, rules: TFMRules) -> dict:
         "countable": values is not None,
         "valued": valued,
         "matched": matched,
-        "off": [{"v": v[:80], "n": n} for v, n in off.most_common(OFF_SHOWN)],
+        "off": [_off_entry(v, n, rules, regexes) for v, n in off.most_common(OFF_SHOWN)],
         "off_distinct": len(off),
         "distinct": len(counted),
         "values": shown,
@@ -333,6 +438,11 @@ def preview(index: ModelIndex, rules: TFMRules) -> dict:
         "components": [{"code": c, "n": n} for c, n in components.most_common(60)],
         "types": [{"name": t, "n": n, "out": types_out.get(t, 0)} for t, n in types_all.most_common()],
     }
+
+
+def _off_entry(v: str, n: int, rules: TFMRules, regexes) -> dict:
+    d = diagnose(v, rules, regexes)
+    return {"v": v[:80], "n": n, "reason": d.reason, "fix": d.fix}
 
 
 # =============================================================================

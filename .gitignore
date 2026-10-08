@@ -17,3 +17,4 @@ frontend/dist/
 
 # Layout gate screenshots of the built app
 frontend/mocks/shots/app/
+testdata/

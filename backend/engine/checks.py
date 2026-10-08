@@ -46,8 +46,20 @@ def applicable_checks(results: dict):
 
 
 def run_checks(ifc, products, rules: TFMRules,
-               bygningsdel_codes: dict, komponent_codes: dict) -> dict:
+               bygningsdel_codes: dict, komponent_codes: dict,
+               codes: dict[int, str] | None = None) -> dict:
+    """``codes``: each product's composed code (Kilde «Fra deler»); the
+    whole code's source is read off the element otherwise."""
+    # IfcSystem names carry a name after the code: start-anchored there.
+    # An element's code is the code, nothing trailing: anchored at both ends.
     regexes = rules.regexes()
+    element_regexes = rules.full_regexes()
+
+    def _strings(e):
+        if codes is not None:
+            v = codes.get(e.id())
+            return [("Sammensatt", v)] if v else []
+        return candidate_strings_for(e, rules.tfm_location)
     structures = rules.structures()
     floor_set = set(rules.floor_codes)
     has_floor = bool(floor_set) and rules.has_part("Etasje")
@@ -102,8 +114,8 @@ def run_checks(ifc, products, rules: TFMRules,
 
         chosen = None
         chosen_idx = None
-        for fld, val in candidate_strings_for(e, rules.tfm_location):
-            for idx, rx in enumerate(regexes):
+        for fld, val in _strings(e):
+            for idx, rx in enumerate(element_regexes):
                 m = rx.search(val)
                 if m:
                     chosen = (fld, val, m)
@@ -116,8 +128,7 @@ def run_checks(ifc, products, rules: TFMRules,
             if chosen is not None:
                 ko_scope = (chosen[2].groupdict().get("komponent") or "").upper()
             else:
-                ko_scope = next((c for c in (loose_component(v) for _, v in
-                                             candidate_strings_for(e, rules.tfm_location)) if c), "")
+                ko_scope = next((c for c in (loose_component(v) for _, v in _strings(e)) if c), "")
             if ko_scope and ko_scope in scope_comp:
                 excluded_ids.add(e.id())
                 continue

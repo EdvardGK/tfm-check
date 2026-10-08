@@ -37,9 +37,20 @@ def codes_for_komponent(system_key: str) -> dict:
     return load_codes(KOMPONENT_SYSTEMS.get(system_key, {}).get("file"))
 
 
+# <PROSJEKT>_<FAG>[_…].ifc: the discipline is the second name part.
+_FAG_IN_NAME = re.compile(r"^[^_]+_([A-Za-zÆØÅæøå]{2,6})(?:[_.\- ]|$)")
+
+
 def detect_discipline_from_filename(name: str) -> str | None:
+    """The discipline (fag) a model file is named for: the part after the
+    project in `<PROSJEKT>_<FAG>.ifc` (HI90_RIV_MMI700.ifc -> RIV), else a
+    known discipline anywhere in the name."""
+    stem = Path(name or "").name
+    m = _FAG_IN_NAME.match(stem)
+    if m:
+        return m.group(1).upper()
     for key, pat in FILENAME_DISCIPLINE_PATTERNS:
-        if pat.search(name):
+        if pat.search(stem):
             return key
     return None
 

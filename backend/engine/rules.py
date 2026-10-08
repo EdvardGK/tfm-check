@@ -22,6 +22,35 @@ def loose_component(value: str) -> str:
     return m.group(1) if m else ""
 
 
+# The PA 0802 aspects a composed code is built from, in order, each after
+# its sign: +lokasjon =system -komponent.
+ASPECTS = ("lokasjon", "system", "komponent")
+ASPECT_SIGN = {"lokasjon": "+", "system": "=", "komponent": "-"}
+
+
+def _loc(v) -> tuple | None:
+    """A source as a 3-tuple, or None for none."""
+    if not v:
+        return None
+    v = list(v) + [None, None, None]
+    if v[0] not in ("pset", "attr"):
+        return None
+    return tuple(v[:3])
+
+
+def compose(values: dict[str, str]) -> str:
+    """A code composed from aspect values, each behind its sign (a value
+    already carrying its sign keeps it). Empty aspects are left out."""
+    out = []
+    for a in ASPECTS:
+        v = (values.get(a) or "").strip()
+        if not v:
+            continue
+        sign = ASPECT_SIGN[a]
+        out.append(v if v.startswith(sign) else sign + v)
+    return "".join(out)
+
+
 @dataclass
 class TFMRules:
     project_name: str = ""
@@ -44,12 +73,26 @@ class TFMRules:
     # Scope: component codes and type names left out of every check.
     scope_components: list[str] = field(default_factory=list)
     scope_types: list[str] = field(default_factory=list)
+    # Kilde: the whole code in one source (tfm_location), or composed from
+    # the PA 0802 aspects, each in its own source: {"lokasjon": loc,
+    # "system": loc, "komponent": loc} (a missing aspect is left out).
+    tfm_mode: str = "whole"
+    tfm_parts: dict = field(default_factory=dict)
+    # Status: the source of the element's MMI (status) code, or None.
+    status_location: tuple | None = None
 
     def _pattern_for_group(self, name: str) -> str:
         n = self.part_digits.get(name) if self.part_digits else None
-        if n and name in DIGIT_LOCKABLE_PARTS and isinstance(n, int) and n > 0:
-            return r"\d{" + str(n) + "}"
+        if n and isinstance(n, int) and n > 0:
+            if name in DIGIT_LOCKABLE_PARTS:
+                return r"\d{" + str(n) + "}"
+            if name == "lokasjon":
+                return r"[A-Za-z0-9]{" + str(n) + "}"
         return PLACEHOLDER_FALLBACK.get(name, r"\S+")
+
+    def part_form(self, name: str) -> str:
+        """A template part's strict form (lokasjon, systemkode …)."""
+        return self._pattern_for_group(name)
 
     def structures(self) -> list[str]:
         return [sequence_to_template(p.get("sequence", [])) for p in self.patterns]
@@ -66,6 +109,15 @@ class TFMRules:
             parts.append(re.escape(s[i:]))
             out.append(re.compile("^" + "".join(parts)))
         return out
+
+    def full_regexes(self) -> list[re.Pattern]:
+        """The forms anchored at both ends: the value IS the code, with
+        nothing trailing (what an element's code is checked against)."""
+        return [re.compile(rx.pattern + "$") for rx in self.regexes()]
+
+    @property
+    def composed(self) -> bool:
+        return self.tfm_mode == "parts"
 
     @property
     def discipline_label(self) -> str:
@@ -112,4 +164,8 @@ class TFMRules:
             floor_style=str(data.get("floor_style") or ""),
             scope_components=[str(c) for c in (data.get("scope_components") or [])],
             scope_types=[str(t) for t in (data.get("scope_types") or [])],
+            tfm_mode="parts" if data.get("tfm_mode") == "parts" else "whole",
+            tfm_parts={k: _loc(v) for k, v in (data.get("tfm_parts") or {}).items()
+                       if k in ASPECTS and _loc(v) is not None},
+            status_location=_loc(data.get("status_location")),
         )

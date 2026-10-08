@@ -1,7 +1,7 @@
 """TFM-sjekk API + static SPA host.
 
 Single deployable: serves the JSON API under /api and the built frontend (if
-present) at /. Designed to run on Railway and be iframe-embedded under skiplum.no.
+present) at /. Runs as a Docker service on the Skiplum apps box and is iframe-embedded on skiplum.com.
 """
 
 from __future__ import annotations
@@ -28,7 +28,8 @@ from engine import (
     list_presets, suggest_preset, suggest_field,
 )
 from engine.ifc_io import load_codes
-from engine.inventory import ModelIndex, inventory_payload, preview
+from engine.inventory import ModelIndex, inventory_payload, preview, values_payload
+from engine.register import build_register_xlsx, register_rows
 from engine.presets import PRESETS, preset_to_rules_dict
 from store import UploadStore
 
@@ -38,7 +39,8 @@ FRONTEND_DIST = HERE.parent / "frontend" / "dist"
 # Origins allowed to iframe-embed the tool.
 FRAME_ANCESTORS = os.environ.get(
     "TFM_FRAME_ANCESTORS",
-    "'self' https://skiplum.no https://*.skiplum.no https://*.vercel.app http://localhost:3000",
+    "'self' https://skiplum.com https://*.skiplum.com https://skiplum.no https://*.skiplum.no "
+    "https://*.vercel.app http://localhost:3000",
 )
 
 app = FastAPI(title="TFM-sjekk", version=APP_VERSION)
@@ -77,6 +79,11 @@ class CheckRequest(BaseModel):
 class PreviewRequest(BaseModel):
     upload_id: str
     rules: dict
+
+
+class ValuesRequest(BaseModel):
+    upload_id: str
+    location: list
 
 
 class ReportRequest(BaseModel):
@@ -198,6 +205,33 @@ def preview_rules(req: PreviewRequest):
     return preview(_index(up), TFMRules.from_dict(req.rules))
 
 
+@app.post("/api/values")
+def source_values(req: ValuesRequest):
+    """One source's values with counts (and the phase an MMI value means)."""
+    up = _resolve(req.upload_id)
+    return values_payload(_index(up), req.location)
+
+
+@app.post("/api/register")
+def register(req: PreviewRequest):
+    """The TFM register for the loaded model, one row per object with a code."""
+    up = _resolve(req.upload_id)
+    rules = TFMRules.from_dict(req.rules)
+    columns, rows, summary = register_rows(
+        up.ifc, up.products, _index(up), rules, up.file_name, up.detected_discipline)
+    data = build_register_xlsx(columns, rows, summary)
+    stem = Path(up.file_name).stem
+    return Response(
+        data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{stem}_TFM-register.xlsx"'},
+    )
+
+
+def _codes(up, rules: TFMRules):
+    return _index(up).code_values(rules) if rules.composed else None
+
+
 @app.post("/api/check")
 def check(req: CheckRequest):
     up = _resolve(req.upload_id)
@@ -206,7 +240,7 @@ def check(req: CheckRequest):
     komp_codes = codes_for_komponent(rules.komponent_system)
 
     t0 = time.time()
-    results = run_checks(up.ifc, up.products, rules, bd_codes, komp_codes)
+    results = run_checks(up.ifc, up.products, rules, bd_codes, komp_codes, _codes(up, rules))
     duration = time.time() - t0 + up.load_seconds
 
     usage.log_upload(
@@ -219,7 +253,8 @@ def check(req: CheckRequest):
     )
 
     loc = rules.tfm_location
-    loc_str = ("Alle felt" if loc[0] == "all"
+    loc_str = ("Sammensatt" if rules.composed
+               else "Alle felt" if loc[0] == "all"
                else loc[2] if loc[0] == "attr"
                else f"{loc[1]}.{loc[2]}")
     return {"results": results, "duration": round(duration, 2), "location_label": loc_str}
@@ -233,7 +268,7 @@ def report(req: ReportRequest):
     komp_codes = codes_for_komponent(rules.komponent_system)
 
     t0 = time.time()
-    results = run_checks(up.ifc, up.products, rules, bd_codes, komp_codes)
+    results = run_checks(up.ifc, up.products, rules, bd_codes, komp_codes, _codes(up, rules))
     duration = time.time() - t0 + up.load_seconds
 
     stem = Path(up.file_name).stem
