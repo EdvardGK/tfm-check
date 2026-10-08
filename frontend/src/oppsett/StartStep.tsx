@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { Canvas, StepBar } from "./Shell";
-import { STATSBYGG_EXAMPLE, STANDARD_LOCATION, locationText } from "./setup";
+import { ANY_FAG, STATSBYGG_EXAMPLE, STANDARD_LOCATION, download, locationText, setupJson, statsbyggRules } from "./setup";
 
 /** The first screen: the Statsbygg standard or a custom setup, and a saved
  *  setup («Åpne regelsett») in the bar. */
@@ -17,6 +17,13 @@ export default function StartStep({
   return (
     <Canvas rows="auto auto minmax(0, 1fr)">
       <StepBar>
+        <button
+          type="button"
+          className="key"
+          onClick={() => download("tfm-oppsett-mal.json", setupJson({ base: "statsbygg", fag: { [ANY_FAG]: statsbyggRules(null) } }))}
+        >
+          Last ned mal
+        </button>
         <button type="button" className="key" onClick={() => input.current?.click()}>
           Åpne regelsett
         </button>

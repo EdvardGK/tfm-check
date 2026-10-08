@@ -157,7 +157,8 @@ export default function Oppsett({
     const fromFile = file ? rulesFor(file, fag) : null;
     const start = fromFile ?? r;
     setRules(loaded && inv && statsbygg ? withStatsbyggFloors(start, inv) : start);
-    go(loaded ? (statsbygg ? "end" : "kilde") : "ifc");
+    // Statsbygg is a preset: every step is pre-filled and stays open to edit.
+    go(loaded ? "kilde" : "ifc");
   };
 
   const openSetup = (f: File) => {
@@ -195,7 +196,7 @@ export default function Oppsett({
     // An opened setup applies its rules for the file's discipline.
     const fromFile = opened ? rulesFor(saved, f) : null;
     setRules((r) => (fromFile ?? (r ? { ...r, discipline_key: f ?? r.discipline_key } : r)));
-    go(statsbygg ? "end" : "kilde");
+    if (step === "ifc") go("kilde");
     try {
       const up = await readModel(file, setReadProgress);
       const inventory = await getInventory(up.upload_id);
@@ -282,7 +283,7 @@ export default function Oppsett({
       standard: ans.standard,
       current,
       pending: !current && !done,
-      enabled: base !== null && (s === "ifc" || loaded || fileName !== null),
+      enabled: base !== null,
       onClick: () => {
         if (s === step) return;
         setDetour(false);
@@ -316,7 +317,7 @@ export default function Oppsett({
         onUse={() => go(detour ? "end" : "kilde")}
       />
     );
-  } else if (rules && fileName !== null && !loaded) {
+  } else if (rules && !loaded) {
     // The model is on its way: the steps that need none work, the others
     // wait for its data.
     if (step === "format") {
@@ -342,7 +343,7 @@ export default function Oppsett({
         <SummaryStep
           inv={null}
           upload={null}
-          fileName={fileName}
+          fileName={fileName ?? "–"}
           rules={rules}
           preview={null}
           checking={false}
