@@ -22,7 +22,7 @@ export default function IfcStep({
   progress: ReadProgress | null;
   fileName: string | null;
   loaded: { products: number } | null;
-  onFile: (file: File) => void;
+  onFile: (files: File[]) => void;
   onUse: () => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -61,10 +61,11 @@ export default function IfcStep({
           ref={input}
           type="file"
           accept=".ifc,.ifczip"
+          multiple
           hidden
           onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) onFile(f);
+            const fs = Array.from(e.target.files ?? []);
+            if (fs.length) onFile(fs);
             e.target.value = "";
           }}
         />

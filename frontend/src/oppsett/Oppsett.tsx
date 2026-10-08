@@ -10,7 +10,8 @@
  *  returns to the summary. «Forrige» goes back along the path taken. */
 
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { downloadRegister, getInventory, getRollup, readIfc as readModel, type ReadProgress } from "../api";
+import { downloadRegister, getInventory, getRollup, importIds, readIfc as readModel, type IdsSpec, type ReadProgress } from "../api";
+import type { ModelEntry } from "./Models";
 import Pending from "./Pending";
 import { progressText } from "./Loader";
 import { allowedFloors, proposeCodes } from "./floors";
@@ -29,7 +30,7 @@ import StatusStep from "./StatusStep";
 import SummaryStep from "./SummaryStep";
 import { usePreview } from "./usePreview";
 import {
-  STANDARD_LOCATION, STATUS_STANDARD, STEP_NAME, WALK, download, fagFromName, schemaFromHeader, floorResult, fmt, formatResult, isStandardFormat, isStandardSource,
+  ANY_FAG, STANDARD_LOCATION, STATUS_STANDARD, STEP_NAME, WALK, download, fagFromName, schemaFromHeader, floorResult, fmt, formatResult, isStandardFormat, isStandardSource,
   locationText, parseSetup, rulesFor, sameLocation, setupFileName, setupJson, sourceResult, sourceText, statsbyggRules,
   statusResult, storeSetup, withFag, withStatsbyggFloors, type Base, type SetupFile, type Step, type WalkStep,
 } from "./setup";
@@ -123,18 +124,64 @@ export default function Oppsett({
   const [detour, setDetour] = useState(false);
   const [live, setLive] = useState<(LiveAnswer & { step: Step }) | null>(null);
   const [slot, setSlot] = useState<HTMLElement | null>(null);
+  // The session's models (the walk shows the active one) and the rules per
+  // discipline as edited in the walk.
+  const [models, setModels] = useState<ModelEntry[]>([]);
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const [session, setSession] = useState<Record<string, RulesDict>>({});
+  const [ids, setIds] = useState<IdsSpec[] | null>(null);
+  const queue = useRef<Promise<void>>(Promise.resolve());
 
   const loaded = upload !== null && inv !== null;
   const fag = upload?.detected_discipline ?? fileFag;
   const savedRules = rulesFor(saved, fag);
   const preview = usePreview(loaded ? upload.upload_id : null, rules);
-  // Later data in the background once the model is in: the rollup for
-  // Oppsummering (the walk's own preview above serves the other steps).
+
+  // The walk's rules are its discipline's rules in the session.
   useEffect(() => {
-    if (!loaded || !rules) return;
-    const t = window.setTimeout(() => void getRollup(upload.upload_id, rules).catch(() => undefined), 400);
+    if (!rules || !activeKey) return;
+    setSession((x) => (x[fag ?? ANY_FAG] === rules ? x : { ...x, [fag ?? ANY_FAG]: rules }));
+  }, [rules, fag, activeKey]);
+
+  /** The rules a model is read with: its discipline's in the session, else
+   *  the opened ruleset's, else the base's defaults. */
+  const defaultsFor = (f: string | null): RulesDict =>
+    base === "custom" ? { ...statsbyggRules(f), floor_style: "" } : statsbyggRules(f);
+  const rulesOf = (m: ModelEntry): RulesDict =>
+    session[m.fag ?? ANY_FAG] ?? (opened ? rulesFor(saved, m.fag) : null) ?? defaultsFor(m.fag);
+
+  // Later data in the background once a model is in: the rollup over the
+  // loaded models for Oppsummering.
+  const loadedItems = models
+    .filter((m) => m.upload)
+    .map((m) => ({ upload_id: m.upload?.upload_id ?? "", rules: m.key === activeKey && rules ? rules : rulesOf(m) }));
+  const itemsKey = JSON.stringify(loadedItems);
+  useEffect(() => {
+    if (loadedItems.length === 0) return;
+    const t = window.setTimeout(() => void getRollup(JSON.parse(itemsKey)).catch(() => undefined), 400);
     return () => window.clearTimeout(t);
-  }, [loaded, upload, rules]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemsKey]);
+
+  /** Floors for a model's storeys in the rules' style, unless set already. */
+  const withFloors = (r: RulesDict, inventory: Inventory): RulesDict => {
+    const style = r.floor_style === "u" ? "u" : r.floor_style === "statsbygg" ? "statsbygg" : null;
+    if (!style || Object.keys(r.storey_codes ?? {}).length > 0) return r;
+    const codes = proposeCodes(inventory.storeys, style);
+    return { ...r, storey_codes: codes, floor_codes: allowedFloors(codes) };
+  };
+
+  /** Make a loaded model the walk's. */
+  const activate = (m: ModelEntry) => {
+    if (!m.upload || !m.inv) return;
+    setActiveKey(m.key);
+    setUpload(m.upload);
+    setInv(m.inv);
+    setFileName(m.fileName);
+    setFileFag(m.fag);
+    setRules(withFloors(rulesOf(m), m.inv));
+    setVisit((v) => v + 1);
+  };
 
   const go = (s: Step) => {
     if (s !== step) setTrail((t) => [...t, step]);
@@ -169,11 +216,17 @@ export default function Oppsett({
   };
 
   const openSetup = (f: File) => {
-    f.text()
-      .then((text) => {
-        const s = parseSetup(text);
-        begin(s.base, rulesFor(s, fag) ?? statsbyggRules(fag), s);
-      })
+    const read: Promise<SetupFile> = /\.ids$/i.test(f.name)
+      ? importIds(f).then((r) => {
+          setIds(r.specs);
+          return parseSetup(JSON.stringify(r.setup));
+        })
+      : f.text().then((text) => {
+          setIds(null);
+          return parseSetup(text);
+        });
+    read
+      .then((s) => begin(s.base, rulesFor(s, fag) ?? statsbyggRules(fag), s))
       .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
   };
 
@@ -182,50 +235,74 @@ export default function Oppsett({
   // upload, read, index, with the counter) until the model's inventory is
   // in, then opens Kilde with its data. The file's name and header
   // (discipline, schema) show in the rail meanwhile.
-  const readIfc = async (file: File) => {
+  const readIfc = async (files: File[]) => {
     if (!rules || reading) return;
-    if (!isModelFile(file.name)) {
+    const ok = files.filter((f) => isModelFile(f.name));
+    if (ok.length === 0) {
       onError("Filen må være en .ifc- eller .ifczip-fil.");
       return;
     }
     onError(null);
-    const f = fagFromName(file.name);
-    setFileName(file.name);
-    setFileFag(f);
-    setFileSchema(null);
-    void schemaFromHeader(file).then(setFileSchema);
-    setUpload(null);
-    setInv(null);
-    setReading(true);
-    setReadProgress({ stage: "pakk", pct: 0 });
-    const statsbygg = base === "statsbygg" && !opened;
-    // An opened setup applies its rules for the file's discipline.
-    const fromFile = opened ? rulesFor(saved, f) : null;
-    setRules((r) => (fromFile ?? (r ? { ...r, discipline_key: f ?? r.discipline_key } : r)));
-    // Held on the loader in the drop frame until the model's inventory is
-    // in; the walk then opens with its data.
-    try {
-      const up = await readModel(file, setReadProgress);
-      const inventory = up.inventory ?? (await getInventory(up.upload_id));
-      setUpload(up);
-      setInv(inventory);
-      go("kilde");
-      // Floors: codes for the model's storeys in the chosen style, unless
-      // codes are set already.
-      setRules((r) => {
-        if (!r) return r;
-        if (statsbygg && !r.floor_style) return withStatsbyggFloors(r, inventory);
-        const style = r.floor_style === "u" ? "u" : r.floor_style === "statsbygg" ? "statsbygg" : null;
-        if (!style || Object.keys(r.storey_codes ?? {}).length > 0) return r;
-        const codes = proposeCodes(inventory.storeys, style);
-        return { ...r, storey_codes: codes, floor_codes: allowedFloors(codes) };
-      });
-    } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
-      setFileName(null);
-    } finally {
-      setReading(false);
-      setReadProgress(null);
+    const entries: ModelEntry[] = ok.map((f, k) => ({
+      key: `${Date.now()}-${k}-${f.name}`,
+      fileName: f.name,
+      fag: fagFromName(f.name),
+      upload: null,
+      inv: null,
+      progress: null,
+      error: null,
+    }));
+    setModels((ms) => [...ms, ...entries]);
+    const patch = (key: string, p: Partial<ModelEntry>) =>
+      setModels((ms) => ms.map((m) => (m.key === key ? { ...m, ...p } : m)));
+
+    // The first model of the session holds the loader, then opens the walk
+    // (Oppsummering when an opened ruleset covers its discipline: nothing
+    // to pick). The others read in the background, one at a time.
+    const first = activeKey === null && !loaded ? entries[0] : null;
+    const read = async (e: ModelEntry, f: File) => {
+      try {
+        const up = await readModel(f, (p) => {
+          patch(e.key, { progress: p });
+          if (e === first) setReadProgress(p);
+        });
+        const inventory = up.inventory ?? (await getInventory(up.upload_id));
+        const done: ModelEntry = { ...e, fag: up.detected_discipline ?? e.fag, upload: up, inv: inventory, progress: null };
+        patch(e.key, done);
+        if (e === first) {
+          activate(done);
+          const covered = opened && rulesFor(saved, done.fag) !== null;
+          go(covered ? "end" : "kilde");
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        patch(e.key, { error: msg, progress: null });
+        if (e === first) {
+          onError(msg);
+          setFileName(null);
+        }
+      }
+    };
+
+    if (first) {
+      setFileName(first.fileName);
+      setFileFag(first.fag);
+      setFileSchema(null);
+      void schemaFromHeader(ok[0]).then(setFileSchema);
+      setReading(true);
+      setReadProgress({ stage: "pakk", pct: 0 });
+      // Held on the loader in the drop frame until the inventory is in.
+      try {
+        await read(first, ok[0]);
+      } finally {
+        setReading(false);
+        setReadProgress(null);
+      }
+    }
+    for (let k = first ? 1 : 0; k < ok.length; k++) {
+      const e = entries[k];
+      const f = ok[k];
+      queue.current = queue.current.then(() => read(e, f));
     }
   };
 
@@ -254,8 +331,8 @@ export default function Oppsett({
             e.preventDefault();
             dragDepth.current = 0;
             setDragging(false);
-            const f = e.dataTransfer.files?.[0];
-            if (f) void readIfc(f);
+            const fs = Array.from(e.dataTransfer.files ?? []);
+            if (fs.length) void readIfc(fs);
           },
         }
       : {};
@@ -321,7 +398,7 @@ export default function Oppsett({
         progress={readProgress}
         fileName={loaded ? upload.file_name : fileName}
         loaded={loaded ? { products: inv.products } : null}
-        onFile={(f) => void readIfc(f)}
+        onFile={(fs) => void readIfc(fs)}
         onUse={() => go(detour ? "end" : "kilde")}
       />
     );
@@ -374,6 +451,11 @@ export default function Oppsett({
           }}
           onAccept={() => undefined}
           onProjectName={(name) => setRules((r) => (r ? { ...r, project_name: name } : r))}
+          models={models}
+          rulesOf={rulesOf}
+          activeKey={activeKey}
+          onModel={() => undefined}
+          ids={ids}
         />
       );
     }
@@ -434,7 +516,8 @@ export default function Oppsett({
           checking={checking}
           registering={registering}
           onSave={() => {
-            const file = withFag(saved, base ?? "custom", fag, rules);
+            let file = withFag(opened ? saved : null, base ?? "custom", fag, rules);
+            for (const [k, r] of Object.entries(session)) if (k !== (fag ?? ANY_FAG)) file = withFag(file, base ?? "custom", k, r);
             setSaved(file);
             storeSetup(file);
             onStored(file);
@@ -443,7 +526,10 @@ export default function Oppsett({
           onRegister={() => {
             onError(null);
             setRegistering(true);
-            downloadRegister(upload.upload_id, rules, upload.file_name.replace(/\.ifc(zip)?$/i, ""))
+            downloadRegister(
+              loadedItems,
+              loadedItems.length > 1 ? (upload.file_name.split("_")[0] ?? "modeller") : upload.file_name.replace(/\.ifc(zip)?$/i, ""),
+            )
               .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)))
               .finally(() => setRegistering(false));
           }}
@@ -457,6 +543,14 @@ export default function Oppsett({
           }}
           onAccept={() => onAccept({ upload, rules })}
           onProjectName={(name) => setRules((r) => (r ? { ...r, project_name: name } : r))}
+          models={models}
+          rulesOf={rulesOf}
+          activeKey={activeKey}
+          onModel={(key) => {
+            const m = models.find((x) => x.key === key);
+            if (m) activate(m);
+          }}
+          ids={ids}
         />
       );
     }
@@ -484,7 +578,7 @@ export default function Oppsett({
         <RailSlot.Provider value={slot}>
           <Bar.Provider value={bar}>
             <Live.Provider value={setLive}>
-              <StepFrame key={`${step}-${visit}${MODEL_STEPS.has(step) ? `-${loaded}` : ""}`} step={step}>
+              <StepFrame key={`${step}-${visit}-${activeKey ?? ""}${MODEL_STEPS.has(step) ? `-${loaded}` : ""}`} step={step}>
                 {body}
               </StepFrame>
             </Live.Provider>

@@ -1,8 +1,10 @@
 import { sequenceToExample } from "../constants";
 import type { Inventory, Preview, RulesDict, UploadResponse } from "../types";
-import { Canvas, Lamp, StepBar } from "./Shell";
+import { Canvas, Lamp, RailOptions, StepBar } from "./Shell";
 import { schemeAnswer } from "./EtasjerStep";
 import RollupTiles, { useRollup } from "./Rollup";
+import { IdsSection, ModelsSection, type ModelEntry } from "./Models";
+import type { IdsSpec, ModelRules } from "../api";
 import {
   STATUS_STANDARD, STEP_NAME, floorResult, fmt, formatResult, isStandardFormat, isStandardSource, locationText,
   sameLocation, sourceResult, sourceText, statusResult, type StepResult, type WalkStep,
@@ -70,6 +72,11 @@ export default function SummaryStep({
   registering,
   onSave,
   onRegister,
+  models,
+  rulesOf,
+  activeKey,
+  onModel,
+  ids,
   onRow,
   onReview,
   onAccept,
@@ -84,17 +91,29 @@ export default function SummaryStep({
   registering: boolean;
   onSave: () => void;
   onRegister: () => void;
+  models: ModelEntry[];
+  rulesOf: (m: ModelEntry) => RulesDict;
+  activeKey: string | null;
+  onModel: (key: string) => void;
+  ids: IdsSpec[] | null;
   onRow: (s: WalkStep) => void;
   onReview: () => void;
   onAccept: () => void;
   onProjectName: (name: string) => void;
 }) {
   const rows = summaryRows(inv, fileName, rules, preview);
-  const roll = useRollup(upload?.upload_id ?? null, rules);
+  const items: ModelRules[] = models
+    .filter((m) => m.upload)
+    .map((m) => ({ upload_id: m.upload?.upload_id ?? "", rules: m.key === activeKey ? rules : rulesOf(m) }));
+  const roll = useRollup(items);
   const failing = rows.some((r) => r.standard && r.result?.verdict === "fail");
 
   return (
     <Canvas rows="auto auto minmax(0, 1fr)">
+      <RailOptions>
+        <ModelsSection models={models} rulesOf={(m) => (m.key === activeKey ? rules : rulesOf(m))} activeKey={activeKey} onPick={onModel} />
+        <IdsSection specs={ids} />
+      </RailOptions>
       <StepBar>
         <button type="button" className="key" onClick={onSave}>
           Lagre oppsett

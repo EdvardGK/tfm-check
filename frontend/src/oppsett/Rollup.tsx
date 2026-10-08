@@ -1,25 +1,25 @@
 import { useEffect, useState } from "react";
-import { getRollup, peek } from "../api";
-import type { Rollup, RollupRow, RulesDict } from "../types";
+import { getRollup, peek, type ModelRules } from "../api";
+import type { Rollup, RollupRow } from "../types";
 import { Lamp } from "./Shell";
 import { MiniLoader } from "./Loader";
 import { fmt } from "./setup";
 
 /** The rules' system and component codes rolled up, following the rules. */
-export function useRollup(uploadId: string | null, rules: RulesDict): Rollup | null {
-  const [roll, setRoll] = useState<Rollup | null>(() => peek<Rollup>("rollup", uploadId, rules));
-  const key = JSON.stringify(rules);
+export function useRollup(items: ModelRules[]): Rollup | null {
+  const [roll, setRoll] = useState<Rollup | null>(() => peek<Rollup>("rollup", "*", items));
+  const key = JSON.stringify(items);
   useEffect(() => {
-    if (!uploadId) return;
-    const parsed = JSON.parse(key) as RulesDict;
-    const ready = peek<Rollup>("rollup", uploadId, parsed);
+    const parsed = JSON.parse(key) as ModelRules[];
+    if (parsed.length === 0) return;
+    const ready = peek<Rollup>("rollup", "*", parsed);
     if (ready) {
       setRoll(ready);
       return;
     }
     let live = true;
     const timer = window.setTimeout(() => {
-      getRollup(uploadId, parsed)
+      getRollup(parsed)
         .then((r) => {
           if (live) setRoll(r);
         })
@@ -31,7 +31,7 @@ export function useRollup(uploadId: string | null, rules: RulesDict): Rollup | n
       live = false;
       window.clearTimeout(timer);
     };
-  }, [uploadId, key]);
+  }, [key]);
   return roll;
 }
 

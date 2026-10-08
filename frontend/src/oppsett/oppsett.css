@@ -359,3 +359,12 @@
 #oppsett .srow2 .key { height: 34px; }
 #oppsett .centry { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 #oppsett .cfield { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+
+/* ── Oppsummering rail: the session's models, the IDS report ── */
+#oppsett .mrow { gap: 3px; }
+#oppsett .mrow .t { font-size: 12.5px; color: var(--color-ink); font-family: var(--font-mono); }
+#oppsett .mrow .mr { display: flex; align-items: center; gap: 8px; width: 100%; }
+#oppsett .mrow .mr .num { margin-left: auto; }
+#oppsett .mrow:disabled { opacity: .7; cursor: default; }
+#oppsett .idslist { display: flex; flex-direction: column; max-height: 220px; overflow: auto; }
+#oppsett .idsrow { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: center; gap: 8px; min-height: 26px; font-size: 12px; }

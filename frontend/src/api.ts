@@ -79,7 +79,13 @@ function stable(v: unknown): string {
   return JSON.stringify(v);
 }
 
-function cached<T>(kind: string, uploadId: string, rules: RulesDict, load: () => Promise<T>): Promise<T> {
+/** One model and the rules it is read with. */
+export interface ModelRules {
+  upload_id: string;
+  rules: RulesDict;
+}
+
+function cached<T>(kind: string, uploadId: string, rules: unknown, load: () => Promise<T>): Promise<T> {
   const key = `${kind}|${uploadId}|${stable(rules)}`;
   const hit = cache.get(key);
   if (hit) return hit.promise as Promise<T>;
@@ -100,7 +106,7 @@ function cached<T>(kind: string, uploadId: string, rules: RulesDict, load: () =>
 }
 
 /** A result already fetched for these rules, or null. */
-export function peek<T>(kind: "preview" | "rollup", uploadId: string | null, rules: RulesDict | null): T | null {
+export function peek<T>(kind: "preview" | "rollup", uploadId: string | null, rules: unknown): T | null {
   if (!uploadId || !rules) return null;
   return (cache.get(`${kind}|${uploadId}|${stable(rules)}`)?.value as T | undefined) ?? null;
 }
@@ -145,11 +151,11 @@ export async function getValues(uploadId: string, location: Location, signal?: A
 }
 
 /** The TFM register (.xlsx), saved as `<model>_TFM-register.xlsx`. */
-export async function downloadRegister(uploadId: string, rules: RulesDict, fileStem: string): Promise<void> {
+export async function downloadRegister(items: ModelRules[], fileStem: string): Promise<void> {
   const res = await fetch("/api/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ upload_id: uploadId, rules }),
+    body: JSON.stringify({ items }),
   });
   if (!res.ok) {
     let detail = `HTTP ${res.status}`;
@@ -292,13 +298,14 @@ export async function readIfc(
   }
 }
 
-export function getRollup(uploadId: string, rules: RulesDict): Promise<Rollup> {
-  return cached("rollup", uploadId, rules, async () =>
+/** System and component codes rolled up over the models. */
+export function getRollup(items: ModelRules[]): Promise<Rollup> {
+  return cached("rollup", "*", items, async () =>
     jsonOrThrow<Rollup>(
       await fetch("/api/rollup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ upload_id: uploadId, rules }),
+        body: JSON.stringify({ items }),
       }),
     ),
   );
