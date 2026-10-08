@@ -97,6 +97,37 @@ def _top(c: Counter, k: int = 12) -> list[dict]:
     return [{"v": v, "n": n} for v, n in c.most_common(k)]
 
 
+def merge_rollups(rolls: list[dict]) -> dict:
+    """Rollups of several models as one: per code, objects summed and what
+    it appears with merged; validity as the first model that links it."""
+    def merge(rows_lists, keys):
+        out: dict[str, dict] = {}
+        for rows in rows_lists:
+            for r in rows:
+                m = out.get(r["code"])
+                if m is None:
+                    m = out[r["code"]] = {**r, **{k: Counter() for k in keys}}
+                    m["n"] = 0
+                elif m["valid"] is None and r["valid"] is not None:
+                    m.update(valid=r["valid"], description=r["description"], reason=r["reason"])
+                m["n"] += r["n"]
+                for k in keys:
+                    for x in r.get(k) or []:
+                        m[k][x["v"]] += x["n"]
+        return [{**m, **{k: _top(m[k]) for k in keys}} for _, m in sorted(out.items())]
+
+    links: dict[str, str] = {}
+    for r in rolls:
+        for p, lbl in r["links"].items():
+            links.setdefault(p, lbl)
+    return {
+        "links": links,
+        "objects": sum(r["objects"] for r in rolls),
+        "systems": merge([r["systems"] for r in rolls], ("systems", "components")),
+        "components": merge([r["components"] for r in rolls], ("systems",)),
+    }
+
+
 def rollup(coded: list[Coded], rules: TFMRules) -> dict:
     """Per system code and per component code: objects, valid in the linked
     standard or not (with the reason), the standard's description, and the

@@ -105,6 +105,22 @@ export function peek<T>(kind: "preview" | "rollup", uploadId: string | null, rul
   return (cache.get(`${kind}|${uploadId}|${stable(rules)}`)?.value as T | undefined) ?? null;
 }
 
+export interface IdsSpec {
+  name: string;
+  mapped: boolean;
+  role?: string | null;
+  source?: string | null;
+  rule?: string | null;
+  detail: string;
+}
+
+/** An .ids file as a ruleset, and what each specification became. */
+export async function importIds(file: File): Promise<{ title: string; setup: unknown; specs: IdsSpec[] }> {
+  const form = new FormData();
+  form.append("file", file);
+  return jsonOrThrow(await fetch("/api/ids", { method: "POST", body: form }));
+}
+
 export function getPreview(uploadId: string, rules: RulesDict): Promise<Preview> {
   return cached("preview", uploadId, rules, async () =>
     jsonOrThrow<Preview>(

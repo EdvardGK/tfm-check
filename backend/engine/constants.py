@@ -63,6 +63,8 @@ PART_TYPES = [
     # component occurrence after «%» (HI90: %SQZ.008.06).
     "Område", "Linje", "Sløyfe", "Adresse 2",
     "Typekode", "Typenr", "Instansnr",
+    # The whole code as one segment, for a form given as one regex (IDS).
+    "Kode",
 ]
 PART_TO_TEMPLATE = {
     "Lokasjon":   "{lokasjon}",
@@ -81,6 +83,7 @@ PART_TO_TEMPLATE = {
     "Typekode":   "{typekode}",
     "Typenr":     "{typenr}",
     "Instansnr":  "{instansnr}",
+    "Kode":       "{kode}",
 }
 SEP_TO_CHAR = {
     "+": "+", ".": ".", "-": "-", "_": "_", "/": "/",
@@ -125,6 +128,7 @@ PLACEHOLDER_FALLBACK = {
     "typekode":   r"[A-ZÆØÅ]{1,3}",
     "typenr":     r"\d{3}",
     "instansnr":  r"\d{2}",
+    "kode":       r"\S+",
 }
 PLACEHOLDER_RE = re.compile(r"\{(\w+)\}")
 
@@ -142,7 +146,7 @@ PART_EXAMPLE = {
     "Lokasjon": "123456", "Rom": "012", "Systemkode": "244", "Etasje": "01",
     "Subnr": "01", "Løpenummer": "001", "Komponent": "DI", "Komp.nr": "001",
     "T-suffiks": "T", "Område": "1", "Linje": "5", "Sløyfe": "08", "Adresse 2": "013",
-    "Typekode": "SQZ", "Typenr": "008", "Instansnr": "06",
+    "Typekode": "SQZ", "Typenr": "008", "Instansnr": "06", "Kode": "+02=360.017",
 }
 
 

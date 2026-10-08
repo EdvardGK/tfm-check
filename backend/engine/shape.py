@@ -42,7 +42,7 @@ _PART_RULE = {
     "lokasjon": "6 tegn", "rom": "1–5 siffer", "systemkode": "3 siffer", "etasje": "1–12 tegn",
     "subnr": "1–4 siffer", "lopenummer": "3 siffer", "komponent": "2 bokstaver", "kompnr": "3 siffer",
     "typeflag": "T", "omrade": "1–2 siffer", "linje": "1–2 siffer", "sloyfe": "2 siffer", "adresse": "3 siffer",
-    "typekode": "1–3 bokstaver", "typenr": "3 siffer", "instansnr": "2 siffer",
+    "typekode": "1–3 bokstaver", "typenr": "3 siffer", "instansnr": "2 siffer", "kode": "én kode uten mellomrom",
 }
 
 

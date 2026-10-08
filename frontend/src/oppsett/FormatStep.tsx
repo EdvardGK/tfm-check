@@ -46,7 +46,7 @@ const TEMPLATE_PART: Record<string, string> = {
   lokasjon: "Lokasjon", rom: "Rom", systemkode: "Systemkode", etasje: "Etasje", subnr: "Subnr",
   lopenummer: "Løpenummer", komponent: "Komponent", kompnr: "Komp.nr", typeflag: "T-suffiks",
   omrade: "Område", linje: "Linje", sloyfe: "Sløyfe", adresse: "Adresse 2", typekode: "Typekode", typenr: "Typenr",
-  instansnr: "Instansnr",
+  instansnr: "Instansnr", kode: "Kode",
 };
 const PART_KEY: Record<string, string> = Object.fromEntries(Object.entries(TEMPLATE_PART).map(([k, v]) => [v, k]));
 
@@ -56,7 +56,7 @@ const PART_RULE: Record<string, string> = {
   Lokasjon: "6 tegn", Rom: "1–5 siffer", Systemkode: "3 siffer", Etasje: "1–12 tegn", Subnr: "1–4 siffer",
   Løpenummer: "3 siffer", Komponent: "2 bokstaver", "Komp.nr": "3 siffer", "T-suffiks": "T",
   "Område": "1–2 siffer", Linje: "1–2 siffer", "Sløyfe": "2 siffer", "Adresse 2": "3 siffer",
-  Typekode: "1–3 bokstaver", Typenr: "3 siffer", Instansnr: "2 siffer",
+  Typekode: "1–3 bokstaver", Typenr: "3 siffer", Instansnr: "2 siffer", Kode: "hele koden",
 };
 
 /** The standards a part can be linked to (backend engine/standards.py). */

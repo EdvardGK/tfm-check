@@ -196,16 +196,36 @@ def _table(wb, title: str, columns: list[str], rows: list[dict]) -> None:
     return ws
 
 
-def build_register_xlsx(columns: list[str], rows: list[dict], summary: dict, roll: dict | None = None) -> bytes:
+def merge_registers(parts: list[tuple]) -> tuple[list[str], list[dict], list[dict], dict]:
+    """Several models' registers as one: the columns in first-seen order
+    (each model's source fields after «Kode som funnet»), all rows, one
+    summary per model, and the rollups merged."""
+    from .codes import merge_rollups
+
+    fields: list[str] = []
+    for columns, *_ in parts:
+        for c in columns[1:columns.index("Kilde")]:
+            if c not in fields:
+                fields.append(c)
+    columns = [KODE, *fields, *COLUMNS_AFTER]
+    rows = [r for _, rs, _, _ in parts for r in rs]
+    rows.sort(key=lambda r: (r["Modellkobling (fil)"], r[KODE], r["GlobalId"]))
+    return columns, rows, [s for _, _, s, _ in parts], merge_rollups([r for *_, r in parts])
+
+
+def build_register_xlsx(columns: list[str], rows: list[dict], summary: dict | list[dict],
+                        roll: dict | None = None) -> bytes:
+    summaries = summary if isinstance(summary, list) else [summary]
     wb = Workbook()
     ws = wb.active
     ws.title = "Sammendrag"
-    ws.append(["Felt", "Verdi"])
-    for k, v in summary.items():
-        ws.append([k, v])
-    _head(ws, 2)
+    ws.append(["Felt", *(["Verdi"] if len(summaries) == 1 else [s.get("Fil", "") for s in summaries])])
+    for k in summaries[0]:
+        ws.append([k, *[s.get(k, "") for s in summaries]])
+    _head(ws, 1 + len(summaries))
     ws.column_dimensions["A"].width = 18
-    ws.column_dimensions["B"].width = 60
+    for i in range(len(summaries)):
+        ws.column_dimensions[get_column_letter(2 + i)].width = 60 if len(summaries) == 1 else 32
 
     reg = _table(wb, "Register", columns, rows)
     st_col = columns.index("Status") + 1

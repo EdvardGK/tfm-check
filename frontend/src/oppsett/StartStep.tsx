@@ -30,7 +30,7 @@ export default function StartStep({
         <input
           ref={input}
           type="file"
-          accept=".json,application/json"
+          accept=".json,.ids,application/json"
           hidden
           onChange={(e) => {
             const f = e.target.files?.[0];

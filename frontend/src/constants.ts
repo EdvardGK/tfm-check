@@ -8,6 +8,7 @@ export const PART_TYPES = [
   "T-suffiks",
   "Område", "Linje", "Sløyfe", "Adresse 2",
   "Typekode", "Typenr", "Instansnr",
+  "Kode",
 ] as const;
 export type PartType = (typeof PART_TYPES)[number];
 
@@ -32,7 +33,7 @@ export const PART_EXAMPLE: Record<string, string> = {
   Lokasjon: "123456", Rom: "012", Systemkode: "244", Etasje: "01",
   Subnr: "01", Løpenummer: "001", Komponent: "DI", "Komp.nr": "001",
   "T-suffiks": "T", "Område": "1", "Linje": "5", "Sløyfe": "08", "Adresse 2": "013",
-  Typekode: "SQZ", Typenr: "008", Instansnr: "06",
+  Typekode: "SQZ", Typenr: "008", Instansnr: "06", Kode: "+02=360.017",
 };
 
 export const FREETEXT_PREFIX = "T:";
@@ -66,6 +67,7 @@ export const PART_COLORS: Record<string, Palette> = {
   "Typekode": { bg: "#f4e4e4", border: "#c98d8d", text: "#6e3a3a" },
   "Typenr": { bg: "#efe6ea", border: "#b896a4", text: "#5a4049" },
   "Instansnr": { bg: "#ebe7f0", border: "#a597b8", text: "#4a4058" },
+  Kode: { bg: "#e9eef0", border: "#7f97a3", text: "#2f4049" },
 };
 export const SEP_COLOR: Palette = { bg: "var(--color-ink)", border: "var(--color-ink)", text: "var(--color-cream)" };
 export const FREETEXT_COLOR: Palette = { bg: "var(--color-input)", border: "var(--color-line)", text: "var(--color-muted)" };

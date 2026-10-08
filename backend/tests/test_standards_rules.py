@@ -216,3 +216,24 @@ def test_gzipped_upload_is_unpacked(model, monkeypatch):
     assert name == "HI90_RIV.ifc" and size == len(raw) == out["file_size"]
     assert Path(tmp_path).read_bytes() == raw
     Path(tmp_path).unlink()
+
+
+def test_register_over_two_models(model):
+    import io
+
+    from openpyxl import load_workbook
+
+    from engine.register import build_register_xlsx, merge_registers, register_rows
+
+    f, products, index = model
+    a = register_rows(f, products, index, parts_rules(), "HI90_RIV.ifc", "RIV")
+    b = register_rows(f, products, index, parts_rules(), "HI90_RIV_MMI800.ifc", "RIV")
+    columns, rows, summaries, roll = merge_registers([a, b])
+    assert len(rows) == len(a[1]) * 2
+    assert {r["Modellkobling (fil)"] for r in rows} == {"HI90_RIV.ifc", "HI90_RIV_MMI800.ifc"}
+    assert len(summaries) == 2
+    sys_ = {s["code"]: s for s in roll["systems"]}
+    assert sys_["360"]["n"] == 2 * {s["code"]: s for s in a[3]["systems"]}["360"]["n"]
+    wb = load_workbook(io.BytesIO(build_register_xlsx(columns, rows, summaries, roll)))
+    head = [c.value for c in wb["Sammendrag"][1]]
+    assert head == ["Felt", "HI90_RIV.ifc", "HI90_RIV_MMI800.ifc"]

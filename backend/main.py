@@ -31,8 +31,9 @@ from engine import (
     list_presets, suggest_preset, suggest_field,
 )
 from engine.inventory import ModelIndex, inventory_payload, preview, values_payload
-from engine.codes import coded_objects, rollup
-from engine.register import build_register_xlsx, register_rows
+from engine.codes import coded_objects, merge_rollups, rollup
+from engine.ids_import import import_ids
+from engine.register import build_register_xlsx, merge_registers, register_rows
 from engine.standards import STANDARDS, codelist
 from engine.presets import PRESETS, preset_to_rules_dict
 from store import UploadStore
@@ -83,6 +84,21 @@ class CheckRequest(BaseModel):
 class PreviewRequest(BaseModel):
     upload_id: str
     rules: dict
+
+
+class ModelsRequest(BaseModel):
+    """One model (upload_id + rules) or several (items), each with its
+    discipline's rules."""
+    upload_id: str | None = None
+    rules: dict | None = None
+    items: list[PreviewRequest] | None = None
+
+    def pairs(self) -> list[PreviewRequest]:
+        if self.items:
+            return self.items
+        if self.upload_id is None or self.rules is None:
+            raise HTTPException(400, "Ingen modell.")
+        return [PreviewRequest(upload_id=self.upload_id, rules=self.rules)]
 
 
 class ValuesRequest(BaseModel):
@@ -334,14 +350,21 @@ def source_values(req: ValuesRequest):
 
 
 @app.post("/api/register")
-def register(req: PreviewRequest):
-    """The TFM register for the loaded model, one row per object with a code."""
-    up = _resolve(req.upload_id)
-    rules = TFMRules.from_dict(req.rules)
-    columns, rows, summary, roll = register_rows(
-        up.ifc, up.products, _index(up), rules, up.file_name, up.detected_discipline)
-    data = build_register_xlsx(columns, rows, summary, roll)
-    stem = Path(up.file_name).stem
+def register(req: ModelsRequest):
+    """The TFM register over the loaded models, one row per object with a
+    code, each model read with its own rules."""
+    parts, ups = [], []
+    for item in req.pairs():
+        up = _resolve(item.upload_id)
+        ups.append(up)
+        parts.append(register_rows(up.ifc, up.products, _index(up), TFMRules.from_dict(item.rules),
+                                   up.file_name, up.detected_discipline))
+    if len(parts) == 1:
+        data = build_register_xlsx(*parts[0])
+        stem = Path(ups[0].file_name).stem
+    else:
+        data = build_register_xlsx(*merge_registers(parts))
+        stem = Path(ups[0].file_name).stem.split("_")[0] or "modeller"
     return Response(
         data,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -349,14 +372,32 @@ def register(req: PreviewRequest):
     )
 
 
+@app.post("/api/ids")
+def ids_to_ruleset(file: UploadFile = File(...)):
+    """An IDS file as a ruleset («Åpne regelsett»), with what each
+    specification became or why it could not."""
+    try:
+        r = import_ids(file.file.read())
+    except Exception as e:  # noqa: BLE001 — the reason goes back to the user
+        raise HTTPException(400, f"Kunne ikke lese IDS: {e}")
+    return {
+        "title": r["title"],
+        "setup": {"tfm_sjekk_oppsett": 2, "base": "custom", "fag": {"*": r["rules"]}},
+        "specs": r["specs"],
+    }
+
+
 @app.post("/api/rollup")
-def code_rollup(req: PreviewRequest):
-    """System and component codes rolled up: objects, valid in the linked
-    standard, description, and what they appear with."""
-    up = _resolve(req.upload_id)
-    rules = TFMRules.from_dict(req.rules)
-    coded, _ = coded_objects(_index(up), rules)
-    return rollup(coded, rules)
+def code_rollup(req: ModelsRequest):
+    """System and component codes rolled up over the models: objects, valid
+    in the linked standard, description, and what they appear with."""
+    rolls = []
+    for item in req.pairs():
+        up = _resolve(item.upload_id)
+        rules = TFMRules.from_dict(item.rules)
+        coded, _ = coded_objects(_index(up), rules)
+        rolls.append(rollup(coded, rules))
+    return rolls[0] if len(rolls) == 1 else merge_rollups(rolls)
 
 
 def _codes(up, rules: TFMRules):
