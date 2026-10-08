@@ -3,6 +3,7 @@
 
 import { ASPECTS, type Aspect, type Inventory, type Location, type Preview, type RulesDict, type UploadResponse } from "../types.ts";
 import { allowedFloors, proposeCodes } from "./floors.ts";
+import { AGENT_MD } from "./agentMd.ts";
 
 /** The walk, in order. «start» is the choice, «end» Oppsummering. */
 export const WALK = ["ifc", "kilde", "format", "etasjer", "scope", "status"] as const;
@@ -203,8 +204,9 @@ export function withFag(file: SetupFile | null, base: Base, fag: string | null, 
   return { base: file?.base ?? base, fag: { ...(file?.fag ?? {}), [fag ?? ANY_FAG]: rules } };
 }
 
+/** The ruleset file, with agent.md (its format, for AI agents) inside. */
 export function setupJson(file: SetupFile): string {
-  return JSON.stringify({ [FILE_KEY]: 2, base: file.base, fag: file.fag }, null, 2);
+  return JSON.stringify({ [FILE_KEY]: 2, agent_md: AGENT_MD, base: file.base, fag: file.fag }, null, 2);
 }
 
 const fill = (rules: RulesDict): RulesDict => ({ ...statsbyggRules(rules.discipline_key ?? null), ...rules });
